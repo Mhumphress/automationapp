@@ -196,15 +196,7 @@
       <div id="view-invoices" class="view-container"></div>
 
       <!-- Subscriptions -->
-      <div id="view-subscriptions" class="view-container">
-        <div class="empty-state">
-          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-          <div class="empty-title">Subscription Tracking</div>
-          <p class="empty-description">Subscription tracking coming in Phase 4.</p>
-        </div>
-      </div>
+      <div id="view-subscriptions" class="view-container"></div>
 
       <!-- Messages -->
       <div id="view-messages" class="view-container">
@@ -234,6 +226,7 @@
     import * as pipelineView from './js/views/pipeline.js';
     import * as tasksView from './js/views/tasks.js';
     import * as invoicesView from './js/views/invoices.js';
+    import * as subscriptionsView from './js/views/subscriptions.js';
     import { queryDocuments } from './js/services/firestore.js';
 
     // ── Auth guard ──────────────────────────
@@ -325,6 +318,16 @@
         invoicesView.render();
       },
       destroy: invoicesView.destroy
+    });
+
+    // Override subscriptions with full view logic
+    registerView('subscriptions', {
+      init: subscriptionsView.init,
+      render() {
+        document.getElementById('headerTitle').textContent = 'Subscriptions';
+        subscriptionsView.render();
+      },
+      destroy: subscriptionsView.destroy
     });
 
     // ── Dashboard ───────────────────────────
