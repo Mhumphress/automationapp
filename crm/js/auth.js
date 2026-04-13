@@ -1,15 +1,8 @@
 import { auth, db } from './config.js';
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  updateProfile
+  onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import {
-  doc,
-  setDoc,
-  serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // --- Auth state listener: redirect if already logged in ---
 onAuthStateChanged(auth, (user) => {
@@ -19,27 +12,7 @@ onAuthStateChanged(auth, (user) => {
 });
 
 // --- DOM refs ---
-const loginView = document.getElementById('loginView');
-const registerView = document.getElementById('registerView');
 const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
-const showRegisterLink = document.getElementById('showRegister');
-const showLoginLink = document.getElementById('showLogin');
-
-// --- View toggle ---
-showRegisterLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  loginView.classList.remove('active');
-  registerView.classList.add('active');
-  clearError('loginError');
-});
-
-showLoginLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  registerView.classList.remove('active');
-  loginView.classList.add('active');
-  clearError('registerError');
-});
 
 // --- Login ---
 loginForm.addEventListener('submit', async (e) => {
@@ -63,47 +36,6 @@ loginForm.addEventListener('submit', async (e) => {
     showError('loginError', mapAuthError(err.code));
   } finally {
     setLoading('loginBtn', false);
-  }
-});
-
-// --- Register ---
-registerForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearError('registerError');
-
-  const name = document.getElementById('registerName').value.trim();
-  const email = document.getElementById('registerEmail').value.trim();
-  const password = document.getElementById('registerPassword').value;
-
-  if (!name || !email || !password) {
-    showError('registerError', 'Please fill in all fields.');
-    return;
-  }
-
-  if (password.length < 6) {
-    showError('registerError', 'Password must be at least 6 characters.');
-    return;
-  }
-
-  setLoading('registerBtn', true);
-
-  try {
-    const { user } = await createUserWithEmailAndPassword(auth, email, password);
-
-    await updateProfile(user, { displayName: name });
-
-    await setDoc(doc(db, 'users', user.uid), {
-      name,
-      email,
-      role: 'member',
-      createdAt: serverTimestamp()
-    });
-
-    // onAuthStateChanged will handle redirect
-  } catch (err) {
-    showError('registerError', mapAuthError(err.code));
-  } finally {
-    setLoading('registerBtn', false);
   }
 });
 
