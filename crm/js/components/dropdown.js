@@ -26,6 +26,7 @@ export function createDropdown({ fetchItems, onSelect, onCreate, placeholder = '
 
   let items = [];
   let isOpen = false;
+  let selectedItem = null;
 
   async function loadItems() {
     items = await fetchItems();
@@ -49,6 +50,7 @@ export function createDropdown({ fetchItems, onSelect, onCreate, placeholder = '
         ${item.sublabel ? `<div class="dropdown-item-sub">${escapeHtml(item.sublabel)}</div>` : ''}
       `;
       row.addEventListener('click', () => {
+        selectedItem = item;
         onSelect(item);
         close();
       });
@@ -60,7 +62,9 @@ export function createDropdown({ fetchItems, onSelect, onCreate, placeholder = '
       createRow.className = 'dropdown-item dropdown-create';
       createRow.innerHTML = `<div class="dropdown-item-label">+ Create "${escapeHtml(filter.trim())}"</div>`;
       createRow.addEventListener('click', () => {
-        onCreate(filter.trim());
+        const name = filter.trim();
+        selectedItem = { id: null, label: name };
+        onCreate(name);
         close();
       });
       list.appendChild(createRow);
@@ -83,10 +87,25 @@ export function createDropdown({ fetchItems, onSelect, onCreate, placeholder = '
   function close() {
     list.style.display = 'none';
     isOpen = false;
-    input.value = '';
+    if (selectedItem) {
+      input.value = selectedItem.label;
+      input.style.color = 'var(--off-black)';
+      input.style.fontWeight = '500';
+    } else {
+      input.value = '';
+      input.style.color = '';
+      input.style.fontWeight = '';
+    }
   }
 
-  input.addEventListener('focus', open);
+  input.addEventListener('focus', () => {
+    if (selectedItem) {
+      input.value = '';
+      input.style.color = '';
+      input.style.fontWeight = '';
+    }
+    open();
+  });
   input.addEventListener('input', () => renderList(input.value));
 
   // Close on click outside
