@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <title>Consultation - Automation App</title>
+  <meta name="description" content="Book a free discovery call with Automation App. Get expert guidance on automating your business processes with custom-built software solutions.">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Consultation - Automation App">
+  <meta property="og:description" content="Book a free discovery call with Automation App. Get expert guidance on automating your business processes with custom-built software solutions.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://automationapp.org/consult.html">
+  <meta property="og:image" content="https://automationapp.org/logo1.png">
+  <meta property="og:site_name" content="Automation App">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Consultation - Automation App">
+  <meta name="twitter:description" content="Book a free discovery call with Automation App. Get expert guidance on automating your business processes with custom-built software solutions.">
+  <meta name="twitter:image" content="https://automationapp.org/logo1.png">
+  <!-- Canonical -->
+  <link rel="canonical" href="https://automationapp.org/consult.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #4F7BF7;
+      --accent-light: #7B9FFF;
+      --black: #0B0F1A;
+      --white: #F8FAFC;
+      --off-white: #EEF2F7;
+      --gray: #8892A8;
+      --font-display: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Outfit', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--off-white); color: var(--black); line-height: 1.6; min-height: 100vh; }
+
+    /* ── NAV (Matched to Index) ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.4rem 4rem;
+      background: rgba(11,15,26,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(79,123,247,0.2);
+    }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: 0.8rem;
+      text-decoration: none;
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+    }
+
+    .nav-logo span {
+      text-transform: none; /* Keeps it 'Automation App' */
+      margin-top: 2px;
+    }
+
+    .nav-links { display: flex; gap: 2.4rem; list-style: none; align-items: center; }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+
+    .nav-cta {
+      border: 1px solid var(--accent);
+      color: var(--accent) !important;
+      padding: 0.5rem 1.3rem !important;
+    }
+    .nav-cta:hover { background: var(--accent) !important; color: var(--black) !important; }
+
+    /* ── LAYOUT ── */
+    .consult-wrapper { display: grid; grid-template-columns: 1fr 1.2fr; min-height: 100vh; padding-top: 80px; }
+
+    /* LEFT SIDE: BRANDING */
+    .consult-sidebar { background: var(--black); color: white; padding: 6rem 4rem; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden; }
+    .consult-sidebar::after { content: ''; position: absolute; bottom: -10%; left: -10%; width: 50%; height: 50%; background: radial-gradient(circle, rgba(79,123,247,0.1) 0%, transparent 70%); }
+
+    .sidebar-label { font-size: 0.7rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.4em; margin-bottom: 2rem; }
+    .sidebar-title { font-family: var(--font-display); font-size: clamp(2.5rem, 4vw, 4rem); font-weight: 300; line-height: 1.1; margin-bottom: 2rem; }
+    .sidebar-title em { font-style: italic; color: var(--accent); }
+    .sidebar-list { list-style: none; margin-top: 2rem; }
+    .sidebar-list li { margin-bottom: 1.5rem; display: flex; align-items: flex-start; gap: 1rem; color: rgba(255,255,255,0.6); font-weight: 300; }
+    .sidebar-list li span { color: var(--accent); font-size: 1.2rem; line-height: 1; }
+
+    /* RIGHT SIDE: FORM */
+    .consult-form-area { padding: 6rem 4rem; display: flex; align-items: center; background: var(--off-white); }
+    .form-card { width: 100%; max-width: 600px; background: white; padding: 4rem; box-shadow: 0 30px 60px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.02); }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+    .input-group { position: relative; margin-bottom: 2rem; }
+
+    label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--gray); display: block; margin-bottom: 0.8rem; font-weight: 600; }
+
+    input, select, textarea {
+      width: 100%; padding: 0.8rem 0; border: none; border-bottom: 1px solid #ddd;
+      background: transparent; font-family: var(--font-body); font-size: 1rem; outline: none; transition: 0.3s;
+      border-radius: 0; /* Fix for iOS styling */
+    }
+    input:focus, select:focus, textarea:focus { border-bottom-color: var(--accent); }
+
+    .submit-btn {
+      width: 100%; background: var(--black); color: var(--accent); border: none; padding: 1.4rem;
+      text-transform: uppercase; letter-spacing: 0.3em; font-weight: 600; font-size: 0.8rem;
+      cursor: pointer; transition: 0.4s; margin-top: 1rem;
+    }
+    .submit-btn:hover { background: var(--accent); color: var(--black); transform: translateY(-3px); }
+
+    /* ── HAMBURGER ── */
+    .hamburger {
+      display: none !important; background: none; border: none; cursor: pointer;
+      width: 32px; height: 24px; position: relative; z-index: 201;
+    }
+    .hamburger span {
+      display: block; position: absolute; left: 0; right: 0;
+      height: 2px; background: var(--accent); transition: transform 0.3s, opacity 0.3s;
+    }
+    .hamburger span:nth-child(1) { top: 0; }
+    .hamburger span:nth-child(2) { top: 50%; transform: translateY(-50%); }
+    .hamburger span:nth-child(3) { bottom: 0; }
+    .hamburger.open span:nth-child(1) { top: 50%; transform: translateY(-50%) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
+    .mobile-menu {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(11,15,26,0.95); backdrop-filter: blur(16px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 2.5rem;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .mobile-menu.open { opacity: 1; pointer-events: auto; }
+    .mobile-menu a {
+      color: rgba(255,255,255,0.75); text-decoration: none;
+      font-size: 1.1rem; font-weight: 500; letter-spacing: 0.15em;
+      text-transform: uppercase; transition: color 0.2s, transform 0.4s ease, opacity 0.4s ease;
+      opacity: 0; transform: translateY(20px);
+    }
+    .mobile-menu.open a {
+      opacity: 1; transform: translateY(0);
+    }
+    .mobile-menu a:nth-child(1) { transition-delay: 0.1s; }
+    .mobile-menu a:nth-child(2) { transition-delay: 0.2s; }
+    .mobile-menu a:nth-child(3) { transition-delay: 0.3s; }
+    .mobile-menu a:hover { color: var(--accent); }
+    .mobile-menu .nav-cta {
+      background: transparent; border: 1px solid var(--accent);
+      color: var(--accent); padding: 0.7rem 1.8rem; font-size: 0.9rem;
+    }
+    .mobile-menu .nav-cta:hover { background: var(--accent); color: var(--black); }
+    .mobile-menu-close {
+      position: absolute; top: 1.5rem; right: 1.5rem;
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.5); font-size: 2rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .mobile-menu-close:hover { color: var(--accent); }
+
+    @media (max-width: 1024px) {
+      .consult-wrapper { grid-template-columns: 1fr; }
+      .consult-sidebar { padding: 4rem 2rem; }
+      .consult-form-area { padding: 4rem 2rem; }
+      .form-card { padding: 2.5rem; }
+      nav { padding: 1.2rem 2rem; }
+      .nav-links { display: none; }
+      .hamburger { display: block !important; }
+      .mobile-menu { display: flex; }
+      .form-row { grid-template-columns: 1fr; gap: 0; }
+    }
+  </style>
+  <!-- Google tag (gtag.js) -->
+  <!-- Replace with your GA ID -->
+  <!--
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-92Q2PSFHZN"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-92Q2PSFHZN');
+  </script>
+  -->
+</head>
+<body>
+
+  <nav>
+    <a href="index.html" class="nav-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="height:38px; width:auto;" fill="currentColor"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/></g><circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/><circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/></svg>
+      <span>Automation App</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="about.html">How It Works</a></li>
+      <li><a href="services.html">Services</a></li>
+      <li><a href="consult.html" class="nav-cta">Book a Consult</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+  <div class="mobile-menu" id="mobileMenu">
+    <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu">&times;</button>
+    <a href="about.html">How It Works</a>
+    <a href="services.html">Services</a>
+    <a href="consult.html" class="nav-cta">Book a Consult</a>
+  </div>
+
+  <div class="consult-wrapper">
+    <aside class="consult-sidebar">
+      <span class="sidebar-label">Consultation</span>
+      <h1 class="sidebar-title">Streamline your <em>business</em> today.</h1>
+      <p style="color: rgba(255,255,255,0.5); font-weight: 300;">We don't just build software; we engineer solutions. Tell us about your workflows, and we'll handle the rest.</p>
+
+      <ul class="sidebar-list">
+        <li><span>✦</span> 30-minute complimentary discovery call.</li>
+        <li><span>✦</span> Full workflow and process audit.</li>
+        <li><span>✦</span> Custom solution roadmap and estimate.</li>
+      </ul>
+      <p style="margin-top:2.5rem; font-size:0.8rem; color:rgba(255,255,255,0.4); font-weight:300;">Questions? Reach us at <a href="mailto:support@automationapp.org" style="color:var(--accent); text-decoration:none;">support@automationapp.org</a></p>
+    </aside>
+
+    <main class="consult-form-area">
+      <div class="form-card">
+        <form action="https://formspree.io/f/mpqoqabj" method="POST">
+          <div class="form-row">
+            <div class="input-group">
+              <label>Full Name</label>
+              <input type="text" name="name" placeholder="John Doe" required>
+            </div>
+            <div class="input-group">
+              <label>Email</label>
+              <input type="email" name="email" placeholder="john@example.com" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="input-group">
+              <label>Phone Number</label>
+              <input type="tel" name="phone" placeholder="(555) 000-0000">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label>Service Interest</label>
+            <select name="service">
+              <option value="hourly">Hourly Consulting ($75/hr)</option>
+              <option value="full-service">Full-Service Build (Custom Quote)</option>
+              <option value="custom">General Inquiry</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label>What would you like to automate?</label>
+            <input type="text" name="vehicle" placeholder="e.g. CRM, invoicing, scheduling, inventory management">
+          </div>
+
+          <div class="input-group">
+            <label>Your Message (Optional)</label>
+            <textarea name="message" rows="3" placeholder="Tell us about your current workflows, pain points, or any specific needs..."></textarea>
+          </div>
+
+          <button type="submit" class="submit-btn">Request Consultation</button>
+          <p style="text-align:center; margin-top:1.2rem; font-size:0.7rem; color:var(--gray); line-height:1.6;">By submitting, you agree to our <a href="terms.html" style="color:var(--accent); text-decoration:none;">Terms of Service</a> and <a href="privacy.html" style="color:var(--accent); text-decoration:none;">Privacy Policy</a>.</p>
+        </form>
+      </div>
+    </main>
+  </div>
+
+<script>
+  // Hamburger menu
+  function toggleMenu() {
+    document.getElementById('hamburger').classList.toggle('open');
+    document.getElementById('mobileMenu').classList.toggle('open');
+    document.body.style.overflow = document.getElementById('mobileMenu').classList.contains('open') ? 'hidden' : '';
+  }
+  document.getElementById('hamburger').addEventListener('click', toggleMenu);
+  document.getElementById('mobileMenuClose').addEventListener('click', toggleMenu);
+
+  const tier = new URLSearchParams(window.location.search).get('tier');
+  if (tier) {
+    const select = document.querySelector('select[name="service"]');
+    const option = select.querySelector('option[value="' + tier + '"]');
+    if (option) option.selected = true;
+  }
+</script>
+</body>
+</html>

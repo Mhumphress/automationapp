@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <title>Custom Automation Services - Automation App</title>
+  <meta name="description" content="Automation App builds custom automation solutions, ERPs, and CRMs for small businesses. Streamline your operations with tailored software, starting at $75/hr.">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Custom Automation Services - Automation App">
+  <meta property="og:description" content="Automation App builds custom automation solutions, ERPs, and CRMs for small businesses. Streamline your operations with tailored software, starting at $75/hr.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://automationapp.org/">
+  <meta property="og:image" content="https://automationapp.org/logo1.png">
+  <meta property="og:site_name" content="Automation App">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Custom Automation Services - Automation App">
+  <meta name="twitter:description" content="Automation App builds custom automation solutions, ERPs, and CRMs for small businesses. Streamline your operations with tailored software, starting at $75/hr.">
+  <meta name="twitter:image" content="https://automationapp.org/logo1.png">
+  <!-- Canonical -->
+  <link rel="canonical" href="https://automationapp.org/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #4F7BF7;
+      --accent-light: #7B9FFF;
+      --accent-dim: rgba(79,123,247,0.15);
+      --black: #0B0F1A;
+      --off-black: #111827;
+      --dark: #1A2332;
+      --white: #F8FAFC;
+      --off-white: #EEF2F7;
+      --gray: #8892A8;
+      --light-gray: #CBD5E1;
+      --font-display: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Outfit', sans-serif;
+      --font-number: 'Playfair Display', Georgia, serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--white);
+      color: var(--black);
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.4rem 4rem;
+      background: rgba(11,15,26,0.7);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(79,123,247,0.2);
+      transition: background 0.3s;
+    }
+    .nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem; /* Space between logo and text */
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.nav-logo span {
+  /* This matches your existing "Automation App" footer style and Cormorant font */
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: none; /* Keeps it as 'Automation App' rather than 'AUTOMATION APP' */
+  line-height: 1;
+  margin-top: 2px; /* Optical alignment fix */
+}
+    .nav-links { display: flex; gap: 2.4rem; list-style: none; }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-cta {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent) !important;
+      padding: 0.5rem 1.3rem !important;
+      letter-spacing: 0.1em !important;
+      transition: background 0.2s, color 0.2s !important;
+    }
+    .nav-cta:hover { background: var(--accent) !important; color: var(--black) !important; }
+
+    /* ── HERO ── */
+    #home {
+      min-height: 100vh;
+      background: var(--black);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      /* FIX: Increased bottom padding to prevent overlap with scroll indicator */
+      padding: 8rem 2rem 10rem;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 100%, rgba(79,123,247,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 20%, rgba(79,123,247,0.06) 0%, transparent 60%);
+    }
+    .hero-line {
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 1px; height: 90px;
+      background: linear-gradient(to bottom, transparent, var(--accent));
+      animation: lineDown 1.2s ease forwards;
+    }
+    @keyframes lineDown { from { height: 0; opacity: 0; } to { height: 90px; opacity: 1; } }
+
+    .hero-eyebrow {
+      font-family: var(--font-body);
+      font-size: 0.72rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-top: 2rem;
+      margin-bottom: 1.4rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.4s ease forwards;
+    }
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(3.5rem, 10vw, 8rem);
+      font-weight: 300;
+      line-height: 1.02;
+      color: var(--white);
+      letter-spacing: -0.01em;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.6s ease forwards;
+    }
+    .hero-title em {
+      font-style: italic;
+      color: var(--accent);
+    }
+    .hero-sub {
+      margin-top: 1.8rem;
+      font-size: 1rem;
+      font-weight: 300;
+      color: rgba(255,255,255,0.55);
+      max-width: 480px;
+      line-height: 1.7;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.8s ease forwards;
+    }
+    .hero-actions {
+      margin-top: 3rem;
+      display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;
+      opacity: 0;
+      animation: fadeUp 0.9s 1s ease forwards;
+      /* FIX: Ensure actions stay above other elements */
+      position: relative;
+      z-index: 10;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--black);
+      border: none;
+      padding: 0.9rem 2.4rem;
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.15s;
+      display: inline-block;
+    }
+    .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+    .btn-ghost {
+      background: transparent;
+      color: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 0.9rem 2.4rem;
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+      display: inline-block;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    .hero-scroll {
+      position: absolute; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      opacity: 0;
+      animation: fadeUpCenter 1s 1.4s ease forwards;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .hero-scroll span {
+      font-size: 0.65rem; letter-spacing: 0.25em; text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+    }
+    .scroll-dot {
+      width: 1px; height: 40px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+      animation: scrollPulse 2s infinite;
+    }
+    @keyframes scrollPulse { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUpCenter {
+      from { opacity: 0; transform: translateX(-50%) translateY(24px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* ── DIVIDER ── */
+    .gold-divider {
+      width: 60px; height: 1px;
+      background: var(--accent);
+      margin: 0 auto 1.5rem;
+    }
+
+    /* ── HOW IT WORKS ── */
+    #about {
+      background: var(--off-white);
+      padding: 7rem 2rem;
+    }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.68rem; letter-spacing: 0.35em;
+      text-transform: uppercase; color: var(--accent);
+      text-align: center; margin-bottom: 0.8rem;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      font-weight: 300;
+      text-align: center;
+      line-height: 1.15;
+      color: var(--black);
+      margin-bottom: 1rem;
+    }
+    .section-title em { font-style: italic; color: var(--accent); }
+    .section-body {
+      text-align: center;
+      font-size: 0.97rem;
+      color: var(--gray);
+      max-width: 560px;
+      margin: 0 auto 4rem;
+      line-height: 1.75;
+      font-weight: 300;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 2px;
+    }
+    .step {
+      background: var(--white);
+      padding: 2.5rem 2rem;
+      position: relative;
+      transition: transform 0.2s;
+    }
+    .step:hover { transform: translateY(-4px); }
+    .step-num {
+      font-family: var(--font-number);
+      font-size: 3.5rem;
+      font-weight: 300;
+      color: rgba(79,123,247,0.25);
+      line-height: 1;
+      margin-bottom: 0.8rem;
+    }
+    .step h3 {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.7rem;
+      color: var(--black);
+    }
+    .step p {
+      font-size: 0.87rem;
+      color: var(--gray);
+      line-height: 1.7;
+      font-weight: 300;
+    }
+    .step-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; background: var(--accent);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 0.3s;
+    }
+    .step:hover .step-bar { transform: scaleX(1); }
+
+    /* ── SERVICES ── */
+    #services {
+      background: var(--black);
+      padding: 7rem 2rem;
+    }
+    #services .section-title { color: var(--white); }
+
+    .tiers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .tier {
+      border: 1px solid rgba(79,123,247,0.2);
+      padding: 3rem 2.5rem;
+      position: relative;
+      transition: border-color 0.3s, transform 0.2s;
+      background: rgba(255,255,255,0.02);
+      display: flex;
+      flex-direction: column;
+    }
+    .tier:hover { border-color: var(--accent); transform: translateY(-4px); cursor: pointer; }
+    .tier-cta {
+      display: inline-block;
+      margin-top: 2rem;
+      padding: 0.85rem 2rem;
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: 1px solid rgba(79,123,247,0.4);
+      color: var(--accent);
+      background: transparent;
+      transition: background 0.3s, color 0.3s, border-color 0.3s;
+    }
+    .tier:hover .tier-cta { background: var(--accent); color: var(--black); border-color: var(--accent); }
+    .tier.featured .tier-cta {
+      background: var(--accent);
+      color: var(--black);
+      border-color: var(--accent);
+    }
+    .tier.featured:hover .tier-cta { background: var(--accent-light); border-color: var(--accent-light); }
+    .tier-features { flex: 1; }
+    .tier-tagline {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.4);
+      font-weight: 300;
+      margin-top: 1.5rem;
+      line-height: 1.6;
+    }
+    .tier-tagline em { color: rgba(255,255,255,0.55); }
+    .tier.featured {
+      border-color: var(--accent);
+      background: rgba(79,123,247,0.05);
+    }
+    .tier-badge {
+      position: absolute; top: -1px; right: 2rem;
+      background: var(--accent);
+      color: var(--black);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.9rem;
+    }
+    .tier-name {
+      font-size: 0.68rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    .tier-price-original {
+      font-family: var(--font-number);
+      font-size: 1.6rem;
+      color: rgba(255,255,255,0.5);
+      text-decoration: line-through;
+      text-decoration-color: #c0392b;
+      text-decoration-thickness: 2px;
+      font-weight: 300;
+      margin-bottom: 0.2rem;
+    }
+    .tier-price-original sup {
+      font-size: 0.7rem;
+      vertical-align: baseline;
+      position: relative;
+      top: -0.3em;
+    }
+    .tier-price-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 0.1rem;
+    }
+    .tier-price {
+      font-family: var(--font-number);
+      font-size: 3.5rem;
+      font-weight: 300;
+      color: var(--white);
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+    .tier-price sup {
+      font-size: 1.4rem;
+      vertical-align: super;
+    }
+    .tier-desc {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 2rem;
+      font-weight: 300;
+    }
+    .tier-features { list-style: none; }
+    .tier-features li {
+      font-size: 0.87rem;
+      color: rgba(255,255,255,0.7);
+      padding: 0.65rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: flex-start; gap: 0.7rem;
+      font-weight: 300;
+      line-height: 1.5;
+    }
+    .tier-features li:last-child { border-bottom: none; }
+    .check {
+      color: var(--accent);
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+
+      /* ── FREE CONSULT BANNER ── */
+    .consult-banner {
+      background: var(--accent);
+      padding: 3.5rem 2rem;
+      text-align: center;
+    }
+    .consult-banner h2 {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 300;
+      color: var(--black);
+      margin-bottom: 0.6rem;
+    }
+    .consult-banner h2 em { font-style: italic; }
+    .consult-banner p {
+      font-size: 0.92rem;
+      color: rgba(0,0,0,0.6);
+      margin-bottom: 1.8rem;
+      font-weight: 300;
+    }
+    .btn-dark {
+      background: var(--black);
+      color: var(--accent);
+      border: none;
+      padding: 0.9rem 2.4rem;
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background 0.2s;
+    }
+    .btn-dark:hover { background: #222; }
+
+    /* ── CONTACT ── */
+    #contact {
+      background: var(--off-white);
+      padding: 7rem 2rem;
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 5rem;
+      align-items: start;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .contact-left h2 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 300;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+    .contact-left h2 em { font-style: italic; color: var(--accent); }
+    .contact-left p {
+      font-size: 0.9rem;
+      color: var(--gray);
+      line-height: 1.75;
+      font-weight: 300;
+    }
+    .contact-detail {
+      margin-top: 2rem;
+      display: flex; flex-direction: column; gap: 0.8rem;
+    }
+    .contact-detail span {
+      font-size: 0.82rem;
+      color: var(--gray);
+      font-weight: 300;
+    }
+    .contact-detail strong {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--black);
+      font-weight: 500;
+    }
+
+    .contact-form { display: flex; flex-direction: column; gap: 1.2rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+    .form-group label {
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gray);
+      font-weight: 500;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      background: var(--white);
+      border: 1px solid var(--light-gray);
+      padding: 0.85rem 1rem;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--black);
+      font-weight: 300;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--accent);
+    }
+    .form-group textarea { resize: vertical; min-height: 110px; }
+    .form-submit {
+      background: var(--black);
+      color: var(--accent);
+      border: none;
+      padding: 1rem 2.4rem;
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+      align-self: flex-start;
+    }
+    .form-submit:hover { background: var(--dark); }
+    .form-note {
+      font-size: 0.75rem;
+      color: var(--gray);
+      font-weight: 300;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--black);
+      padding: 3rem 4rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      border-top: 1px solid rgba(79,123,247,0.15);
+    }
+    .footer-logo {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+    }
+    .footer-copy {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.25);
+      font-weight: 300;
+    }
+    .footer-links { display: flex; gap: 1.5rem; }
+    .footer-links a {
+      font-size: 0.72rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--accent); }
+    .footer-social { display: flex; gap: 1.2rem; align-items: center; }
+    .footer-social a {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .footer-social a:hover { border-color: var(--accent); background: rgba(79,123,247,0.1); }
+    .footer-social svg { width: 14px; height: 14px; fill: rgba(255,255,255,0.4); transition: fill 0.2s; }
+    .footer-social a:hover svg { fill: var(--accent); }
+    .footer-email { margin-top: 0.8rem; }
+    .footer-email a { color: var(--accent); text-decoration: none; font-size: 0.8rem; letter-spacing: 0.06em; transition: opacity 0.2s; }
+    .footer-email a:hover { opacity: 0.7; }
+    .footer-legal { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
+    .footer-legal a { color: rgba(255,255,255,0.3); text-decoration: none; font-size: 0.7rem; letter-spacing: 0.08em; transition: color 0.2s; }
+    .footer-legal a:hover { color: var(--accent); }
+
+    /* ── HAMBURGER ── */
+    .hamburger {
+      display: none !important;
+      background: none; border: none; cursor: pointer;
+      width: 32px; height: 24px; position: relative; z-index: 201;
+    }
+    .hamburger span {
+      display: block; position: absolute; left: 0; right: 0;
+      height: 2px; background: var(--accent);
+      transition: transform 0.3s, opacity 0.3s;
+    }
+    .hamburger span:nth-child(1) { top: 0; }
+    .hamburger span:nth-child(2) { top: 50%; transform: translateY(-50%); }
+    .hamburger span:nth-child(3) { bottom: 0; }
+    .hamburger.open span:nth-child(1) { top: 50%; transform: translateY(-50%) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
+
+    .mobile-menu {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(11,15,26,0.95); backdrop-filter: blur(16px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 2.5rem;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .mobile-menu.open { opacity: 1; pointer-events: auto; }
+    .mobile-menu a {
+      color: rgba(255,255,255,0.75); text-decoration: none;
+      font-size: 1.1rem; font-weight: 500; letter-spacing: 0.15em;
+      text-transform: uppercase; transition: color 0.2s, transform 0.4s ease, opacity 0.4s ease;
+      opacity: 0; transform: translateY(20px);
+    }
+    .mobile-menu.open a {
+      opacity: 1; transform: translateY(0);
+    }
+    .mobile-menu a:nth-child(1) { transition-delay: 0.1s; }
+    .mobile-menu a:nth-child(2) { transition-delay: 0.2s; }
+    .mobile-menu a:nth-child(3) { transition-delay: 0.3s; }
+    .mobile-menu a:hover { color: var(--accent); }
+    .mobile-menu .nav-cta {
+      background: transparent; border: 1px solid var(--accent);
+      color: var(--accent); padding: 0.7rem 1.8rem;
+      font-size: 0.9rem;
+    }
+    .mobile-menu .nav-cta:hover { background: var(--accent); color: var(--black); }
+    .mobile-menu-close {
+      position: absolute; top: 1.5rem; right: 1.5rem;
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.5); font-size: 2rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .mobile-menu-close:hover { color: var(--accent); }
+
+    /* ── MOBILE ── */
+    @media (max-width: 768px) {
+      nav { padding: 1.2rem 1.5rem; }
+      .nav-links { display: none; }
+      .hamburger { display: block !important; }
+      .mobile-menu { display: flex; }
+      #home { padding: 6rem 1.5rem 8rem; }
+      #about, #services, #contact { padding: 4.5rem 1.5rem; }
+      .tiers { grid-template-columns: 1fr; }
+      .tier { padding: 2.2rem 1.8rem; }
+      .steps-grid { grid-template-columns: 1fr; }
+      .consult-banner { padding: 2.5rem 1.5rem; }
+      .contact-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+      .form-row { grid-template-columns: 1fr; }
+      footer { flex-direction: column; align-items: flex-start; padding: 2rem 1.5rem; gap: 1.5rem; }
+      .footer-links { flex-wrap: wrap; }
+      .hero-sub { padding: 0 0.5rem; }
+    }
+
+    /* Success message */
+    .form-success {
+      display: none;
+      background: rgba(79,123,247,0.1);
+      border: 1px solid var(--accent);
+      padding: 1.2rem 1.5rem;
+      font-size: 0.9rem;
+      color: var(--accent);
+      font-weight: 300;
+    }
+  </style>
+  <!-- Replace with your GA ID -->
+  <!--
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-92Q2PSFHZN"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-92Q2PSFHZN');
+  </script>
+  -->
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="height:38px; width:auto; display:block;" fill="currentColor"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/></g><circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/><circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/></svg>
+   <span>Automation App</span>
+  </a>
+  <ul class="nav-links">
+  <li><a href="about.html">How It Works</a></li>
+  <li><a href="services.html">Services</a></li>
+  <li><a href="consult.html" class="nav-cta">Book a Consult</a></li>
+</ul>
+  <button class="hamburger" id="hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu">&times;</button>
+  <a href="about.html">How It Works</a>
+  <a href="services.html">Services</a>
+  <a href="consult.html" class="nav-cta">Book a Consult</a>
+</div>
+
+<section id="home">
+  <div class="hero-bg"></div>
+  <div class="hero-line"></div>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:clamp(160px,22vw,260px); height:auto; margin-top:2rem; opacity:0; animation:fadeUp 0.9s 0.2s ease forwards;" fill="var(--accent)"><g fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/></g><circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/><circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/></svg>
+  <p class="hero-eyebrow">Custom Automation for Small Business</p>
+  <h1 class="hero-title">Your business,<br><em>automated</em></h1>
+  <p class="hero-sub">Automation App designs, builds, and maintains custom software — from ERPs and CRMs to workflow automation — so you can focus on running your business, not fighting your tools.</p>
+  <div class="hero-actions">
+  <a href="consult.html" class="btn-primary">Book Free Consultation</a>
+  <a href="services.html" class="btn-ghost">View Services</a>
+</div>
+  <div class="hero-scroll">
+    <span>Scroll</span>
+    <div class="scroll-dot"></div>
+  </div>
+</section>
+
+<div class="consult-banner">
+  <h2>Free 30-Minute <em>Discovery Call.</em></h2>
+  <p>We'll walk through your current workflows, pain points, and what a custom solution could look like. Zero obligation, zero pressure.</p>
+  <a href="consult.html" class="btn-dark">Book Your Free Call</a>
+</div>
+
+<section id="services">
+  <div class="section-inner">
+    <p class="section-label">Services</p>
+    <div class="gold-divider"></div>
+    <h2 class="section-title" style="color:var(--white);">Choose your <em>level</em><br>of service.</h2>
+    <p class="section-body" style="color:rgba(255,255,255,0.4);">Whether you need a single workflow automated or a full custom platform, we have a plan that fits your business and budget.</p>
+
+    <div class="tiers">
+      <div class="tier" onclick="window.location.href='services.html#comparison'">
+        <p class="tier-name">Hourly Consulting</p>
+        <div class="tier-price"><sup>$</sup>75<span style="font-size:1.2rem;">/hr</span></div>
+        <p class="tier-desc">Process Automation</p>
+        <ul class="tier-features">
+          <li><span class="check">✦</span>Full workflow audit and discovery session</li>
+          <li><span class="check">✦</span>Custom automation design and implementation</li>
+          <li><span class="check">✦</span>Integration with your existing tools and platforms</li>
+        </ul>
+        <p class="tier-tagline"><em>Your operations expert, on demand.</em></p>
+        <a href="services.html#comparison" class="tier-cta">See More Details →</a>
+      </div>
+
+      <div class="tier featured" onclick="window.location.href='services.html#comparison'">
+        <div class="tier-badge">Most Popular</div>
+        <p class="tier-name">Full-Service Build</p>
+        <div class="tier-price">Custom</div>
+        <p class="tier-desc">Complete Platform Development</p>
+        <ul class="tier-features">
+          <li><span class="check">✦</span>Priority service — your project moves to the front of the line</li>
+          <li><span class="check">✦</span>Custom ERP, CRM, or internal tool built to your specs</li>
+          <li><span class="check">✦</span>Ongoing support with affordable monthly subscription</li>
+        </ul>
+        <p class="tier-tagline"><em>Your entire operation — streamlined and future-proof.</em></p>
+        <a href="services.html#comparison" class="tier-cta">See More Details →</a>
+      </div>
+    </div>
+
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="section-inner">
+    <p class="section-label">How It Works</p>
+    <div class="gold-divider"></div>
+    <h2 class="section-title">How it <em>works.</em></h2>
+    <p class="section-body">From discovery to launch, we handle every step of building your custom automation.</p>
+
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-bar"></div>
+        <div class="step-num">01</div>
+        <h3>Tell Us Your Workflow</h3>
+        <p>You talk, we listen. We'll map out every process, bottleneck, and manual task in your business to understand exactly what needs to be automated.</p>
+      </div>
+      <div class="step">
+        <div class="step-bar"></div>
+        <div class="step-num">02</div>
+        <h3>We Design Your Solution</h3>
+        <p>We architect a custom system tailored to your operations — choosing the right tech stack, integrations, and user experience for your team.</p>
+      </div>
+      <div class="step">
+        <div class="step-bar"></div>
+        <div class="step-num">03</div>
+        <h3>We Build & Test</h3>
+        <p>Our team develops your solution with rigorous testing at every stage. You'll see progress in real time and provide feedback before launch.</p>
+      </div>
+      <div class="step">
+        <div class="step-bar"></div>
+        <div class="step-num">04</div>
+        <h3>You Launch & Scale</h3>
+        <p>We deploy your solution, train your team, and provide ongoing support. As your business grows, your system grows with it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="contact-grid">
+    <div class="contact-left">
+      <p class="section-label" style="text-align:left; margin-bottom:0.5rem;">Contact</p>
+      <div class="gold-divider" style="margin:0 0 1.2rem;"></div>
+      <h2>Let's automate your <em>business.</em></h2>
+      <p>Fill out the form and we'll be in touch to schedule your free 30-minute discovery call. No commitment, just clarity.</p>
+      <div class="contact-detail">
+        <span>
+          <strong>Free Discovery Call</strong>
+          30 minutes · No charge · No obligation
+        </span>
+        <span>
+          <strong>Availability</strong>
+          Mon – Fri, flexible scheduling
+        </span>
+        <span>
+          <strong>Service Area</strong>
+          Nationwide — we work with businesses across the US
+        </span>
+      </div>
+    </div>
+
+    <div>
+      <form class="contact-form" id="contactForm" action="https://formspree.io/f/mpqoqabj" method="POST">
+        <div class="form-row">
+          <div class="form-group">
+            <label>First Name</label>
+            <input type="text" name="first_name" placeholder="John" required />
+          </div>
+          <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" name="last_name" placeholder="Smith" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" placeholder="john@example.com" required />
+        </div>
+        <div class="form-group">
+          <label>Phone (optional)</label>
+          <input type="tel" name="phone" placeholder="(555) 000-0000" />
+        </div>
+        <div class="form-group">
+          <label>Package Interest</label>
+          <select name="package">
+            <option value="">Select a service...</option>
+            <option>Hourly Consulting ($75/hr)</option>
+            <option>Full-Service Build (Custom Quote)</option>
+            <option>Not sure yet — just exploring</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>What would you like to automate? (optional)</label>
+          <input type="text" name="vehicle" placeholder="e.g. CRM, invoicing, scheduling, inventory management" />
+        </div>
+        <div class="form-group">
+          <label>Anything else?</label>
+          <textarea name="message" placeholder="Tell us about your situation, timeline, or any questions you have..."></textarea>
+        </div>
+        <p class="form-note">By submitting, you agree to be contacted by Automation App regarding your inquiry. See our <a href="terms.html" style="color:var(--accent); text-decoration:none;">Terms of Service</a> and <a href="privacy.html" style="color:var(--accent); text-decoration:none;">Privacy Policy</a>.</p>
+        <button type="submit" class="form-submit">Send Message →</button>
+        <div class="form-success" id="formSuccess">
+          ✦ &nbsp;Thanks! We'll be in touch within 24 hours to schedule your free discovery call.
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-logo">Automation App</div>
+  <div class="footer-links">
+    <a href="about.html">How It Works</a>
+    <a href="services.html">Services</a>
+    <a href="consult.html">Contact</a>
+  </div>
+  <div class="footer-social">
+  </div>
+  <div class="footer-email"><a href="mailto:support@automationapp.org">support@automationapp.org</a></div>
+  <div class="footer-legal">
+    <a href="terms.html">Terms of Service</a>
+    <a href="privacy.html">Privacy Policy</a>
+  </div>
+  <p class="footer-copy">© 2026 Automation App. All rights reserved.</p>
+</footer>
+
+<script>
+  // Hamburger menu
+  function toggleMenu() {
+    document.getElementById('hamburger').classList.toggle('open');
+    document.getElementById('mobileMenu').classList.toggle('open');
+    document.body.style.overflow = document.getElementById('mobileMenu').classList.contains('open') ? 'hidden' : '';
+  }
+  document.getElementById('hamburger').addEventListener('click', toggleMenu);
+  document.getElementById('mobileMenuClose').addEventListener('click', toggleMenu);
+
+  // Form submit via Formspree AJAX
+  document.getElementById('contactForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = this.querySelector('.form-submit');
+    btn.textContent = 'Sending…';
+    btn.disabled = true;
+    try {
+      const res = await fetch(this.action, {
+        method: 'POST',
+        body: new FormData(this),
+        headers: { 'Accept': 'application/json' }
+      });
+      if (res.ok) {
+        document.getElementById('formSuccess').style.display = 'block';
+        btn.style.display = 'none';
+        this.reset();
+      } else {
+        btn.textContent = 'Something went wrong - try again';
+        btn.disabled = false;
+      }
+    } catch {
+      btn.textContent = 'Network error - try again';
+      btn.disabled = false;
+    }
+  });
+
+  // Highlight nav link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav-links a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 120) current = s.getAttribute('id');
+    });
+    navLinks.forEach(a => {
+      a.style.color = a.getAttribute('href') === '#' + current
+        ? 'var(--accent)' : '';
+    });
+  });
+</script>
+</body>
+</html>

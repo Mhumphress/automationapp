@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <title>Services - Automation App</title>
+  <meta name="description" content="Compare Automation App service plans: Hourly Consulting at $75/hr and Full-Service Build for custom quotes. Professional automation development for small businesses.">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Services - Automation App">
+  <meta property="og:description" content="Compare Automation App service plans: Hourly Consulting at $75/hr and Full-Service Build for custom quotes. Professional automation development for small businesses.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://automationapp.org/services.html">
+  <meta property="og:image" content="https://automationapp.org/logo1.png">
+  <meta property="og:site_name" content="Automation App">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Services - Automation App">
+  <meta name="twitter:description" content="Compare Automation App service plans: Hourly Consulting at $75/hr and Full-Service Build for custom quotes. Professional automation development for small businesses.">
+  <meta name="twitter:image" content="https://automationapp.org/logo1.png">
+  <!-- Canonical -->
+  <link rel="canonical" href="https://automationapp.org/services.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #4F7BF7;
+      --accent-light: #7B9FFF;
+      --accent-dim: rgba(79,123,247,0.15);
+      --black: #0B0F1A;
+      --off-black: #111827;
+      --white: #F8FAFC;
+      --off-white: #EEF2F7;
+      --gray: #8892A8;
+      --light-gray: #CBD5E1;
+      --font-display: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Outfit', sans-serif;
+      --font-number: 'Playfair Display', Georgia, serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font-body); background: var(--white); color: var(--black); overflow-x: hidden; }
+
+    /* ── NAV ── */
+   nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.4rem 4rem;
+      background: rgba(11,15,26,0.7);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(79,123,247,0.2);
+      transition: background 0.3s;
+    }
+    .nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem; /* Space between logo and text */
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.nav-logo span {
+  /* Logo text style with Cormorant font */
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: none;
+  line-height: 1;
+  margin-top: 2px; /* Optical alignment fix */
+}
+    .nav-links { display: flex; gap: 2.4rem; list-style: none; }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-cta {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent) !important;
+      padding: 0.5rem 1.3rem !important;
+      letter-spacing: 0.1em !important;
+      transition: background 0.2s, color 0.2s !important;
+    }
+    .nav-cta:hover { background: var(--accent) !important; color: var(--black) !important; }
+
+    /* ── HERO ── */
+    .services-hero {
+      background: var(--black);
+      padding: 12rem 2rem 8rem;
+      text-align: center;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 60% at 50% 110%, rgba(79,123,247,0.1) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 10%, rgba(79,123,247,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .hero-line {
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 1px; height: 80px;
+      background: linear-gradient(to bottom, transparent, var(--accent));
+      animation: lineDown 1s 0.2s ease both;
+    }
+    @keyframes lineDown {
+      from { height: 0; opacity: 0; }
+      to   { height: 80px; opacity: 1; }
+    }
+    .section-label {
+      font-size: 0.7rem; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.4em;
+      margin-bottom: 1.2rem; display: block;
+    }
+    .services-hero .section-label {
+      animation: fadeUp 0.8s 0.5s ease both;
+    }
+    .services-hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(3rem, 6vw, 5rem);
+      font-weight: 300; line-height: 1.1;
+      animation: fadeUp 0.9s 0.7s ease both;
+    }
+    .services-hero h1 em { font-style: italic; color: var(--accent); }
+    .hero-sub-line {
+      width: 40px; height: 1px;
+      background: var(--accent);
+      margin: 2rem auto 0;
+      animation: expandLine 0.8s 1s ease both;
+    }
+    @keyframes expandLine {
+      from { width: 0; opacity: 0; }
+      to   { width: 40px; opacity: 1; }
+    }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(36px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-left {
+      opacity: 0;
+      transform: translateX(-36px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+    .reveal-left.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .reveal-right {
+      opacity: 0;
+      transform: translateX(36px);
+      transition: opacity 0.75s ease, transform 0.75s ease;
+    }
+    .reveal-right.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* Stagger delays for children */
+    .stagger > *:nth-child(1) { transition-delay: 0s; }
+    .stagger > *:nth-child(2) { transition-delay: 0.1s; }
+    .stagger > *:nth-child(3) { transition-delay: 0.2s; }
+    .stagger > *:nth-child(4) { transition-delay: 0.3s; }
+    .stagger > *:nth-child(5) { transition-delay: 0.4s; }
+
+    /* ── SERVICE ROWS ── */
+    .service-row {
+      max-width: 1100px;
+      margin: 7rem auto;
+      padding: 0 2rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: center;
+    }
+    .service-row.flip { direction: rtl; }
+    .service-row.flip .service-content { direction: ltr; }
+    .service-row.flip .reveal-left { transform: translateX(36px); }
+    .service-row.flip .reveal-left.visible { transform: translateX(0); }
+    .service-row.flip .reveal-right { transform: translateX(-36px); }
+    .service-row.flip .reveal-right.visible { transform: translateX(0); }
+
+    .service-content .section-label { text-align: left; }
+    .service-content h2 {
+      font-family: var(--font-display);
+      font-size: 2.6rem; font-weight: 300;
+      margin-bottom: 0.5rem;
+      line-height: 1.15;
+    }
+    .accent-rule {
+      width: 48px; height: 1px;
+      background: var(--accent);
+      margin: 1rem 0 1.4rem;
+      transition: width 0.6s ease;
+    }
+    .service-content:hover .accent-rule { width: 80px; }
+
+    .price-tag-original {
+      font-family: var(--font-number);
+      font-size: 1.6rem;
+      color: rgba(0,0,0,0.4);
+      text-decoration: line-through;
+      text-decoration-color: #c0392b;
+      text-decoration-thickness: 2px;
+      font-weight: 300;
+      margin-bottom: 0.2rem;
+    }
+    .price-tag-original sup {
+      font-size: 0.7rem;
+      vertical-align: baseline;
+      position: relative;
+      top: -0.3em;
+    }
+    .price-tag-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 0.1rem;
+    }
+    .price-tag {
+      font-family: var(--font-number);
+      font-size: 3.8rem; color: var(--accent);
+      margin-bottom: 1.2rem; display: block;
+      line-height: 1;
+    }
+    .price-tag sup { font-size: 1.4rem; vertical-align: super; }
+
+    .service-desc {
+      font-size: 0.93rem; font-weight: 300;
+      color: var(--gray); line-height: 1.8;
+      margin-bottom: 1.8rem;
+    }
+
+    .feature-list { list-style: none; margin-bottom: 2rem; }
+    .feature-list li {
+      margin-bottom: 0.85rem;
+      color: var(--black);
+      font-size: 0.88rem;
+      font-weight: 300;
+      position: relative;
+      padding-left: 1.8rem;
+      line-height: 1.5;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      padding-bottom: 0.85rem;
+    }
+    .feature-list li:last-child { border-bottom: none; }
+    .feature-list li::before { content: "\2726"; position: absolute; left: 0; color: var(--accent); font-size: 0.7rem; top: 0.15rem; }
+
+    .btn-action {
+      display: inline-block;
+      padding: 0.95rem 2.4rem;
+      background: var(--black);
+      color: var(--accent);
+      text-decoration: none;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.78rem;
+      font-weight: 600;
+      transition: background 0.2s, transform 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-action::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--accent);
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      z-index: 0;
+    }
+    .btn-action:hover::after { transform: translateX(0); }
+    .btn-action span { position: relative; z-index: 1; }
+    .btn-action:hover span { color: var(--black); }
+    .btn-action:hover { transform: translateY(-2px); }
+
+    /* ── IMAGE CARD ── */
+    .service-image {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 4/5;
+      background: var(--off-white);
+    }
+    .service-image::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(79,123,247,0.08) 0%, transparent 60%);
+      z-index: 1; pointer-events: none;
+    }
+    .service-image img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.7s ease;
+    }
+    .service-image:hover img { transform: scale(1.04); }
+    .img-border {
+      position: absolute;
+      top: 12px; left: 12px; right: -12px; bottom: -12px;
+      border: 1px solid rgba(79,123,247,0.25);
+      z-index: -1;
+      transition: top 0.3s, left 0.3s, right 0.3s, bottom 0.3s;
+    }
+    .service-image:hover + .img-border,
+    .service-image:hover ~ .img-border { top: 8px; left: 8px; right: -8px; bottom: -8px; }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 2rem;
+      height: 1px; background: var(--light-gray);
+    }
+
+    /* ── ADDONS STRIP ── */
+    .addons-strip {
+      background: var(--black);
+      padding: 5rem 2rem;
+    }
+    .addons-inner {
+      max-width: 1100px; margin: 0 auto;
+    }
+    .addons-inner .section-label { text-align: center; margin-bottom: 0.8rem; }
+    .addons-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 3vw, 2.8rem);
+      font-weight: 300; color: var(--white);
+      text-align: center; margin-bottom: 3rem;
+    }
+    .addons-title em { font-style: italic; color: var(--accent); }
+    .addons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1px;
+      background: rgba(79,123,247,0.1);
+      border: 1px solid rgba(79,123,247,0.1);
+    }
+    .addon {
+      background: var(--off-black);
+      padding: 2rem 1.8rem;
+      transition: background 0.2s;
+    }
+    .addon:hover { background: rgba(79,123,247,0.07); }
+    .addon-price {
+      font-family: var(--font-display);
+      font-size: 2.2rem; color: var(--accent);
+      font-weight: 300; margin-bottom: 0.4rem;
+    }
+    .addon-name {
+      font-size: 0.83rem; color: rgba(255,255,255,0.55);
+      font-weight: 300; line-height: 1.6;
+    }
+    .discounts-note {
+      text-align: center;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.3);
+      font-weight: 300;
+      margin-top: 2rem;
+    }
+    .discounts-note strong { color: var(--accent); }
+
+    /* ── COMPARISON CHART ── */
+    .comparison-section {
+      background: var(--off-white);
+      padding: 6rem 2rem;
+    }
+    .comparison-inner {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .comparison-inner .section-label { text-align: center; margin-bottom: 0.8rem; }
+    .comparison-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 3vw, 2.8rem);
+      font-weight: 300;
+      color: var(--black);
+      text-align: center;
+      margin-bottom: 3.5rem;
+    }
+    .comparison-title em { font-style: italic; color: var(--accent); }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+
+    /* Column highlight on hover */
+    .comparison-table .col-essential,
+    .comparison-table .col-whiteglove {
+      transition: background 0.3s ease;
+    }
+    .comparison-table:hover .col-essential { background: transparent; }
+    .comparison-table:hover .col-whiteglove { background: transparent; }
+    .comparison-table .col-essential:hover,
+    .comparison-table td.col-essential:hover ~ td.col-essential,
+    .comparison-table .col-whiteglove:hover,
+    .comparison-table td.col-whiteglove:hover ~ td.col-whiteglove {
+      background: rgba(79,123,247,0.04);
+    }
+
+    /* Header cells */
+    .comp-header-cell {
+      padding: 2rem 1.5rem 1.8rem;
+      text-align: center;
+      vertical-align: bottom;
+      position: relative;
+    }
+    .comp-header-cell.col-essential {
+      background: var(--black);
+      border-radius: 12px 12px 0 0;
+    }
+    .comp-header-cell.col-whiteglove {
+      background: var(--black);
+      border-radius: 12px 12px 0 0;
+    }
+    .comp-popular {
+      display: inline-block;
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--black);
+      background: var(--accent);
+      padding: 0.25rem 0.8rem;
+      margin-bottom: 0.8rem;
+      font-weight: 600;
+    }
+    .comp-tier-name {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 0.4rem;
+    }
+    .comp-header-cell.col-essential .comp-tier-name { color: var(--white); }
+    .comp-header-cell.col-whiteglove .comp-tier-name { color: var(--white); }
+    .comp-tier-price {
+      font-family: var(--font-number);
+      font-size: 2.6rem;
+      font-weight: 300;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .comp-tier-price sup { font-size: 1rem; vertical-align: super; }
+
+    /* Feature rows */
+    .comp-feature-label {
+      padding: 1rem 1.2rem;
+      font-size: 0.88rem;
+      font-weight: 300;
+      color: var(--black);
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      line-height: 1.5;
+    }
+    .comp-feature-value {
+      padding: 1rem 1.5rem;
+      text-align: center;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      font-size: 1rem;
+      vertical-align: middle;
+    }
+    .comp-feature-value.col-whiteglove {
+      background: rgba(11,15,26,0.03);
+      border-bottom-color: rgba(0,0,0,0.05);
+    }
+
+    /* Check & dash icons */
+    .check {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: var(--black);
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .dash {
+      display: inline-block;
+      width: 18px; height: 2px;
+      background: var(--light-gray);
+      border-radius: 1px;
+      vertical-align: middle;
+    }
+
+    /* CTA row */
+    .comp-cta-cell {
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+    .comp-cta-cell.col-essential {
+      background: var(--black);
+      border-radius: 0 0 12px 12px;
+    }
+    .comp-cta-cell.col-essential .btn-action {
+      background: var(--accent);
+      color: var(--black);
+    }
+    .comp-cta-cell.col-essential .btn-action::after {
+      background: var(--white);
+    }
+    .comp-cta-cell.col-whiteglove {
+      background: var(--black);
+      border-radius: 0 0 12px 12px;
+    }
+    .comp-cta-cell .btn-action {
+      width: 220px;
+      text-align: center;
+      justify-content: center;
+    }
+    .comp-cta-cell.col-whiteglove .btn-action {
+      background: var(--accent);
+      color: var(--black);
+    }
+    .comp-cta-cell.col-whiteglove .btn-action::after {
+      background: var(--white);
+    }
+
+    /* Hover highlight entire column */
+    .col-highlight-essential .col-essential,
+    .col-highlight-whiteglove .col-whiteglove {
+      background: var(--black) !important;
+    }
+    .col-highlight-essential .col-essential.comp-feature-label,
+    .col-highlight-whiteglove .col-whiteglove.comp-feature-label {
+      color: var(--white) !important;
+      border-bottom-color: rgba(255,255,255,0.1) !important;
+    }
+    .col-highlight-essential .col-essential.comp-feature-value,
+    .col-highlight-whiteglove .col-whiteglove.comp-feature-value {
+      border-bottom-color: rgba(255,255,255,0.1) !important;
+    }
+    .col-highlight-essential .col-essential .dash,
+    .col-highlight-whiteglove .col-whiteglove .dash {
+      background: rgba(255,255,255,0.25) !important;
+    }
+    .col-highlight-essential .col-essential.comp-header-cell,
+    .col-highlight-essential .col-essential.comp-cta-cell {
+      background: var(--black) !important;
+    }
+    .col-highlight-whiteglove .col-whiteglove.comp-header-cell,
+    .col-highlight-whiteglove .col-whiteglove.comp-cta-cell {
+      background: var(--black) !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .comparison-section { padding: 4rem 1rem; }
+      .comparison-table { border-spacing: 0; }
+      .comp-feature-label {
+        font-size: 0.72rem;
+        padding: 0.7rem 0.5rem;
+        line-height: 1.4;
+      }
+      .comp-feature-value { padding: 0.7rem 0.3rem; min-width: 52px; }
+      .comp-header-cell {
+        padding: 1.2rem 0.5rem 1rem;
+      }
+      .comp-header-cell.col-essential,
+      .comp-header-cell.col-whiteglove {
+        border-radius: 8px 8px 0 0;
+      }
+      .comp-cta-cell.col-essential,
+      .comp-cta-cell.col-whiteglove {
+        border-radius: 0 0 8px 8px;
+      }
+      .comp-tier-name { font-size: 0.9rem; }
+      .comp-tier-price { font-size: 1.6rem; }
+      .comp-tier-price sup { font-size: 0.7rem; }
+      .comp-popular { font-size: 0.55rem; padding: 0.2rem 0.6rem; margin-bottom: 0.5rem; }
+      .comp-cta-cell { padding: 1.2rem 0.5rem; }
+      .comp-cta-cell .btn-action {
+        width: 100%; max-width: none; min-width: 0;
+        font-size: 0.6rem; padding: 0.7rem 0.5rem;
+        letter-spacing: 0.1em;
+      }
+      .check { width: 22px; height: 22px; font-size: 0.65rem; }
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--black);
+      padding: 3rem 4rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      border-top: 1px solid rgba(79,123,247,0.15);
+    }
+    .footer-logo {
+      font-family: var(--font-display);
+      font-size: 1.5rem; font-weight: 600;
+      color: var(--accent); letter-spacing: 0.08em;
+    }
+    .footer-copy { font-size: 0.75rem; color: rgba(255,255,255,0.25); font-weight: 300; }
+    .footer-links { display: flex; gap: 1.5rem; }
+    .footer-links a {
+      font-size: 0.72rem; letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--accent); }
+    .footer-social { display: flex; gap: 1.2rem; align-items: center; }
+    .footer-social a {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .footer-social a:hover { border-color: var(--accent); background: rgba(79,123,247,0.1); }
+    .footer-social svg { width: 14px; height: 14px; fill: rgba(255,255,255,0.4); transition: fill 0.2s; }
+    .footer-social a:hover svg { fill: var(--accent); }
+    .footer-email { margin-top: 0.8rem; }
+    .footer-email a { color: var(--accent); text-decoration: none; font-size: 0.8rem; letter-spacing: 0.06em; transition: opacity 0.2s; }
+    .footer-email a:hover { opacity: 0.7; }
+    .footer-legal { display: flex; gap: 1.5rem; margin-top: 0.5rem; }
+    .footer-legal a { color: rgba(255,255,255,0.3); text-decoration: none; font-size: 0.7rem; letter-spacing: 0.08em; transition: color 0.2s; }
+    .footer-legal a:hover { color: var(--accent); }
+
+    /* ── HAMBURGER ── */
+    .hamburger {
+      display: none !important; background: none; border: none; cursor: pointer;
+      width: 32px; height: 24px; position: relative; z-index: 201;
+    }
+    .hamburger span {
+      display: block; position: absolute; left: 0; right: 0;
+      height: 2px; background: var(--accent); transition: transform 0.3s, opacity 0.3s;
+    }
+    .hamburger span:nth-child(1) { top: 0; }
+    .hamburger span:nth-child(2) { top: 50%; transform: translateY(-50%); }
+    .hamburger span:nth-child(3) { bottom: 0; }
+    .hamburger.open span:nth-child(1) { top: 50%; transform: translateY(-50%) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
+    .mobile-menu {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(11,15,26,0.95); backdrop-filter: blur(16px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 2.5rem;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .mobile-menu.open { opacity: 1; pointer-events: auto; }
+    .mobile-menu a {
+      color: rgba(255,255,255,0.75); text-decoration: none;
+      font-size: 1.1rem; font-weight: 500; letter-spacing: 0.15em;
+      text-transform: uppercase; transition: color 0.2s, transform 0.4s ease, opacity 0.4s ease;
+      opacity: 0; transform: translateY(20px);
+    }
+    .mobile-menu.open a {
+      opacity: 1; transform: translateY(0);
+    }
+    .mobile-menu a:nth-child(1) { transition-delay: 0.1s; }
+    .mobile-menu a:nth-child(2) { transition-delay: 0.2s; }
+    .mobile-menu a:nth-child(3) { transition-delay: 0.3s; }
+    .mobile-menu a:hover { color: var(--accent); }
+    .mobile-menu .nav-cta {
+      background: transparent; border: 1px solid var(--accent);
+      color: var(--accent); padding: 0.7rem 1.8rem; font-size: 0.9rem;
+    }
+    .mobile-menu .nav-cta:hover { background: var(--accent); color: var(--black); }
+    .mobile-menu-close {
+      position: absolute; top: 1.5rem; right: 1.5rem;
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.5); font-size: 2rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .mobile-menu-close:hover { color: var(--accent); }
+
+    /* ── MOBILE ── */
+    @media (max-width: 768px) {
+      nav { padding: 1.2rem 1.5rem; }
+      .nav-links { display: none; }
+      .hamburger { display: block !important; }
+      .mobile-menu { display: flex; }
+      .service-row { grid-template-columns: 1fr; gap: 2.5rem; margin: 4rem auto; }
+      .service-row.flip { direction: ltr; }
+      footer { flex-direction: column; align-items: flex-start; padding: 2rem 1.5rem; gap: 1.5rem; }
+      .footer-links { flex-wrap: wrap; }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+  <!-- Replace with your GA ID -->
+  <!--
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-92Q2PSFHZN"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-92Q2PSFHZN');
+  </script>
+  -->
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="height:38px; width:auto; display:block;" fill="currentColor"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/></g><circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/><circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/></svg>
+    <span>Automation App</span>
+  </a>
+  <ul class="nav-links">
+  <li><a href="about.html">How It Works</a></li>
+  <li><a href="services.html">Services</a></li>
+  <li><a href="consult.html" class="nav-cta">Book a Consult</a></li>
+</ul>
+  <button class="hamburger" id="hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu">&times;</button>
+  <a href="about.html">How It Works</a>
+  <a href="services.html">Services</a>
+  <a href="consult.html" class="nav-cta">Book a Consult</a>
+</div>
+
+<!-- HERO -->
+<header class="services-hero">
+  <div class="hero-bg"></div>
+  <div class="hero-line"></div>
+  <span class="section-label">Investment & Value</span>
+  <h1>Solutions for the<br>the <em>modern</em> business</h1>
+  <div class="hero-sub-line"></div>
+</header>
+
+<main>
+
+  <!-- TIER 1 -->
+  <section class="service-row">
+    <div class="service-content reveal-left">
+      <span class="section-label">Service 01</span>
+      <h2>Hourly Consulting</h2>
+      <div class="accent-rule"></div>
+      <span class="price-tag">$75<sup>/hr</sup></span>
+      <p class="service-desc">Perfect for businesses that need targeted automation work — a specific workflow streamlined, an integration built, or an existing system optimized. Pay only for the hours you need.</p>
+      <ul class="feature-list stagger">
+        <li class="reveal">Full workflow audit and discovery session to identify automation opportunities</li>
+        <li class="reveal">Custom automation design and implementation for your specific processes</li>
+        <li class="reveal">Integration with your existing tools — Google Workspace, QuickBooks, Slack, and more</li>
+        <li class="reveal">Data migration and cleanup from spreadsheets or legacy systems</li>
+        <li class="reveal">Ongoing maintenance and updates available as needed</li>
+      </ul>
+      <a href="consult.html?tier=hourly" class="btn-action"><span>Select Hourly Consulting →</span></a>
+    </div>
+    <div style="position:relative;">
+      <div class="service-image reveal-right">
+        <img src="ford.jpg" alt="Automation Consulting" />
+      </div>
+      <div class="img-border"></div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- TIER 2 -->
+  <section class="service-row flip">
+    <div class="service-content reveal-right">
+      <span class="section-label">Service 02</span>
+      <h2>Full-Service Build</h2>
+      <div class="accent-rule"></div>
+      <span class="price-tag">Custom</span>
+      <p class="service-desc">A complete custom platform built from the ground up — ERP, CRM, scheduling system, or whatever your business needs. We handle everything from architecture to deployment.</p>
+      <ul class="feature-list stagger">
+        <li class="reveal">Priority service — your project moves to the front of the line</li>
+        <li class="reveal">Custom ERP, CRM, or internal tool designed to your exact specifications</li>
+        <li class="reveal">Branded interface with your company's look and feel</li>
+        <li class="reveal">Automated reporting, dashboards, and analytics built in</li>
+        <li class="reveal">Affordable monthly subscription for hosting, support, and updates</li>
+      </ul>
+      <a href="consult.html?tier=full-service" class="btn-action"><span>Select Full-Service Build →</span></a>
+    </div>
+    <div style="position:relative;">
+      <div class="service-image reveal-left">
+        <img src="lexus.jpg" alt="Full-Service Platform Build" />
+      </div>
+      <div class="img-border"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- COMPARISON CHART -->
+<section class="comparison-section" id="comparison">
+  <div class="comparison-inner">
+    <span class="section-label">Compare Services</span>
+    <h2 class="comparison-title">Find the right <em>fit</em></h2>
+
+    <table class="comparison-table" id="compTable">
+      <thead>
+        <tr>
+          <th class="comp-header-cell" style="background:transparent;"></th>
+          <th class="comp-header-cell col-essential">
+            <div class="comp-tier-name">Hourly Consulting</div>
+            <div class="comp-tier-price">$75<sup>/hr</sup></div>
+          </th>
+          <th class="comp-header-cell col-whiteglove">
+            <div class="comp-popular">Most Popular</div>
+            <div class="comp-tier-name">Full-Service Build</div>
+            <div class="comp-tier-price">Custom</div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="comp-feature-label">Full workflow audit and discovery session</td>
+          <td class="comp-feature-value col-essential"><span class="check">&#10003;</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Custom automation design and implementation</td>
+          <td class="comp-feature-value col-essential"><span class="check">&#10003;</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Integration with existing tools and platforms</td>
+          <td class="comp-feature-value col-essential"><span class="check">&#10003;</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Data migration and cleanup</td>
+          <td class="comp-feature-value col-essential"><span class="check">&#10003;</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Ongoing maintenance and support</td>
+          <td class="comp-feature-value col-essential"><span class="check">&#10003;</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Dedicated project manager</td>
+          <td class="comp-feature-value col-essential"><span class="dash">-</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Priority scheduling — your project first</td>
+          <td class="comp-feature-value col-essential"><span class="dash">-</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Custom branded platform with your company identity</td>
+          <td class="comp-feature-value col-essential"><span class="dash">-</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Built-in analytics, dashboards, and reporting</td>
+          <td class="comp-feature-value col-essential"><span class="dash">-</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td class="comp-feature-label">Affordable monthly subscription for hosting and updates</td>
+          <td class="comp-feature-value col-essential"><span class="dash">-</span></td>
+          <td class="comp-feature-value col-whiteglove"><span class="check">&#10003;</span></td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="comp-cta-cell"></td>
+          <td class="comp-cta-cell col-essential">
+            <a href="consult.html?tier=hourly" class="btn-action"><span>Select Hourly Consulting</span></a>
+          </td>
+          <td class="comp-cta-cell col-whiteglove">
+            <a href="consult.html?tier=full-service" class="btn-action"><span>Select Full-Service Build</span></a>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Automation App</div>
+  <div class="footer-links">
+    <a href="index.html#about">How It Works</a>
+    <a href="services.html">Services</a>
+    <a href="index.html#contact">Contact</a>
+  </div>
+  <div class="footer-email"><a href="mailto:support@automationapp.org">support@automationapp.org</a></div>
+  <div class="footer-legal">
+    <a href="terms.html">Terms of Service</a>
+    <a href="privacy.html">Privacy Policy</a>
+  </div>
+  <p class="footer-copy">&copy; 2026 Automation App. All rights reserved.</p>
+</footer>
+
+<script>
+  // Hamburger menu
+  (function() {
+    var hamburger = document.getElementById('hamburger');
+    var mobileMenu = document.getElementById('mobileMenu');
+    var closeBtn = document.getElementById('mobileMenuClose');
+    function toggleMenu() {
+      hamburger.classList.toggle('open');
+      mobileMenu.classList.toggle('open');
+      document.body.style.overflow = mobileMenu.classList.contains('open') ? 'hidden' : '';
+    }
+    if (hamburger) hamburger.addEventListener('click', toggleMenu);
+    if (closeBtn) closeBtn.addEventListener('click', toggleMenu);
+  })();
+
+  // Scroll reveal
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        // For stagger children
+        entry.target.querySelectorAll('.reveal').forEach((el, i) => {
+          setTimeout(() => el.classList.add('visible'), i * 100);
+        });
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => {
+    observer.observe(el);
+  });
+
+  // Comparison chart - animate checks/dashes on scroll
+  const chartObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const icons = entry.target.querySelectorAll('.check, .dash');
+        icons.forEach((icon, i) => {
+          setTimeout(() => icon.classList.add('visible'), i * 80);
+        });
+        chartObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.2 });
+
+  const compTable = document.getElementById('compTable');
+  if (compTable) chartObserver.observe(compTable);
+
+  // Column highlight on hover
+  if (compTable) {
+    compTable.querySelectorAll('.col-essential').forEach(cell => {
+      cell.addEventListener('mouseenter', () => compTable.classList.add('col-highlight-essential'));
+      cell.addEventListener('mouseleave', () => compTable.classList.remove('col-highlight-essential'));
+    });
+    compTable.querySelectorAll('.col-whiteglove').forEach(cell => {
+      cell.addEventListener('mouseenter', () => compTable.classList.add('col-highlight-whiteglove'));
+      cell.addEventListener('mouseleave', () => compTable.classList.remove('col-highlight-whiteglove'));
+    });
+  }
+
+  // Nav active link
+  const navLinks = document.querySelectorAll('.nav-links a');
+  navLinks.forEach(a => {
+    if (a.getAttribute('href') === 'services.html') {
+      a.style.color = 'var(--accent)';
+    }
+  });
+</script>
+
+</body>
+</html>

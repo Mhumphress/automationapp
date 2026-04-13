@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <title>Terms of Service - Automation App</title>
+  <meta name="description" content="Automation App Terms of Service. Read the terms and conditions governing the use of Automation App's automation and software development services.">
+  <meta property="og:title" content="Terms of Service - Automation App">
+  <meta property="og:description" content="Automation App Terms of Service. Read the terms and conditions governing the use of Automation App's automation and software development services.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://automationapp.org/terms.html">
+  <meta property="og:image" content="https://automationapp.org/logo1.png">
+  <meta property="og:site_name" content="Automation App">
+  <link rel="canonical" href="https://automationapp.org/terms.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #4F7BF7;
+      --accent-light: #7B9FFF;
+      --accent-dim: rgba(79,123,247,0.15);
+      --black: #0B0F1A;
+      --off-black: #111827;
+      --dark: #1A2332;
+      --white: #F8FAFC;
+      --off-white: #EEF2F7;
+      --gray: #8892A8;
+      --light-gray: #CBD5E1;
+      --font-display: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Outfit', sans-serif;
+      --font-number: 'Playfair Display', Georgia, serif;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--black);
+      color: var(--off-white);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* -- NAV -- */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.4rem 4rem;
+      background: rgba(11,15,26,0.7);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(79,123,247,0.2);
+      transition: background 0.3s;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 0.8rem;
+      font-family: var(--font-display);
+      font-size: 1.8rem; font-weight: 600;
+      color: var(--accent); letter-spacing: 0.08em;
+      text-decoration: none;
+    }
+    .nav-logo span {
+      font-family: var(--font-display);
+      font-weight: 600; text-transform: none;
+      line-height: 1; margin-top: 2px;
+    }
+    .nav-links { display: flex; gap: 2.4rem; list-style: none; }
+    .nav-links a {
+      color: rgba(255,255,255,0.75); text-decoration: none;
+      font-size: 0.82rem; font-weight: 500;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-cta {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent) !important;
+      padding: 0.5rem 1.3rem !important;
+      letter-spacing: 0.1em !important;
+      transition: background 0.2s, color 0.2s !important;
+    }
+    .nav-cta:hover { background: var(--accent) !important; color: var(--black) !important; }
+
+    /* -- LEGAL CONTENT -- */
+    .legal-wrap {
+      padding: 10rem 2rem 5rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .legal-wrap .eyebrow {
+      font-size: 0.68rem; letter-spacing: 0.35em;
+      text-transform: uppercase; color: var(--accent);
+      margin-bottom: 1rem; display: block;
+    }
+    .legal-wrap h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2.2rem, 4vw, 3.4rem);
+      font-weight: 300; line-height: 1.15;
+      color: var(--white);
+      margin-bottom: 0.6rem;
+    }
+    .legal-wrap .effective-date {
+      font-size: 0.85rem; color: var(--gray);
+      margin-bottom: 3rem; font-weight: 300;
+    }
+    .legal-wrap h2 {
+      font-family: var(--font-display);
+      font-size: 1.5rem; font-weight: 400;
+      color: var(--accent);
+      margin-top: 2.8rem; margin-bottom: 1rem;
+      line-height: 1.3;
+    }
+    .legal-wrap p {
+      color: rgba(243,240,234,0.75);
+      font-size: 0.92rem; font-weight: 300;
+      line-height: 1.85; margin-bottom: 1rem;
+    }
+    .legal-wrap ul {
+      list-style: none; padding: 0;
+      margin-bottom: 1rem;
+    }
+    .legal-wrap ul li {
+      position: relative;
+      padding-left: 1.4rem;
+      color: rgba(243,240,234,0.75);
+      font-size: 0.92rem; font-weight: 300;
+      line-height: 1.85; margin-bottom: 0.5rem;
+    }
+    .legal-wrap ul li::before {
+      content: '';
+      position: absolute; left: 0; top: 0.7rem;
+      width: 5px; height: 5px;
+      background: var(--accent); border-radius: 50%;
+    }
+    .legal-wrap a {
+      color: var(--accent); text-decoration: none;
+      transition: color 0.2s;
+    }
+    .legal-wrap a:hover { color: var(--accent-light); }
+    .legal-wrap .closing {
+      margin-top: 2.5rem;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(79,123,247,0.15);
+      font-style: italic;
+      color: rgba(243,240,234,0.5);
+    }
+
+    /* -- FOOTER -- */
+    footer {
+      background: var(--black);
+      padding: 3rem 4rem;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap; gap: 1rem;
+      border-top: 1px solid rgba(79,123,247,0.15);
+    }
+    .footer-logo {
+      font-family: var(--font-display);
+      font-size: 1.5rem; font-weight: 600;
+      color: var(--accent); letter-spacing: 0.08em;
+    }
+    .footer-copy { font-size: 0.75rem; color: rgba(255,255,255,0.25); font-weight: 300; }
+    .footer-links { display: flex; gap: 1.5rem; }
+    .footer-links a {
+      font-size: 0.72rem; letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--accent); }
+    .footer-email { margin-top: 0.8rem; }
+    .footer-email a { color: var(--accent); text-decoration: none; font-size: 0.8rem; letter-spacing: 0.06em; transition: opacity 0.2s; }
+    .footer-email a:hover { opacity: 0.7; }
+    .footer-legal { display: flex; gap: 1.5rem; }
+    .footer-legal a {
+      font-size: 0.7rem; letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      text-decoration: none; transition: opacity 0.2s;
+      opacity: 0.5;
+    }
+    .footer-legal a:hover { opacity: 1; }
+
+    /* -- HAMBURGER -- */
+    .hamburger {
+      display: none !important; background: none; border: none; cursor: pointer;
+      width: 32px; height: 24px; position: relative; z-index: 201;
+    }
+    .hamburger span {
+      display: block; position: absolute; left: 0; right: 0;
+      height: 2px; background: var(--accent); transition: transform 0.3s, opacity 0.3s;
+    }
+    .hamburger span:nth-child(1) { top: 0; }
+    .hamburger span:nth-child(2) { top: 50%; transform: translateY(-50%); }
+    .hamburger span:nth-child(3) { bottom: 0; }
+    .hamburger.open span:nth-child(1) { top: 50%; transform: translateY(-50%) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { bottom: 50%; transform: translateY(50%) rotate(-45deg); }
+    .mobile-menu {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(11,15,26,0.95); backdrop-filter: blur(16px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 2.5rem;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .mobile-menu.open { opacity: 1; pointer-events: auto; }
+    .mobile-menu a {
+      color: rgba(255,255,255,0.75); text-decoration: none;
+      font-size: 1.1rem; font-weight: 500; letter-spacing: 0.15em;
+      text-transform: uppercase; transition: color 0.2s, transform 0.4s ease, opacity 0.4s ease;
+      opacity: 0; transform: translateY(20px);
+    }
+    .mobile-menu.open a { opacity: 1; transform: translateY(0); }
+    .mobile-menu a:nth-child(1) { transition-delay: 0.1s; }
+    .mobile-menu a:nth-child(2) { transition-delay: 0.2s; }
+    .mobile-menu a:nth-child(3) { transition-delay: 0.3s; }
+    .mobile-menu a:hover { color: var(--accent); }
+    .mobile-menu .nav-cta {
+      background: transparent; border: 1px solid var(--accent);
+      color: var(--accent); padding: 0.7rem 1.8rem; font-size: 0.9rem;
+    }
+    .mobile-menu .nav-cta:hover { background: var(--accent); color: var(--black); }
+    .mobile-menu-close {
+      position: absolute; top: 1.5rem; right: 1.5rem;
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.5); font-size: 2rem; line-height: 1;
+      transition: color 0.2s;
+    }
+    .mobile-menu-close:hover { color: var(--accent); }
+
+    /* -- MOBILE -- */
+    @media (max-width: 768px) {
+      nav { padding: 1.2rem 1.5rem; }
+      .nav-links { display: none; }
+      .hamburger { display: block !important; }
+      .mobile-menu { display: flex; }
+      .legal-wrap { padding: 8rem 1.5rem 3rem; }
+      footer { flex-direction: column; align-items: flex-start; padding: 2rem 1.5rem; }
+    }
+  </style>
+  <!-- Replace with your GA ID -->
+  <!--
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-92Q2PSFHZN"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-92Q2PSFHZN');
+  </script>
+  -->
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="height:38px; width:auto;" fill="currentColor"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/></g><circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/><circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/></svg><span>Automation App</span></a>
+  <ul class="nav-links">
+    <li><a href="about.html">How It Works</a></li>
+    <li><a href="services.html">Services</a></li>
+    <li><a href="consult.html" class="nav-cta">Book a Consult</a></li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Menu"><span></span><span></span><span></span></button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu">&times;</button>
+  <a href="about.html">How It Works</a>
+  <a href="services.html">Services</a>
+  <a href="consult.html" class="nav-cta">Book a Consult</a>
+</div>
+
+<!-- CONTENT -->
+<div class="legal-wrap">
+  <span class="eyebrow">Automation App</span>
+  <h1>Terms of Service</h1>
+  <p class="effective-date">Effective Date: April 3, 2026</p>
+
+  <h2>1. Acceptance of Terms</h2>
+  <p>These Terms of Service constitute a legally binding contract between you and Automation App. By accessing automationapp.org, submitting an inquiry, booking a consultation, or purchasing any Automation App service, you acknowledge that you have read, understood, and agree to be bound by this Agreement. Automation App reserves the right to amend this Agreement at any time. Your continued use of our services following any such notice constitutes your acceptance of the updated terms.</p>
+
+  <h2>2. Description of Services</h2>
+  <p>Automation App is a custom automation and software development company that provides professional services to small businesses. We design, build, and maintain custom software solutions including ERPs, CRMs, workflow automation systems, internal tools, and other business applications. Automation App does not provide legal or financial advice. All final decisions regarding project scope and requirements remain with the Client.</p>
+  <p>Automation App offers the following service tiers:</p>
+  <ul>
+    <li><strong>Hourly Consulting ($75/hr):</strong> Full workflow audit and discovery; custom automation design and implementation; integration with existing tools and platforms; data migration and cleanup; ongoing maintenance and updates as needed.</li>
+    <li><strong>Full-Service Build (Custom Quote):</strong> All Hourly Consulting services plus priority scheduling; custom branded platform built to exact specifications; built-in analytics, dashboards, and reporting; affordable monthly subscription for hosting, support, and updates; complete hands-off experience from discovery to deployment.</li>
+  </ul>
+
+  <h2>3. Eligibility</h2>
+  <p>To use Automation App services, you must be at least 18 years of age, have the legal capacity to enter a binding contract, reside in or operate a business within the United States, and provide accurate and complete information throughout the engagement. Automation App reserves the right to refuse service to any individual at its sole discretion.</p>
+
+  <h2>4. Payment &amp; Billing</h2>
+  <p>Upon completing the initial consultation and deciding to move forward, Automation App will issue an invoice to the client. Payment is due within one (1) business day of the invoice being sent. Work will not begin until payment is received in full.</p>
+  <p>All payments are processed securely through Stripe. Automation App does not collect, store, or have access to your payment card information.</p>
+  <p>Service fees apply to the scope of work defined in the project agreement.</p>
+  <p>Automation App reserves the right to modify pricing at any time. Changes will not affect services already purchased.</p>
+  <p>In the event of a chargeback filed with your card issuer, Automation App reserves the right to suspend services immediately pending resolution.</p>
+
+  <h2>5. Refund Policy</h2>
+  <p>Automation App is committed to transparency and accountability. Our refund policy is built around specific, measurable deliverables established with every client prior to the start of work.</p>
+  <p><strong>How the Parameters Are Established:</strong></p>
+  <p>Following the initial discovery call, Automation App will provide the client with a written scope of work detailing: (a) the specific deliverables; (b) the timeline for completion; and (c) the project milestones and acceptance criteria.</p>
+  <p>By submitting payment, the client confirms that they have received, reviewed, and agreed to the scope of work. Payment serves as the client's binding acknowledgment of these parameters and constitutes full acceptance of the terms under which Automation App's performance will be evaluated for refund purposes. No additional signature is required for these parameters to be enforceable.</p>
+  <p>Work begins immediately upon receipt of payment. No work will commence prior to payment being received in full.</p>
+  <p><strong>Refund Triggers:</strong></p>
+  <ul>
+    <li><strong>Timeline Overrun (50% Refund):</strong> If Automation App fails to deliver within the timeline stated in the scope of work, the client is entitled to request a 50% refund. The request must be submitted in writing to <a href="mailto:support@automationapp.org">support@automationapp.org</a> within seven (7) calendar days of the timeline expiration.</li>
+    <li><strong>Deliverables Not Met (50% Refund):</strong> If the delivered solution does not meet the acceptance criteria stated in the scope of work, the client is entitled to request a 50% refund. The request must be submitted in writing to <a href="mailto:support@automationapp.org">support@automationapp.org</a> within seven (7) calendar days of the solution being delivered to the client.</li>
+    <li><strong>Both Conditions Not Met (100% Refund):</strong> If Automation App both exceeds the stated timeline and fails to meet the stated acceptance criteria, the client is entitled to a full 100% refund.</li>
+  </ul>
+  <p><strong>Refund Exclusions:</strong></p>
+  <p>Refund requests will not be honored under the following circumstances:</p>
+  <ul>
+    <li>The client significantly changes project scope or requirements after development has begun without a formal change order.</li>
+    <li>The client fails to provide necessary information, access, or feedback within agreed-upon timelines.</li>
+    <li>The client provides inaccurate or incomplete information that materially affects delivery.</li>
+    <li>The client has already approved and accepted the delivered solution.</li>
+  </ul>
+  <p>All refund requests must be submitted in writing to <a href="mailto:support@automationapp.org">support@automationapp.org</a>. Approved refunds will be processed within ten (10) business days to the original payment method. The refund policy described in this section represents the client's sole financial remedy under this Agreement.</p>
+
+  <h2>6. Client Responsibilities &amp; Acceptable Use</h2>
+  <ul>
+    <li><strong>Accuracy:</strong> Provide complete and truthful information about business processes, requirements, and technical environment.</li>
+    <li><strong>Timely Communication:</strong> Respond to Automation App in a timely manner. Automation App is not responsible for missed opportunities resulting from client unresponsiveness.</li>
+    <li><strong>Scope Adherence:</strong> Agree that changes to project scope after development begins may require a change order.</li>
+    <li><strong>Final Approval:</strong> All deployment decisions remain with you.</li>
+  </ul>
+  <p>Prohibited conduct includes submitting false information, impersonating any person or entity, using services for unlawful purposes, or interfering with Automation App's operations. Automation App reserves the right to terminate services immediately and without refund for any such violation.</p>
+
+  <h2>7. No Guarantee of Specific Outcome</h2>
+  <p>While Automation App establishes deliverables and timelines for each engagement and makes every reasonable commercial effort to meet or exceed them, we make no absolute guarantee of any specific business outcome, revenue increase, or time savings. Third-party integrations, client infrastructure, and evolving requirements are outside Automation App's control. Where Automation App falls short of its stated commitments, the refund policy in Section 5 provides the client's exclusive remedy.</p>
+
+  <h2>8. Intellectual Property</h2>
+  <p>All content on automationapp.org is the exclusive property of Automation App and protected by applicable intellectual property laws. Clients are granted a limited, non-exclusive, non-transferable license to access our website for personal use only. You may not copy, reproduce, distribute, modify, or create derivative works from any Automation App content without prior written consent.</p>
+
+  <h2>9. Privacy</h2>
+  <p>Automation App's collection and use of personal information is governed by our <a href="privacy.html">Privacy Policy</a>, incorporated into this Agreement by reference. By using our services, you consent to the data practices described therein. In the course of providing services, Automation App will share relevant client information with third-party service providers solely as necessary to perform the contracted services.</p>
+
+  <h2>10. Limitation of Liability</h2>
+  <p>To the fullest extent permitted by law, Automation App shall not be liable for: actions or omissions by third-party service providers; third-party software or API changes; system outages beyond our control; or any indirect, incidental, or consequential damages. Automation App's maximum aggregate liability shall not exceed the total amount paid by the client for the applicable service.</p>
+
+  <h2>11. Disclaimer of Warranties</h2>
+  <p>Automation App's services are provided on an "as is" and "as available" basis without warranties of any kind. Automation App does not warrant that services will be uninterrupted, error-free, or result in any specific outcome. Automation App is not a licensed attorney or financial advisor, and nothing herein constitutes legal or financial advice.</p>
+
+  <h2>12. Cancellation Policy</h2>
+  <ul>
+    <li><strong>Pre-Development:</strong> Full refund if cancelled before development work begins. Request must be submitted in writing to <a href="mailto:support@automationapp.org">support@automationapp.org</a>.</li>
+    <li><strong>Post-Development:</strong> Once development has begun, cancellations are evaluated under the refund policy in Section 5.</li>
+  </ul>
+  <p>Approved refunds are processed within ten (10) business days to the original payment method.</p>
+
+  <h2>13. Termination</h2>
+  <p>Automation App may terminate or suspend services at any time, with or without cause. Immediate termination without refund may occur for violations of this Agreement, submission of false information, or abusive conduct toward staff. If Automation App terminates without cause, a prorated refund will be issued based on work completed at the time of termination.</p>
+
+  <h2>14. Indemnification</h2>
+  <p>You agree to indemnify and hold harmless Automation App and its representatives from any claims, damages, or expenses -- including reasonable attorneys' fees -- arising from: your use of our services; your violation of this Agreement; your violation of any applicable law; or false information you provide.</p>
+
+  <h2>15. Dispute Resolution</h2>
+  <ul>
+    <li><strong>Informal Resolution:</strong> Parties will first attempt to resolve disputes by contacting <a href="mailto:support@automationapp.org">support@automationapp.org</a>. Automation App will respond within ten (10) business days. Parties agree to negotiate in good faith for thirty (30) days before pursuing formal proceedings.</li>
+    <li><strong>Binding Arbitration:</strong> Unresolved disputes shall be submitted to binding arbitration in Livingston County, New York. The arbitrator's decision is final and binding.</li>
+    <li><strong>No Class Actions:</strong> All disputes must be resolved on an individual basis. You waive the right to participate in any class action against Automation App.</li>
+    <li><strong>Exceptions:</strong> Either party may seek emergency injunctive relief from a court to prevent irreparable harm pending arbitration.</li>
+  </ul>
+
+  <h2>16. Governing Law</h2>
+  <p>This Agreement is governed by the laws of the State of New York. Subject to Section 15, any legal proceedings shall be brought exclusively in the courts of Livingston County, New York.</p>
+
+  <h2>17. Force Majeure</h2>
+  <p>Automation App is not liable for delays or failures caused by circumstances beyond its reasonable control, including acts of God, natural disasters, pandemics, war, government actions, power outages, or third-party system failures. If services cannot resume within thirty (30) days, the client may request a prorated refund for unperformed services.</p>
+
+  <h2>18. Severability</h2>
+  <p>If any provision of this Agreement is found invalid or unenforceable, it shall be modified to the minimum extent necessary or severed entirely. All remaining provisions shall continue in full force and effect.</p>
+
+  <h2>19. Entire Agreement</h2>
+  <p>This Agreement, together with Automation App's <a href="privacy.html">Privacy Policy</a>, constitutes the entire agreement between the parties and supersedes all prior communications and understandings. No modification is binding unless made in writing and signed by an authorized Automation App representative.</p>
+
+  <h2>20. Contact Information</h2>
+  <p>Automation App<br>
+  Website: <a href="https://automationapp.org">automationapp.org</a><br>
+  Email: <a href="mailto:support@automationapp.org">support@automationapp.org</a><br>
+  Livingston County, New York</p>
+
+  <p class="closing">By purchasing Automation App services, you acknowledge that you have read, understood, and agreed to these Terms of Service.</p>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Automation App</div>
+  <div class="footer-links">
+    <a href="about.html">How It Works</a>
+    <a href="services.html">Services</a>
+    <a href="consult.html">Contact</a>
+  </div>
+  <div class="footer-email"><a href="mailto:support@automationapp.org">support@automationapp.org</a></div>
+  <div class="footer-legal">
+    <a href="terms.html">Terms of Service</a>
+    <a href="privacy.html">Privacy Policy</a>
+  </div>
+  <p class="footer-copy">&copy; 2026 Automation App. All rights reserved.</p>
+</footer>
+
+<script>
+  // Hamburger menu
+  function toggleMenu() {
+    document.getElementById('hamburger').classList.toggle('open');
+    document.getElementById('mobileMenu').classList.toggle('open');
+    document.body.style.overflow = document.getElementById('mobileMenu').classList.contains('open') ? 'hidden' : '';
+  }
+  document.getElementById('hamburger').addEventListener('click', toggleMenu);
+  document.getElementById('mobileMenuClose').addEventListener('click', toggleMenu);
+</script>
+
+</body>
+</html>
