@@ -226,6 +226,8 @@
     import { showToast } from './js/ui.js';
     import * as contactsView from './js/views/contacts.js';
     import * as pipelineView from './js/views/pipeline.js';
+    import { queryDocuments } from './js/services/firestore.js';
+    import { formatCurrency as fmtCurrency } from './js/ui.js';
 
     // ── Auth guard ──────────────────────────
     onAuthStateChanged(auth, (user) => {
@@ -296,6 +298,32 @@
         pipelineView.render();
       },
       destroy: pipelineView.destroy
+    });
+
+    // Override dashboard with live stats
+    registerView('dashboard', {
+      async render() {
+        document.getElementById('headerTitle').textContent = 'Dashboard';
+        try {
+          const [contactsList, dealsList] = await Promise.all([
+            queryDocuments('contacts'),
+            queryDocuments('deals')
+          ]);
+          document.getElementById('statContacts').textContent = contactsList.length;
+
+          const activeDeals = dealsList.filter(d => d.stage !== 'won' && d.stage !== 'lost');
+          document.getElementById('statProjects').textContent = activeDeals.length;
+
+          // Open tasks placeholder — will be wired in Phase 3
+          document.getElementById('statTasks').textContent = '0';
+
+          const wonDeals = dealsList.filter(d => d.stage === 'won');
+          const revenue = wonDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+          document.getElementById('statRevenue').textContent = fmtCurrency(revenue);
+        } catch (err) {
+          console.error('Dashboard stats error:', err);
+        }
+      }
     });
 
     // ── Nav click handlers ──────────────────
