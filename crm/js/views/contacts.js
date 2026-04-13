@@ -1,6 +1,6 @@
 import { queryDocuments, addDocument, updateDocument, deleteDocument, queryDocumentsWhere } from '../services/firestore.js';
 import { addActivity, logFieldEdit, getActivity } from '../services/activity.js';
-import { createDetailPanel } from '../components/detail-panel.js';
+import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency } from '../ui.js';
@@ -11,10 +11,11 @@ let currentMode = 'table';
 let searchTerm = '';
 let sortField = 'lastName';
 let sortDir = 'asc';
-let panel = null;
+let currentPage = 'list';
+let modal = null;
 
 export function init() {
-  panel = createDetailPanel();
+  modal = createModal();
 }
 
 export async function render() {
@@ -23,10 +24,16 @@ export async function render() {
   } catch (err) {
     console.error('Contacts render error:', err);
   }
-  renderView();
+  if (currentPage === 'list') renderListView();
 }
 
-export function destroy() {}
+export function destroy() {
+  currentPage = 'list';
+}
+
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
 
 async function loadData() {
   try {
@@ -43,7 +50,11 @@ async function loadData() {
   }
 }
 
-function renderView() {
+// ---------------------------------------------------------------------------
+// List View
+// ---------------------------------------------------------------------------
+
+function renderListView() {
   const container = document.getElementById('view-contacts');
   container.innerHTML = '';
 
@@ -76,7 +87,7 @@ function renderView() {
     });
   });
 
-  topbar.querySelector('#addContactBtn').addEventListener('click', () => openCreatePanel());
+  topbar.querySelector('#addContactBtn').addEventListener('click', () => openCreateModal());
 
   renderContent(container);
 }
@@ -146,6 +157,10 @@ function getFilteredContacts() {
   return list;
 }
 
+// ---------------------------------------------------------------------------
+// Table (polished — avatar + stacked name/company in name cell)
+// ---------------------------------------------------------------------------
+
 function renderTable(list) {
   const table = document.createElement('table');
   table.className = 'data-table';
@@ -163,7 +178,7 @@ function renderTable(list) {
   columns.forEach(col => {
     const th = document.createElement('th');
     th.className = 'sortable' + (sortField === col.key ? ' sort-active' : '');
-    th.innerHTML = `${col.label} <span class="sort-icon">${sortField === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '▲'}</span>`;
+    th.innerHTML = `${col.label} <span class="sort-icon">${sortField === col.key ? (sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;'}</span>`;
     th.addEventListener('click', () => {
       if (sortField === col.key) {
         sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -171,7 +186,7 @@ function renderTable(list) {
         sortField = col.key;
         sortDir = 'asc';
       }
-      renderView();
+      renderListView();
     });
     headerRow.appendChild(th);
   });
@@ -180,34 +195,62 @@ function renderTable(list) {
 
   const tbody = document.createElement('tbody');
   list.forEach(contact => {
+    const initials = ((contact.firstName || '')[0] || '') + ((contact.lastName || '')[0] || '');
     const tr = document.createElement('tr');
     tr.className = 'clickable';
-    tr.innerHTML = `
-      <td>${escapeHtml(contact.firstName)} ${escapeHtml(contact.lastName)}</td>
-      <td>${escapeHtml(contact.companyName || '—')}</td>
-      <td>${escapeHtml(contact.email || '—')}</td>
-      <td>${escapeHtml(contact.phone || '—')}</td>
-      <td>${escapeHtml(contact.jobTitle || '—')}</td>
-    `;
-    tr.addEventListener('click', () => openDetailPanel(contact));
 
-    // Make company name clickable
+    // Name cell with avatar + stacked name/company
+    const nameTd = document.createElement('td');
+    nameTd.innerHTML = `
+      <div class="contact-name-cell">
+        <div class="contact-card-avatar">${escapeHtml(initials.toUpperCase())}</div>
+        <div>
+          <div style="font-weight:500;">${escapeHtml(contact.firstName)} ${escapeHtml(contact.lastName)}</div>
+          <div style="font-size:0.75rem;color:var(--gray);">${escapeHtml(contact.companyName || '')}</div>
+        </div>
+      </div>
+    `;
+    tr.appendChild(nameTd);
+
+    // Company cell
+    const companyTd = document.createElement('td');
+    companyTd.textContent = contact.companyName || '\u2014';
     if (contact.companyId) {
-      const companyTd = tr.querySelectorAll('td')[1];
       companyTd.style.cssText = 'color:var(--accent);cursor:pointer;';
       companyTd.addEventListener('click', (e) => {
         e.stopPropagation();
         const company = companies.find(c => c.id === contact.companyId);
-        if (company) openCompanyPanel(company);
+        if (company) showCompanyPage(company);
       });
     }
+    tr.appendChild(companyTd);
 
+    // Email
+    const emailTd = document.createElement('td');
+    emailTd.textContent = contact.email || '\u2014';
+    tr.appendChild(emailTd);
+
+    // Phone
+    const phoneTd = document.createElement('td');
+    phoneTd.textContent = contact.phone || '\u2014';
+    tr.appendChild(phoneTd);
+
+    // Title
+    const titleTd = document.createElement('td');
+    titleTd.textContent = contact.jobTitle || '\u2014';
+    tr.appendChild(titleTd);
+
+    tr.addEventListener('click', () => showDetailPage(contact));
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
 
   return table;
 }
+
+// ---------------------------------------------------------------------------
+// Cards (polished — 48px avatar, hover lift via CSS)
+// ---------------------------------------------------------------------------
 
 function renderCards(list) {
   const grid = document.createElement('div');
@@ -219,7 +262,7 @@ function renderCards(list) {
     card.className = 'contact-card';
     card.innerHTML = `
       <div class="contact-card-header">
-        <div class="contact-card-avatar">${escapeHtml(initials.toUpperCase())}</div>
+        <div class="contact-card-avatar" style="width:48px;height:48px;font-size:1.1rem;">${escapeHtml(initials.toUpperCase())}</div>
         <div>
           <div class="contact-card-name">${escapeHtml(contact.firstName)} ${escapeHtml(contact.lastName)}</div>
           ${contact.jobTitle ? `<div class="contact-card-title">${escapeHtml(contact.jobTitle)}</div>` : ''}
@@ -229,50 +272,57 @@ function renderCards(list) {
       ${contact.email ? `<div class="contact-card-detail">${escapeHtml(contact.email)}</div>` : ''}
       ${contact.phone ? `<div class="contact-card-detail">${escapeHtml(contact.phone)}</div>` : ''}
     `;
-    card.addEventListener('click', () => openDetailPanel(contact));
+    card.addEventListener('click', () => showDetailPage(contact));
     grid.appendChild(card);
   });
 
   return grid;
 }
 
-function openCreatePanel() {
-  const form = document.createElement('div');
+// ---------------------------------------------------------------------------
+// Create Modal
+// ---------------------------------------------------------------------------
+
+function openCreateModal() {
+  const form = document.createElement('form');
+  form.className = 'modal-form';
   form.innerHTML = `
-    <form class="create-form" id="createContactForm">
-      <div class="panel-field">
-        <div class="panel-field-label">First Name *</div>
+    <div class="modal-form-grid">
+      <div class="modal-field">
+        <label>First Name *</label>
         <input type="text" name="firstName" required placeholder="First name">
       </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Last Name *</div>
+      <div class="modal-field">
+        <label>Last Name *</label>
         <input type="text" name="lastName" required placeholder="Last name">
       </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Email</div>
+    </div>
+    <div class="modal-form-grid">
+      <div class="modal-field">
+        <label>Email</label>
         <input type="email" name="email" placeholder="email@example.com">
       </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Phone</div>
+      <div class="modal-field">
+        <label>Phone</label>
         <input type="tel" name="phone" placeholder="Phone number">
       </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Job Title</div>
-        <input type="text" name="jobTitle" placeholder="Job title">
-      </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Company</div>
-        <div id="companyDropdownSlot"></div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Notes</div>
-        <textarea name="notes" rows="3" placeholder="Notes..."></textarea>
-      </div>
-      <div style="display:flex;gap:0.5rem;margin-top:1rem;">
-        <button type="submit" class="btn btn-primary" style="flex:1;">Save Contact</button>
-        <button type="button" class="btn btn-secondary" id="cancelCreate">Cancel</button>
-      </div>
-    </form>
+    </div>
+    <div class="modal-field">
+      <label>Job Title</label>
+      <input type="text" name="jobTitle" placeholder="Job title">
+    </div>
+    <div class="modal-field">
+      <label>Company</label>
+      <div id="companySlot"></div>
+    </div>
+    <div class="modal-field">
+      <label>Notes</label>
+      <textarea name="notes" rows="3" placeholder="Notes..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary btn-lg">Create Contact</button>
+      <span class="modal-cancel">Cancel</span>
+    </div>
   `;
 
   let selectedCompany = null;
@@ -287,13 +337,13 @@ function openCreatePanel() {
     },
     placeholder: 'Search or create company...'
   });
-  form.querySelector('#companyDropdownSlot').appendChild(dropdown);
+  form.querySelector('#companySlot').appendChild(dropdown);
 
-  panel.open('New Contact', form);
+  modal.open('New Contact', form);
 
-  form.querySelector('#cancelCreate').addEventListener('click', () => panel.close());
+  form.querySelector('.modal-cancel').addEventListener('click', () => modal.close());
 
-  form.querySelector('#createContactForm').addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = {
@@ -310,9 +360,9 @@ function openCreatePanel() {
     try {
       await addDocument('contacts', data);
       showToast('Contact created', 'success');
-      panel.close();
+      modal.close();
       await loadData();
-      renderView();
+      renderListView();
     } catch (err) {
       console.error('Create contact failed:', err);
       showToast('Failed to create contact', 'error');
@@ -320,62 +370,86 @@ function openCreatePanel() {
   });
 }
 
-async function openDetailPanel(contact) {
-  const content = document.createElement('div');
-  let activeTab = 'details';
+// ---------------------------------------------------------------------------
+// Detail Page
+// ---------------------------------------------------------------------------
 
-  function renderPanelContent() {
-    content.innerHTML = '';
+function showDetailPage(contact) {
+  currentPage = 'detail';
+  const container = document.getElementById('view-contacts');
+  container.innerHTML = '';
 
-    const tabs = document.createElement('div');
-    tabs.className = 'panel-tabs';
-    tabs.innerHTML = `
-      <button class="panel-tab ${activeTab === 'details' ? 'active' : ''}" data-tab="details">Details</button>
-      <button class="panel-tab ${activeTab === 'activity' ? 'active' : ''}" data-tab="activity">Activity</button>
-    `;
-    tabs.querySelectorAll('.panel-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        activeTab = tab.dataset.tab;
-        renderPanelContent();
-      });
-    });
-    content.appendChild(tabs);
+  // Back button
+  const backBtn = document.createElement('button');
+  backBtn.className = 'detail-back';
+  backBtn.innerHTML = '&larr; Back to Contacts';
+  backBtn.addEventListener('click', () => goBackToList());
+  container.appendChild(backBtn);
 
-    const body = document.createElement('div');
-    body.style.paddingTop = '1rem';
+  // Header
+  const initials = ((contact.firstName || '')[0] || '') + ((contact.lastName || '')[0] || '');
+  const companyLabel = contact.companyName ? ` at ${escapeHtml(contact.companyName)}` : '';
+  const header = document.createElement('div');
+  header.className = 'detail-header';
+  header.innerHTML = `
+    <div class="detail-avatar" style="width:64px;height:64px;font-size:1.5rem;">${escapeHtml(initials.toUpperCase())}</div>
+    <div style="flex:1;">
+      <div class="detail-name">${escapeHtml(contact.firstName)} ${escapeHtml(contact.lastName)}</div>
+      <div class="detail-subtitle">${contact.jobTitle ? escapeHtml(contact.jobTitle) : ''}${companyLabel}</div>
+    </div>
+    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+  `;
+  container.appendChild(header);
 
-    if (activeTab === 'details') {
-      renderDetailsTab(body, contact);
-    } else {
-      renderActivityTab(body, contact);
+  // Delete handler
+  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+    if (!confirm(`Delete ${contact.firstName} ${contact.lastName}? This cannot be undone.`)) return;
+    try {
+      await deleteDocument('contacts', contact.id);
+      showToast('Contact deleted', 'success');
+      await loadData();
+      goBackToList();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showToast('Failed to delete contact', 'error');
     }
+  });
 
-    content.appendChild(body);
+  // Two-column layout
+  const layout = document.createElement('div');
+  layout.className = 'detail-layout';
 
-    const deleteRow = document.createElement('div');
-    deleteRow.style.cssText = 'margin-top:2rem;padding-top:1rem;border-top:1px solid #E2E8F0;';
-    deleteRow.innerHTML = `<button class="btn btn-ghost" style="color:var(--danger);">Delete Contact</button>`;
-    deleteRow.querySelector('button').addEventListener('click', async () => {
-      if (!confirm(`Delete ${contact.firstName} ${contact.lastName}? This cannot be undone.`)) return;
-      try {
-        await deleteDocument('contacts', contact.id);
-        showToast('Contact deleted', 'success');
-        panel.close();
-        await loadData();
-        renderView();
-      } catch (err) {
-        console.error('Delete failed:', err);
-        showToast('Failed to delete contact', 'error');
-      }
-    });
-    content.appendChild(deleteRow);
-  }
+  // Left column — Contact Information
+  const leftCol = document.createElement('div');
+  const leftTitle = document.createElement('div');
+  leftTitle.className = 'detail-section-title';
+  leftTitle.textContent = 'Contact Information';
+  leftCol.appendChild(leftTitle);
+  renderDetailFields(leftCol, contact);
 
-  renderPanelContent();
-  panel.open(`${contact.firstName} ${contact.lastName}`, content);
+  // Right column — Activity
+  const rightCol = document.createElement('div');
+  const rightTitle = document.createElement('div');
+  rightTitle.className = 'detail-section-title';
+  rightTitle.textContent = 'Activity';
+  rightCol.appendChild(rightTitle);
+  renderActivitySection(rightCol, contact);
+
+  layout.appendChild(leftCol);
+  layout.appendChild(rightCol);
+  container.appendChild(layout);
 }
 
-function renderDetailsTab(container, contact) {
+function goBackToList() {
+  currentPage = 'list';
+  renderListView();
+}
+
+// ---------------------------------------------------------------------------
+// Detail Fields (editable inline)
+// ---------------------------------------------------------------------------
+
+function renderDetailFields(container, contact) {
   const fields = [
     { key: 'firstName', label: 'First Name', type: 'text' },
     { key: 'lastName', label: 'Last Name', type: 'text' },
@@ -387,9 +461,9 @@ function renderDetailsTab(container, contact) {
 
   fields.forEach(f => {
     const field = document.createElement('div');
-    field.className = 'panel-field';
-    field.innerHTML = `<div class="panel-field-label">${f.label}</div><div class="panel-field-value"></div>`;
-    const valueEl = field.querySelector('.panel-field-value');
+    field.className = 'detail-field';
+    field.innerHTML = `<div class="detail-field-label">${f.label}</div><div class="detail-field-value"></div>`;
+    const valueEl = field.querySelector('.detail-field-value');
 
     makeEditable(valueEl, {
       field: f.key,
@@ -407,18 +481,34 @@ function renderDetailsTab(container, contact) {
     container.appendChild(field);
   });
 
-  // Company field (special — uses dropdown)
+  // Company field (special — clickable link or dropdown)
   const companyField = document.createElement('div');
-  companyField.className = 'panel-field';
-  companyField.innerHTML = `<div class="panel-field-label">Company</div>`;
+  companyField.className = 'detail-field';
+  companyField.innerHTML = `<div class="detail-field-label">Company</div>`;
 
   const companyValue = document.createElement('div');
-  companyValue.className = 'panel-field-value' + (contact.companyName ? '' : ' empty');
-  companyValue.textContent = contact.companyName || 'Click to add...';
-  companyValue.style.cursor = 'pointer';
+  companyValue.className = 'detail-field-value' + (contact.companyName ? '' : ' empty');
 
-  companyValue.addEventListener('click', () => {
+  if (contact.companyName && contact.companyId) {
+    // Render as clickable link
+    const link = document.createElement('span');
+    link.style.cssText = 'color:var(--accent);cursor:pointer;';
+    link.textContent = contact.companyName;
+    link.addEventListener('click', () => {
+      const company = companies.find(c => c.id === contact.companyId);
+      if (company) showCompanyPage(company);
+    });
+    companyValue.appendChild(link);
+  } else {
+    companyValue.textContent = contact.companyName || 'Click to add...';
+  }
+
+  companyValue.style.cursor = 'pointer';
+  companyValue.addEventListener('click', (e) => {
+    // Don't replace if they clicked the link (which will navigate)
+    if (e.target.tagName === 'SPAN' && e.target.style.color) return;
     companyValue.innerHTML = '';
+    companyValue.classList.add('editing');
     const dropdown = createDropdown({
       fetchItems: async () => companies.map(c => ({ id: c.id, label: c.name, sublabel: c.industry || '' })),
       onSelect: async (item) => {
@@ -427,8 +517,16 @@ function renderDetailsTab(container, contact) {
         await logFieldEdit('contacts', contact.id, 'Company', oldName, item.label);
         contact.companyId = item.id;
         contact.companyName = item.label;
-        companyValue.textContent = item.label;
-        companyValue.classList.remove('empty');
+        companyValue.classList.remove('editing', 'empty');
+        companyValue.innerHTML = '';
+        const newLink = document.createElement('span');
+        newLink.style.cssText = 'color:var(--accent);cursor:pointer;';
+        newLink.textContent = item.label;
+        newLink.addEventListener('click', () => {
+          const company = companies.find(c => c.id === item.id);
+          if (company) showCompanyPage(company);
+        });
+        companyValue.appendChild(newLink);
         companyValue.classList.add('flash-success');
         setTimeout(() => companyValue.classList.remove('flash-success'), 600);
       },
@@ -440,102 +538,121 @@ function renderDetailsTab(container, contact) {
         await logFieldEdit('contacts', contact.id, 'Company', oldName, name);
         contact.companyId = ref.id;
         contact.companyName = name;
-        companyValue.textContent = name;
-        companyValue.classList.remove('empty');
+        companyValue.classList.remove('editing', 'empty');
+        companyValue.innerHTML = '';
+        const newLink = document.createElement('span');
+        newLink.style.cssText = 'color:var(--accent);cursor:pointer;';
+        newLink.textContent = name;
+        newLink.addEventListener('click', () => {
+          const company = companies.find(c => c.id === ref.id);
+          if (company) showCompanyPage(company);
+        });
+        companyValue.appendChild(newLink);
         showToast(`Company "${name}" created`, 'success');
       },
       placeholder: 'Search or create company...'
     });
     companyValue.appendChild(dropdown);
-    companyValue.querySelector('input').focus();
+    const input = companyValue.querySelector('input');
+    if (input) input.focus();
   });
 
   companyField.appendChild(companyValue);
   container.appendChild(companyField);
 }
 
-async function renderActivityTab(container, contact) {
-  const addBtn = document.createElement('button');
-  addBtn.className = 'btn btn-secondary';
-  addBtn.style.marginBottom = '1rem';
-  addBtn.textContent = '+ Add Activity';
+// ---------------------------------------------------------------------------
+// Activity Section (composer + timeline)
+// ---------------------------------------------------------------------------
 
-  const formWrapper = document.createElement('div');
-  formWrapper.style.display = 'none';
-  formWrapper.innerHTML = `
-    <div class="add-activity-form">
-      <select id="activityType">
-        <option value="call">Call</option>
-        <option value="email">Email</option>
-        <option value="meeting">Meeting</option>
-        <option value="note">Note</option>
-      </select>
-      <textarea id="activityDesc" placeholder="What happened?"></textarea>
-      <div class="add-activity-actions">
-        <button class="btn btn-primary btn-sm" id="saveActivity">Save</button>
-        <button class="btn btn-ghost btn-sm" id="cancelActivity">Cancel</button>
-      </div>
+function renderActivitySection(container, contact) {
+  // Composer (always visible)
+  const composer = document.createElement('div');
+  composer.className = 'activity-composer';
+
+  let selectedType = 'call';
+
+  composer.innerHTML = `
+    <div class="activity-type-pills">
+      <button type="button" class="activity-type-pill active" data-type="call">Call</button>
+      <button type="button" class="activity-type-pill" data-type="email">Email</button>
+      <button type="button" class="activity-type-pill" data-type="meeting">Meeting</button>
+      <button type="button" class="activity-type-pill" data-type="note">Note</button>
     </div>
+    <textarea placeholder="Log an activity..."></textarea>
+    <button class="btn btn-primary" style="align-self:flex-end;margin-top:0.5rem;">Save</button>
   `;
 
-  addBtn.addEventListener('click', () => {
-    formWrapper.style.display = 'block';
-    addBtn.style.display = 'none';
+  // Type pill selection
+  composer.querySelectorAll('.activity-type-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      composer.querySelectorAll('.activity-type-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      selectedType = pill.dataset.type;
+    });
   });
 
-  container.appendChild(addBtn);
-  container.appendChild(formWrapper);
+  // Save handler
+  const saveBtn = composer.querySelector('.btn-primary');
+  const textarea = composer.querySelector('textarea');
 
-  formWrapper.querySelector('#cancelActivity').addEventListener('click', () => {
-    formWrapper.style.display = 'none';
-    addBtn.style.display = '';
-  });
-
-  formWrapper.querySelector('#saveActivity').addEventListener('click', async () => {
-    const type = formWrapper.querySelector('#activityType').value;
-    const desc = formWrapper.querySelector('#activityDesc').value.trim();
+  saveBtn.addEventListener('click', async () => {
+    const desc = textarea.value.trim();
     if (!desc) return;
 
-    await addActivity('contacts', contact.id, { type, description: desc });
-    showToast('Activity logged', 'success');
-    formWrapper.style.display = 'none';
-    addBtn.style.display = '';
-    formWrapper.querySelector('#activityDesc').value = '';
+    try {
+      await addActivity('contacts', contact.id, { type: selectedType, description: desc });
+      showToast('Activity logged', 'success');
+      textarea.value = '';
 
-    const timeline = container.querySelector('.activity-timeline');
-    if (timeline) timeline.remove();
-    await appendTimeline(container, contact);
+      // Refresh timeline
+      const timeline = container.querySelector('.detail-timeline');
+      if (timeline) timeline.remove();
+      await loadTimeline(container, contact);
+    } catch (err) {
+      console.error('Failed to log activity:', err);
+      showToast('Failed to log activity', 'error');
+    }
   });
 
-  await appendTimeline(container, contact);
+  container.appendChild(composer);
+
+  // Timeline
+  loadTimeline(container, contact);
 }
 
-async function appendTimeline(container, contact) {
-  const activities = await getActivity('contacts', contact.id);
+async function loadTimeline(container, contact) {
+  let activities = [];
+  try {
+    activities = await getActivity('contacts', contact.id);
+  } catch (err) {
+    console.error('Failed to load activities:', err);
+  }
 
   const timeline = document.createElement('div');
-  timeline.className = 'activity-timeline';
+  timeline.className = 'detail-timeline';
 
   if (activities.length === 0) {
     timeline.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem 0;font-size:0.85rem;">No activity yet.</div>';
   } else {
+    const iconMap = { call: '\uD83D\uDCDE', email: '\u2709\uFE0F', meeting: '\uD83E\uDD1D', note: '\uD83D\uDCDD', edit: '\u270F\uFE0F' };
+
     activities.forEach(act => {
-      const iconMap = { call: '📞', email: '✉️', meeting: '🤝', note: '📝', edit: '✏️' };
       const item = document.createElement('div');
       item.className = 'activity-item';
 
       let desc = escapeHtml(act.description || '');
       let diff = '';
       if (act.type === 'edit' && act.oldValue !== undefined) {
-        diff = `<div class="activity-diff">"${escapeHtml(act.oldValue || '(empty)')}" → "${escapeHtml(act.newValue || '(empty)')}"</div>`;
+        diff = `<div class="activity-diff">&ldquo;${escapeHtml(act.oldValue || '(empty)')}&rdquo; &rarr; &ldquo;${escapeHtml(act.newValue || '(empty)')}&rdquo;</div>`;
       }
 
       item.innerHTML = `
-        <div class="activity-icon ${act.type}">${iconMap[act.type] || '•'}</div>
-        <div class="activity-body">
+        <div class="activity-icon ${act.type}">${iconMap[act.type] || '\u2022'}</div>
+        <div class="activity-card">
           <div class="activity-desc">${desc}</div>
           ${diff}
-          <div class="activity-meta">${escapeHtml(act.createdByEmail || 'Unknown')} · ${timeAgo(act.createdAt)}</div>
+          <div class="activity-meta">${escapeHtml(act.createdByEmail || 'Unknown')} &middot; ${timeAgo(act.createdAt)}</div>
         </div>
       `;
       timeline.appendChild(item);
@@ -545,8 +662,45 @@ async function appendTimeline(container, contact) {
   container.appendChild(timeline);
 }
 
-async function openCompanyPanel(company) {
-  const content = document.createElement('div');
+// ---------------------------------------------------------------------------
+// Company Detail Page
+// ---------------------------------------------------------------------------
+
+async function showCompanyPage(company) {
+  currentPage = 'detail';
+  const container = document.getElementById('view-contacts');
+  container.innerHTML = '';
+
+  // Back button
+  const backBtn = document.createElement('button');
+  backBtn.className = 'detail-back';
+  backBtn.innerHTML = '&larr; Back to Contacts';
+  backBtn.addEventListener('click', () => goBackToList());
+  container.appendChild(backBtn);
+
+  // Header
+  const nameInitial = (company.name || '?')[0].toUpperCase();
+  const header = document.createElement('div');
+  header.className = 'detail-header';
+  header.innerHTML = `
+    <div class="detail-avatar" style="width:64px;height:64px;font-size:1.5rem;">${escapeHtml(nameInitial)}</div>
+    <div style="flex:1;">
+      <div class="detail-name">${escapeHtml(company.name)}</div>
+      <div class="detail-subtitle">${company.industry ? escapeHtml(company.industry) : 'Company'}</div>
+    </div>
+  `;
+  container.appendChild(header);
+
+  // Detail layout
+  const layout = document.createElement('div');
+  layout.className = 'detail-layout';
+
+  // Left column — Company fields
+  const leftCol = document.createElement('div');
+  const leftTitle = document.createElement('div');
+  leftTitle.className = 'detail-section-title';
+  leftTitle.textContent = 'Company Information';
+  leftCol.appendChild(leftTitle);
 
   const fields = [
     { key: 'name', label: 'Company Name', type: 'text' },
@@ -559,9 +713,9 @@ async function openCompanyPanel(company) {
 
   fields.forEach(f => {
     const field = document.createElement('div');
-    field.className = 'panel-field';
-    field.innerHTML = `<div class="panel-field-label">${f.label}</div><div class="panel-field-value"></div>`;
-    const valueEl = field.querySelector('.panel-field-value');
+    field.className = 'detail-field';
+    field.innerHTML = `<div class="detail-field-label">${f.label}</div><div class="detail-field-value"></div>`;
+    const valueEl = field.querySelector('.detail-field-value');
 
     makeEditable(valueEl, {
       field: f.key,
@@ -570,6 +724,7 @@ async function openCompanyPanel(company) {
       onSave: async (newValue, oldValue) => {
         await updateDocument('companies', company.id, { [f.key]: newValue });
         company[f.key] = newValue;
+        // If company name changed, update all linked contacts
         if (f.key === 'name') {
           const linkedContacts = contacts.filter(c => c.companyId === company.id);
           for (const c of linkedContacts) {
@@ -580,16 +735,16 @@ async function openCompanyPanel(company) {
       }
     });
 
-    content.appendChild(field);
+    leftCol.appendChild(field);
   });
 
-  // Address
+  // Address field
   const addr = company.address || {};
   const addrStr = [addr.street, addr.city, addr.state, addr.zip, addr.country].filter(Boolean).join(', ');
   const addrField = document.createElement('div');
-  addrField.className = 'panel-field';
-  addrField.innerHTML = `<div class="panel-field-label">Address</div><div class="panel-field-value"></div>`;
-  const addrValue = addrField.querySelector('.panel-field-value');
+  addrField.className = 'detail-field';
+  addrField.innerHTML = `<div class="detail-field-label">Address</div><div class="detail-field-value"></div>`;
+  const addrValue = addrField.querySelector('.detail-field-value');
   makeEditable(addrValue, {
     field: 'address',
     type: 'text',
@@ -601,46 +756,62 @@ async function openCompanyPanel(company) {
       company.address = address;
     }
   });
-  content.appendChild(addrField);
+  leftCol.appendChild(addrField);
+
+  // Right column — Linked contacts + deals
+  const rightCol = document.createElement('div');
 
   // Linked contacts
   const linkedContacts = contacts.filter(c => c.companyId === company.id);
-  const contactsSection = document.createElement('div');
-  contactsSection.style.cssText = 'margin-top:1.5rem;padding-top:1rem;border-top:1px solid #E2E8F0;';
-  contactsSection.innerHTML = `<div class="panel-field-label" style="margin-bottom:0.75rem;">Linked Contacts (${linkedContacts.length})</div>`;
+  const contactsTitle = document.createElement('div');
+  contactsTitle.className = 'detail-section-title';
+  contactsTitle.textContent = `Linked Contacts (${linkedContacts.length})`;
+  rightCol.appendChild(contactsTitle);
+
   if (linkedContacts.length === 0) {
-    contactsSection.innerHTML += '<div style="font-size:0.85rem;color:var(--gray);">No contacts linked.</div>';
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem;';
+    emptyMsg.textContent = 'No contacts linked.';
+    rightCol.appendChild(emptyMsg);
   } else {
     linkedContacts.forEach(c => {
       const row = document.createElement('div');
       row.style.cssText = 'padding:0.4rem 0;font-size:0.85rem;cursor:pointer;color:var(--accent);';
       row.textContent = `${c.firstName} ${c.lastName}`;
-      row.addEventListener('click', () => openDetailPanel(c));
-      contactsSection.appendChild(row);
+      row.addEventListener('click', () => showDetailPage(c));
+      rightCol.appendChild(row);
     });
   }
-  content.appendChild(contactsSection);
 
   // Linked deals
   let linkedDeals = [];
   try {
     linkedDeals = await queryDocumentsWhere('deals', 'companyId', '==', company.id);
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 
-  const dealsSection = document.createElement('div');
-  dealsSection.style.cssText = 'margin-top:1rem;padding-top:1rem;border-top:1px solid #E2E8F0;';
-  dealsSection.innerHTML = `<div class="panel-field-label" style="margin-bottom:0.75rem;">Linked Deals (${linkedDeals.length})</div>`;
+  const dealsTitle = document.createElement('div');
+  dealsTitle.className = 'detail-section-title';
+  dealsTitle.style.marginTop = '1.5rem';
+  dealsTitle.textContent = `Linked Deals (${linkedDeals.length})`;
+  rightCol.appendChild(dealsTitle);
+
   if (linkedDeals.length === 0) {
-    dealsSection.innerHTML += '<div style="font-size:0.85rem;color:var(--gray);">No deals linked.</div>';
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'font-size:0.85rem;color:var(--gray);';
+    emptyMsg.textContent = 'No deals linked.';
+    rightCol.appendChild(emptyMsg);
   } else {
     linkedDeals.forEach(d => {
       const row = document.createElement('div');
       row.style.cssText = 'padding:0.4rem 0;font-size:0.85rem;display:flex;justify-content:space-between;';
       row.innerHTML = `<span>${escapeHtml(d.name)}</span><span style="color:var(--accent);font-weight:500;">${formatCurrency(d.value)}</span>`;
-      dealsSection.appendChild(row);
+      rightCol.appendChild(row);
     });
   }
-  content.appendChild(dealsSection);
 
-  panel.open(company.name, content);
+  layout.appendChild(leftCol);
+  layout.appendChild(rightCol);
+  container.appendChild(layout);
 }
