@@ -18,17 +18,29 @@ export function init() {
 }
 
 export async function render() {
-  await loadData();
+  try {
+    await loadData();
+  } catch (err) {
+    console.error('Contacts render error:', err);
+  }
   renderView();
 }
 
 export function destroy() {}
 
 async function loadData() {
-  [contacts, companies] = await Promise.all([
-    queryDocuments('contacts', 'lastName', 'asc'),
-    queryDocuments('companies', 'name', 'asc')
-  ]);
+  try {
+    const results = await Promise.allSettled([
+      queryDocuments('contacts', 'lastName', 'asc'),
+      queryDocuments('companies', 'name', 'asc')
+    ]);
+    contacts = results[0].status === 'fulfilled' ? results[0].value : [];
+    companies = results[1].status === 'fulfilled' ? results[1].value : [];
+    if (results[0].status === 'rejected') console.error('Failed to load contacts:', results[0].reason);
+    if (results[1].status === 'rejected') console.error('Failed to load companies:', results[1].reason);
+  } catch (err) {
+    console.error('loadData error:', err);
+  }
 }
 
 function renderView() {

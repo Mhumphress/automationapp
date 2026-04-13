@@ -29,24 +29,36 @@ export function init() {
 }
 
 export async function render() {
-  await loadData();
+  try {
+    await loadData();
+  } catch (err) {
+    console.error('Pipeline render error:', err);
+  }
   renderView();
 }
 
 export function destroy() {}
 
 async function loadData() {
-  const [dealsData, contactsData, companiesData, stagesDoc] = await Promise.all([
-    queryDocuments('deals', 'createdAt', 'desc'),
-    queryDocuments('contacts', 'lastName', 'asc'),
-    queryDocuments('companies', 'name', 'asc'),
-    getDocument('settings', 'pipeline')
-  ]);
-  deals = dealsData;
-  contacts = contactsData;
-  companies = companiesData;
-  if (stagesDoc && stagesDoc.stages) {
-    stages = stagesDoc.stages;
+  try {
+    const results = await Promise.allSettled([
+      queryDocuments('deals', 'createdAt', 'desc'),
+      queryDocuments('contacts', 'lastName', 'asc'),
+      queryDocuments('companies', 'name', 'asc'),
+      getDocument('settings', 'pipeline')
+    ]);
+    deals = results[0].status === 'fulfilled' ? results[0].value : [];
+    contacts = results[1].status === 'fulfilled' ? results[1].value : [];
+    companies = results[2].status === 'fulfilled' ? results[2].value : [];
+    const stagesDoc = results[3].status === 'fulfilled' ? results[3].value : null;
+    if (stagesDoc && stagesDoc.stages) {
+      stages = stagesDoc.stages;
+    }
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') console.error(`loadData query ${i} failed:`, r.reason);
+    });
+  } catch (err) {
+    console.error('loadData error:', err);
   }
 }
 
