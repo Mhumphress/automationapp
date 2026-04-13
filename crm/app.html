@@ -193,15 +193,7 @@
       <div id="view-tasks" class="view-container"></div>
 
       <!-- Invoices -->
-      <div id="view-invoices" class="view-container">
-        <div class="empty-state">
-          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
-          </svg>
-          <div class="empty-title">Invoice Management</div>
-          <p class="empty-description">Invoice management coming in Phase 4.</p>
-        </div>
-      </div>
+      <div id="view-invoices" class="view-container"></div>
 
       <!-- Subscriptions -->
       <div id="view-subscriptions" class="view-container">
@@ -241,6 +233,7 @@
     import * as contactsView from './js/views/contacts.js';
     import * as pipelineView from './js/views/pipeline.js';
     import * as tasksView from './js/views/tasks.js';
+    import * as invoicesView from './js/views/invoices.js';
     import { queryDocuments } from './js/services/firestore.js';
 
     // ── Auth guard ──────────────────────────
@@ -322,6 +315,16 @@
         tasksView.render();
       },
       destroy: tasksView.destroy
+    });
+
+    // Override invoices with full view logic
+    registerView('invoices', {
+      init: invoicesView.init,
+      render() {
+        document.getElementById('headerTitle').textContent = 'Invoices';
+        invoicesView.render();
+      },
+      destroy: invoicesView.destroy
     });
 
     // ── Dashboard ───────────────────────────
