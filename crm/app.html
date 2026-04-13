@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM - Automation App</title>
+  <link rel="icon" type="image/svg+xml" href="../logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <!-- ════════════════ SIDEBAR ════════════════ -->
+    <aside class="sidebar" id="sidebar">
+
+      <!-- Logo -->
+      <a href="../index.html" class="sidebar-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor">
+          <g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/>
+          </g>
+          <circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/>
+          <circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/>
+        </svg>
+        <span>Automation App</span>
+      </a>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+
+        <!-- Overview -->
+        <div class="nav-section-label">Overview</div>
+        <button class="nav-item" data-view="dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          Dashboard
+        </button>
+
+        <!-- Manage -->
+        <div class="nav-section-label">Manage</div>
+        <button class="nav-item" data-view="contacts">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Contacts
+        </button>
+        <button class="nav-item" data-view="pipeline">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          Pipeline
+        </button>
+        <button class="nav-item" data-view="tasks">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>
+          </svg>
+          Tasks
+        </button>
+
+        <!-- Finance -->
+        <div class="nav-section-label">Finance</div>
+        <button class="nav-item" data-view="invoices">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+          </svg>
+          Invoices
+        </button>
+        <button class="nav-item" data-view="subscriptions">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          Subscriptions
+        </button>
+
+        <!-- Client -->
+        <div class="nav-section-label">Client</div>
+        <button class="nav-item" data-view="messages">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Messages
+        </button>
+
+      </nav>
+
+      <!-- Footer / User -->
+      <div class="sidebar-footer">
+        <div class="user-avatar" id="userAvatar">--</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">Loading...</div>
+          <div class="user-role" id="userRole">member</div>
+        </div>
+        <button class="btn-logout" id="logoutBtn" title="Sign out">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- ════════════════ HEADER ════════════════ -->
+    <header class="app-header">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <button class="mobile-header-btn" id="menuToggle" title="Toggle menu">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <h1 id="headerTitle">Dashboard</h1>
+      </div>
+      <div id="headerActions"></div>
+    </header>
+
+    <!-- ════════════════ MAIN ════════════════ -->
+    <main class="app-main">
+
+      <!-- Dashboard -->
+      <div id="view-dashboard" class="view-container">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Contacts</div>
+            <div class="stat-value" id="statContacts">0</div>
+            <div class="stat-change neutral">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Active Projects</div>
+            <div class="stat-value" id="statProjects">0</div>
+            <div class="stat-change neutral">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Open Tasks</div>
+            <div class="stat-value" id="statTasks">0</div>
+            <div class="stat-change neutral">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Revenue MTD</div>
+            <div class="stat-value" id="statRevenue">$0</div>
+            <div class="stat-change neutral">--</div>
+          </div>
+        </div>
+
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          <div class="empty-title">Welcome to your CRM</div>
+          <p class="empty-description">Your dashboard will populate as you add contacts, deals, and tasks. Get started by adding your first contact.</p>
+          <button class="btn btn-primary" onclick="window.location.hash='contacts'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add First Contact
+          </button>
+        </div>
+      </div>
+
+      <!-- Contacts -->
+      <div id="view-contacts" class="view-container">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <div class="empty-title">Contact Management</div>
+          <p class="empty-description">Contact management coming in Phase 2.</p>
+        </div>
+      </div>
+
+      <!-- Pipeline -->
+      <div id="view-pipeline" class="view-container">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <div class="empty-title">Deal Pipeline</div>
+          <p class="empty-description">Deal pipeline coming in Phase 2.</p>
+        </div>
+      </div>
+
+      <!-- Tasks -->
+      <div id="view-tasks" class="view-container">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>
+          </svg>
+          <div class="empty-title">Task Management</div>
+          <p class="empty-description">Task management coming in Phase 3.</p>
+        </div>
+      </div>
+
+      <!-- Invoices -->
+      <div id="view-invoices" class="view-container">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+          </svg>
+          <div class="empty-title">Invoice Management</div>
+          <p class="empty-description">Invoice management coming in Phase 4.</p>
+        </div>
+      </div>
+
+      <!-- Subscriptions -->
+      <div id="view-subscriptions" class="view-container">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <div class="empty-title">Subscription Tracking</div>
+          <p class="empty-description">Subscription tracking coming in Phase 4.</p>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div id="view-messages" class="view-container">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <div class="empty-title">Client Messaging</div>
+          <p class="empty-description">Client messaging coming in Phase 5.</p>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toastContainer"></div>
+
+  <!-- ════════════════ SCRIPT ════════════════ -->
+  <script type="module">
+    import { auth } from './js/config.js';
+    import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { registerView, navigate, initRouter } from './js/router.js';
+    import { showToast } from './js/ui.js';
+
+    // ── Auth guard ──────────────────────────
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.replace('login.html');
+        return;
+      }
+
+      // Populate sidebar user info
+      const displayName = user.displayName || user.email || 'User';
+      const initials = displayName
+        .split(' ')
+        .map(w => w[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+
+      document.getElementById('userAvatar').textContent = initials;
+      document.getElementById('userName').textContent = displayName;
+      // Role could come from Firestore — default to 'member' for now
+      document.getElementById('userRole').textContent = 'member';
+    });
+
+    // ── Logout ──────────────────────────────
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        showToast('Sign out failed. Please try again.', 'error');
+      }
+    });
+
+    // ── View title map ──────────────────────
+    const viewTitles = {
+      dashboard:     'Dashboard',
+      contacts:      'Contacts',
+      pipeline:      'Pipeline',
+      tasks:         'Tasks',
+      invoices:      'Invoices',
+      subscriptions: 'Subscriptions',
+      messages:      'Messages'
+    };
+
+    // ── Register views ──────────────────────
+    Object.keys(viewTitles).forEach(name => {
+      registerView(name, {
+        render() {
+          document.getElementById('headerTitle').textContent = viewTitles[name];
+        }
+      });
+    });
+
+    // ── Nav click handlers ──────────────────
+    document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        navigate(btn.dataset.view);
+        // Close mobile sidebar if open
+        document.getElementById('sidebar').classList.remove('open');
+      });
+    });
+
+    // ── Mobile menu toggle ──────────────────
+    document.getElementById('menuToggle').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+
+    document.getElementById('sidebarOverlay').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.remove('open');
+    });
+
+    // ── Init router ─────────────────────────
+    initRouter('dashboard');
+  </script>
+
+</body>
+</html>
