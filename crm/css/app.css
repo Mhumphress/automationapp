@@ -991,6 +991,164 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 /* ═══════════════════════════════════════════════
+   VIEW TOP BAR
+   ═══════════════════════════════════════════════ */
+
+.view-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.view-topbar .search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.55rem 1rem;
+  padding-left: 2.25rem;
+  font-size: 0.85rem;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 0.75rem center;
+  color: var(--off-black);
+}
+
+.view-topbar .search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,123,247,0.1);
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.view-toggle button {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--gray-dark);
+  background: #fff;
+  border: none;
+  border-right: 1px solid #E2E8F0;
+  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+
+.view-toggle button:last-child {
+  border-right: none;
+}
+
+.view-toggle button:hover {
+  background: #F8FAFC;
+}
+
+.view-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════
+   CARD GRID
+   ═══════════════════════════════════════════════ */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.contact-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: box-shadow var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+
+.contact-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #CBD5E1;
+}
+
+.contact-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.contact-card-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.contact-card-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--black);
+}
+
+.contact-card-title {
+  font-size: 0.8rem;
+  color: var(--gray-dark);
+}
+
+.contact-card-detail {
+  font-size: 0.8rem;
+  color: var(--gray-dark);
+  padding: 0.15rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════
+   TABLE CLICKABLE ROWS
+   ═══════════════════════════════════════════════ */
+
+.data-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.data-table thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table thead th.sortable:hover {
+  color: var(--accent);
+}
+
+.data-table thead th .sort-icon {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-size: 0.6rem;
+  opacity: 0.5;
+}
+
+.data-table thead th.sort-active .sort-icon {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════ */
 
