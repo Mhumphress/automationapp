@@ -1859,6 +1859,194 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 /* ═══════════════════════════════════════════════
+   TASK MANAGEMENT
+   ═══════════════════════════════════════════════ */
+
+.task-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  cursor: grab;
+  transition: box-shadow var(--duration) var(--ease), transform var(--duration) var(--ease);
+  border-left: 3px solid transparent;
+}
+
+.task-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-1px);
+}
+
+.task-card.dragging {
+  opacity: 0.5;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.task-card.overdue {
+  border-left-color: var(--danger);
+}
+
+.task-card-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--black);
+  margin-bottom: 0.5rem;
+}
+
+.task-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--gray);
+}
+
+.task-card-due {
+  font-size: 0.75rem;
+  color: var(--gray-dark);
+}
+
+.task-card-due.overdue {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* --- Priority Badge --- */
+
+.priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.priority-dot.high {
+  background: var(--danger);
+}
+
+.priority-dot.medium {
+  background: var(--warning);
+}
+
+.priority-dot.low {
+  background: var(--info);
+}
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.priority-badge.high {
+  background: var(--danger-dim);
+  color: #DC2626;
+}
+
+.priority-badge.medium {
+  background: var(--warning-dim);
+  color: #D97706;
+}
+
+.priority-badge.low {
+  background: var(--info-dim);
+  color: #2563EB;
+}
+
+/* --- Task Assignee Avatar --- */
+
+.task-card-assignee {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.task-card-link {
+  font-size: 0.7rem;
+  color: var(--gray);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Notification Banner --- */
+
+.notification-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: var(--accent-dim);
+  border: 1px solid rgba(79,123,247,0.2);
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--off-black);
+}
+
+.notification-banner button {
+  padding: 0.4rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease);
+}
+
+.notification-banner button:hover {
+  background: var(--accent-strong);
+}
+
+/* --- Status Pills for Tasks --- */
+
+.status-pills {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-pill {
+  padding: 0.5rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: #F1F5F9;
+  color: var(--gray-dark);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.status-pill:hover {
+  background: #E8ECF4;
+}
+
+.status-pill.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════ */
 
