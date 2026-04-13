@@ -35,6 +35,22 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    match /invoices/{invoiceId}/activity/{activityId} {
+      allow read, write: if isAuth();
+    }
+
+    match /subscriptions/{subId}/activity/{activityId} {
+      allow read, write: if isAuth();
+    }
+
+    match /subscriptions/{subId}/payments/{paymentId} {
+      allow read, write: if isAuth();
+    }
+
+    match /internal_subs/{id} {
+      allow read, write: if isAuth();
+    }
+
     match /deals/{dealId} {
       allow read, write: if isAuth();
     }
