@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Automation App CRM</title>
+  <link rel="icon" type="image/svg+xml" href="../logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+
+  <div class="auth-bg"></div>
+
+  <div class="auth-container">
+
+    <div class="auth-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor">
+        <g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/>
+        </g>
+        <circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/>
+        <circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/>
+      </svg>
+      <span>Automation App</span>
+    </div>
+
+    <div class="auth-card">
+
+      <!-- Login View -->
+      <div id="loginView" class="auth-view active">
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in to your CRM dashboard</p>
+        <div id="loginError" class="auth-error"></div>
+        <form id="loginForm" class="auth-form" autocomplete="on">
+          <div class="input-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" name="email" placeholder="you@company.com" required autocomplete="email">
+          </div>
+          <div class="input-group">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" name="password" placeholder="Enter your password" required autocomplete="current-password">
+          </div>
+          <button type="submit" id="loginBtn" class="auth-btn">Sign In</button>
+        </form>
+        <p class="auth-toggle">Don't have an account? <a href="#" id="showRegister">Create one</a></p>
+      </div>
+
+      <!-- Register View -->
+      <div id="registerView" class="auth-view">
+        <h1>Create account</h1>
+        <p class="subtitle">Set up your CRM access</p>
+        <div id="registerError" class="auth-error"></div>
+        <form id="registerForm" class="auth-form" autocomplete="on">
+          <div class="input-group">
+            <label for="registerName">Full Name</label>
+            <input type="text" id="registerName" name="name" placeholder="Jane Doe" required autocomplete="name">
+          </div>
+          <div class="input-group">
+            <label for="registerEmail">Email</label>
+            <input type="email" id="registerEmail" name="email" placeholder="you@company.com" required autocomplete="email">
+          </div>
+          <div class="input-group">
+            <label for="registerPassword">Password</label>
+            <input type="password" id="registerPassword" name="password" placeholder="Min. 6 characters" required minlength="6" autocomplete="new-password">
+          </div>
+          <button type="submit" id="registerBtn" class="auth-btn">Create Account</button>
+        </form>
+        <p class="auth-toggle">Already have an account? <a href="#" id="showLogin">Sign in</a></p>
+      </div>
+
+    </div>
+
+    <div class="auth-footer">
+      <a href="../index.html">&larr; Back to Automation App</a>
+    </div>
+
+  </div>
+
+  <script type="module" src="js/auth.js"></script>
+</body>
+</html>
