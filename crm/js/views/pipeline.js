@@ -1,7 +1,7 @@
 import { db } from '../config.js';
 import { queryDocuments, addDocument, updateDocument, deleteDocument, getDocument } from '../services/firestore.js';
 import { addActivity, logFieldEdit, getActivity } from '../services/activity.js';
-import { createDetailPanel } from '../components/detail-panel.js';
+import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
@@ -22,10 +22,11 @@ let currentMode = 'kanban';
 let searchTerm = '';
 let sortField = 'name';
 let sortDir = 'asc';
-let panel = null;
+let currentPage = 'list';
+let modal = null;
 
 export function init() {
-  panel = createDetailPanel();
+  modal = createModal();
 }
 
 export async function render() {
@@ -34,10 +35,16 @@ export async function render() {
   } catch (err) {
     console.error('Pipeline render error:', err);
   }
-  renderView();
+  if (currentPage === 'list') renderListView();
 }
 
-export function destroy() {}
+export function destroy() {
+  currentPage = 'list';
+}
+
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
 
 async function loadData() {
   try {
@@ -62,7 +69,11 @@ async function loadData() {
   }
 }
 
-function renderView() {
+// ---------------------------------------------------------------------------
+// List View
+// ---------------------------------------------------------------------------
+
+function renderListView() {
   const container = document.getElementById('view-pipeline');
   container.innerHTML = '';
 
@@ -98,11 +109,15 @@ function renderView() {
     });
   });
 
-  topbar.querySelector('#addDealBtn').addEventListener('click', () => openCreatePanel());
-  topbar.querySelector('#pipelineSettingsBtn').addEventListener('click', () => openSettingsPanel());
+  topbar.querySelector('#addDealBtn').addEventListener('click', () => openCreateModal());
+  topbar.querySelector('#pipelineSettingsBtn').addEventListener('click', () => openSettingsModal());
 
   renderContent(container);
 }
+
+// ---------------------------------------------------------------------------
+// Content Switcher (empty state / kanban / table)
+// ---------------------------------------------------------------------------
 
 function renderContent(container) {
   const existing = container.querySelector('.view-content');
@@ -127,6 +142,13 @@ function renderContent(container) {
         </button>
       </div>
     `;
+  } else if (filtered.length === 0) {
+    wrapper.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-title">No matches</div>
+        <p class="empty-description">No deals match your search.</p>
+      </div>
+    `;
   } else if (currentMode === 'kanban') {
     wrapper.appendChild(renderKanban(filtered));
   } else {
@@ -149,6 +171,10 @@ function getFilteredDeals() {
   return list;
 }
 
+// ---------------------------------------------------------------------------
+// Kanban
+// ---------------------------------------------------------------------------
+
 function renderKanban(list) {
   const board = document.createElement('div');
   board.className = 'kanban-board';
@@ -164,7 +190,7 @@ function renderKanban(list) {
     col.innerHTML = `
       <div class="kanban-column-header">
         <div class="kanban-column-title">${escapeHtml(stage.label)}</div>
-        <div class="kanban-column-meta">${stageDeals.length} deal${stageDeals.length !== 1 ? 's' : ''} · ${formatCurrency(totalValue)}</div>
+        <div class="kanban-column-meta">${stageDeals.length} deal${stageDeals.length !== 1 ? 's' : ''} &middot; ${formatCurrency(totalValue)}</div>
       </div>
     `;
 
@@ -184,11 +210,16 @@ function renderKanban(list) {
       const deal = deals.find(d => d.id === dealId);
       if (deal && deal.stage !== stage.id) {
         const oldStage = stages.find(s => s.id === deal.stage);
-        await updateDocument('deals', dealId, { stage: stage.id });
-        await logFieldEdit('deals', dealId, 'Stage', oldStage ? oldStage.label : deal.stage, stage.label);
-        deal.stage = stage.id;
-        renderView();
-        showToast(`Moved to ${stage.label}`, 'success');
+        try {
+          await updateDocument('deals', dealId, { stage: stage.id });
+          await logFieldEdit('deals', dealId, 'Stage', oldStage ? oldStage.label : deal.stage, stage.label);
+          deal.stage = stage.id;
+          renderListView();
+          showToast(`Moved to ${stage.label}`, 'success');
+        } catch (err) {
+          console.error('Drag stage change failed:', err);
+          showToast('Failed to move deal', 'error');
+        }
       }
     });
 
@@ -213,7 +244,7 @@ function renderKanban(list) {
         card.classList.add('dragging');
       });
       card.addEventListener('dragend', () => card.classList.remove('dragging'));
-      card.addEventListener('click', () => openDetailPanel(deal));
+      card.addEventListener('click', () => showDealDetail(deal));
 
       body.appendChild(card);
     });
@@ -224,6 +255,10 @@ function renderKanban(list) {
 
   return board;
 }
+
+// ---------------------------------------------------------------------------
+// Table
+// ---------------------------------------------------------------------------
 
 function renderTable(list) {
   const sorted = [...list].sort((a, b) => {
@@ -253,11 +288,15 @@ function renderTable(list) {
   columns.forEach(col => {
     const th = document.createElement('th');
     th.className = 'sortable' + (sortField === col.key ? ' sort-active' : '');
-    th.innerHTML = `${col.label} <span class="sort-icon">${sortField === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '▲'}</span>`;
+    th.innerHTML = `${col.label} <span class="sort-icon">${sortField === col.key ? (sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;'}</span>`;
     th.addEventListener('click', () => {
-      if (sortField === col.key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-      else { sortField = col.key; sortDir = 'asc'; }
-      renderView();
+      if (sortField === col.key) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortField = col.key;
+        sortDir = 'asc';
+      }
+      renderListView();
     });
     headerRow.appendChild(th);
   });
@@ -271,13 +310,13 @@ function renderTable(list) {
     tr.className = 'clickable';
     tr.innerHTML = `
       <td>${escapeHtml(deal.name)}</td>
-      <td>${deal.value ? formatCurrency(deal.value) : '—'}</td>
+      <td>${deal.value ? formatCurrency(deal.value) : '\u2014'}</td>
       <td><span class="badge-status ${deal.stage}">${escapeHtml(stageObj ? stageObj.label : deal.stage)}</span></td>
-      <td>${escapeHtml(deal.contactName || '—')}</td>
-      <td>${escapeHtml(deal.companyName || '—')}</td>
+      <td>${escapeHtml(deal.contactName || '\u2014')}</td>
+      <td>${escapeHtml(deal.companyName || '\u2014')}</td>
       <td>${formatDate(deal.expectedClose)}</td>
     `;
-    tr.addEventListener('click', () => openDetailPanel(deal));
+    tr.addEventListener('click', () => showDealDetail(deal));
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
@@ -285,41 +324,46 @@ function renderTable(list) {
   return table;
 }
 
-function openCreatePanel() {
-  const form = document.createElement('div');
+// ---------------------------------------------------------------------------
+// Create Deal Modal
+// ---------------------------------------------------------------------------
+
+function openCreateModal() {
+  const form = document.createElement('form');
+  form.className = 'modal-form';
   form.innerHTML = `
-    <form class="create-form" id="createDealForm">
-      <div class="panel-field">
-        <div class="panel-field-label">Deal Name *</div>
-        <input type="text" name="name" required placeholder="Deal name">
-      </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Value</div>
+    <div class="modal-field">
+      <label>Deal Name *</label>
+      <input type="text" name="name" required placeholder="Deal name">
+    </div>
+    <div class="modal-form-grid">
+      <div class="modal-field">
+        <label>Value</label>
         <input type="number" name="value" step="0.01" placeholder="0.00">
       </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Stage</div>
+      <div class="modal-field">
+        <label>Stage</label>
         <select name="stage">
           ${stages.map(s => `<option value="${s.id}" ${s.id === 'lead' ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
         </select>
       </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Contact</div>
-        <div id="contactDropdownSlot"></div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Expected Close</div>
-        <input type="date" name="expectedClose">
-      </div>
-      <div class="panel-field">
-        <div class="panel-field-label">Notes</div>
-        <textarea name="notes" rows="3" placeholder="Notes..."></textarea>
-      </div>
-      <div style="display:flex;gap:0.5rem;margin-top:1rem;">
-        <button type="submit" class="btn btn-primary" style="flex:1;">Save Deal</button>
-        <button type="button" class="btn btn-secondary" id="cancelCreate">Cancel</button>
-      </div>
-    </form>
+    </div>
+    <div class="modal-field">
+      <label>Contact</label>
+      <div id="contactSlot"></div>
+    </div>
+    <div class="modal-field">
+      <label>Expected Close</label>
+      <input type="date" name="expectedClose">
+    </div>
+    <div class="modal-field">
+      <label>Notes</label>
+      <textarea name="notes" rows="3" placeholder="Notes..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary btn-lg">Create Deal</button>
+      <span class="modal-cancel">Cancel</span>
+    </div>
   `;
 
   let selectedContact = null;
@@ -332,13 +376,13 @@ function openCreatePanel() {
     onSelect: (item) => { selectedContact = item; },
     placeholder: 'Search contacts...'
   });
-  form.querySelector('#contactDropdownSlot').appendChild(dropdown);
+  form.querySelector('#contactSlot').appendChild(dropdown);
 
-  panel.open('New Deal', form);
+  modal.open('New Deal', form);
 
-  form.querySelector('#cancelCreate').addEventListener('click', () => panel.close());
+  form.querySelector('.modal-cancel').addEventListener('click', () => modal.close());
 
-  form.querySelector('#createDealForm').addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
 
@@ -367,9 +411,9 @@ function openCreatePanel() {
     try {
       await addDocument('deals', data);
       showToast('Deal created', 'success');
-      panel.close();
+      modal.close();
       await loadData();
-      renderView();
+      renderListView();
     } catch (err) {
       console.error('Create deal failed:', err);
       showToast('Failed to create deal', 'error');
@@ -377,86 +421,123 @@ function openCreatePanel() {
   });
 }
 
-async function openDetailPanel(deal) {
-  const content = document.createElement('div');
-  let activeTab = 'details';
+// ---------------------------------------------------------------------------
+// Deal Detail Page
+// ---------------------------------------------------------------------------
 
-  function renderPanelContent() {
-    content.innerHTML = '';
+function showDealDetail(deal) {
+  currentPage = 'detail';
+  const container = document.getElementById('view-pipeline');
+  container.innerHTML = '';
 
-    const tabs = document.createElement('div');
-    tabs.className = 'panel-tabs';
-    tabs.innerHTML = `
-      <button class="panel-tab ${activeTab === 'details' ? 'active' : ''}" data-tab="details">Details</button>
-      <button class="panel-tab ${activeTab === 'activity' ? 'active' : ''}" data-tab="activity">Activity</button>
-    `;
-    tabs.querySelectorAll('.panel-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        activeTab = tab.dataset.tab;
-        renderPanelContent();
-      });
-    });
-    content.appendChild(tabs);
+  // Back button
+  const backBtn = document.createElement('button');
+  backBtn.className = 'detail-back';
+  backBtn.innerHTML = '&larr; Back to Pipeline';
+  backBtn.addEventListener('click', () => goBackToList());
+  container.appendChild(backBtn);
 
-    const body = document.createElement('div');
-    body.style.paddingTop = '1rem';
+  // Header
+  const header = document.createElement('div');
+  header.className = 'detail-header';
+  header.innerHTML = `
+    <div class="detail-avatar" style="background:var(--accent-dim);color:var(--accent);">$</div>
+    <div style="flex:1;">
+      <div class="detail-name">${escapeHtml(deal.name)}</div>
+      <div class="detail-subtitle" style="color:var(--accent);font-family:var(--font-display);font-size:1.25rem;font-weight:600;">${formatCurrency(deal.value || 0)}</div>
+    </div>
+    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+  `;
+  container.appendChild(header);
 
-    if (activeTab === 'details') {
-      renderDealDetails(body, deal);
-    } else {
-      renderDealActivity(body, deal);
+  // Delete handler
+  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+    if (!confirm(`Delete "${deal.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteDocument('deals', deal.id);
+      showToast('Deal deleted', 'success');
+      await loadData();
+      goBackToList();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showToast('Failed to delete deal', 'error');
     }
+  });
 
-    content.appendChild(body);
+  // Stage pills
+  const pillsContainer = document.createElement('div');
+  pillsContainer.className = 'stage-pills';
+  renderStagePills(pillsContainer, deal, container);
+  container.appendChild(pillsContainer);
 
-    const deleteRow = document.createElement('div');
-    deleteRow.style.cssText = 'margin-top:2rem;padding-top:1rem;border-top:1px solid #E2E8F0;';
-    deleteRow.innerHTML = `<button class="btn btn-ghost" style="color:var(--danger);">Delete Deal</button>`;
-    deleteRow.querySelector('button').addEventListener('click', async () => {
-      if (!confirm(`Delete "${deal.name}"? This cannot be undone.`)) return;
-      try {
-        await deleteDocument('deals', deal.id);
-        showToast('Deal deleted', 'success');
-        panel.close();
-        await loadData();
-        renderView();
-      } catch (err) {
-        console.error('Delete failed:', err);
-        showToast('Failed to delete deal', 'error');
-      }
-    });
-    content.appendChild(deleteRow);
-  }
+  // Two-column layout
+  const layout = document.createElement('div');
+  layout.className = 'detail-layout';
 
-  renderPanelContent();
-  panel.open(deal.name, content);
+  // Left column — Deal Information
+  const leftCol = document.createElement('div');
+  const leftTitle = document.createElement('div');
+  leftTitle.className = 'detail-section-title';
+  leftTitle.textContent = 'Deal Information';
+  leftCol.appendChild(leftTitle);
+  renderDealFields(leftCol, deal);
+
+  // Right column — Activity
+  const rightCol = document.createElement('div');
+  const rightTitle = document.createElement('div');
+  rightTitle.className = 'detail-section-title';
+  rightTitle.textContent = 'Activity';
+  rightCol.appendChild(rightTitle);
+  renderDealActivity(rightCol, deal);
+
+  layout.appendChild(leftCol);
+  layout.appendChild(rightCol);
+  container.appendChild(layout);
 }
 
-function renderDealDetails(container, deal) {
-  // Stage dropdown
-  const stageField = document.createElement('div');
-  stageField.className = 'panel-field';
-  stageField.innerHTML = `<div class="panel-field-label">Stage</div>`;
-  const stageSelect = document.createElement('select');
-  stageSelect.style.cssText = 'width:100%;padding:0.4rem 0.5rem;font-size:0.9rem;border:1px solid #E2E8F0;border-radius:var(--radius-sm);';
-  stages.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = s.label;
-    if (deal.stage === s.id) opt.selected = true;
-    stageSelect.appendChild(opt);
-  });
-  stageSelect.addEventListener('change', async () => {
-    const oldStage = stages.find(s => s.id === deal.stage);
-    const newStage = stages.find(s => s.id === stageSelect.value);
-    await updateDocument('deals', deal.id, { stage: stageSelect.value });
-    await logFieldEdit('deals', deal.id, 'Stage', oldStage ? oldStage.label : deal.stage, newStage ? newStage.label : stageSelect.value);
-    deal.stage = stageSelect.value;
-    showToast(`Stage: ${newStage ? newStage.label : stageSelect.value}`, 'success');
-  });
-  stageField.appendChild(stageSelect);
-  container.appendChild(stageField);
+// ---------------------------------------------------------------------------
+// Stage Pills
+// ---------------------------------------------------------------------------
 
+function renderStagePills(pillsContainer, deal, pageContainer) {
+  pillsContainer.innerHTML = '';
+
+  stages.forEach(stage => {
+    const pill = document.createElement('button');
+    pill.className = 'stage-pill' + (deal.stage === stage.id ? ' active' : '');
+    pill.textContent = stage.label;
+
+    pill.addEventListener('click', async () => {
+      if (deal.stage === stage.id) return;
+      const oldStage = stages.find(s => s.id === deal.stage);
+      const newStage = stage;
+      try {
+        await updateDocument('deals', deal.id, { stage: stage.id });
+        await logFieldEdit('deals', deal.id, 'Stage', oldStage?.label || deal.stage, newStage.label);
+        deal.stage = stage.id;
+        // Re-render pills to show new active state
+        renderStagePills(pillsContainer, deal, pageContainer);
+        // Update subtitle value display
+        const subtitle = pageContainer.querySelector('.detail-subtitle');
+        if (subtitle) {
+          subtitle.style.color = 'var(--accent)';
+        }
+        showToast(`Stage: ${newStage.label}`, 'success');
+      } catch (err) {
+        console.error('Stage change failed:', err);
+        showToast('Failed to change stage', 'error');
+      }
+    });
+
+    pillsContainer.appendChild(pill);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Deal Fields (editable inline)
+// ---------------------------------------------------------------------------
+
+function renderDealFields(container, deal) {
   const textFields = [
     { key: 'name', label: 'Deal Name', type: 'text' },
     { key: 'value', label: 'Value', type: 'number' },
@@ -466,9 +547,9 @@ function renderDealDetails(container, deal) {
 
   textFields.forEach(f => {
     const field = document.createElement('div');
-    field.className = 'panel-field';
-    field.innerHTML = `<div class="panel-field-label">${f.label}</div><div class="panel-field-value"></div>`;
-    const valueEl = field.querySelector('.panel-field-value');
+    field.className = 'detail-field';
+    field.innerHTML = `<div class="detail-field-label">${f.label}</div><div class="detail-field-value"></div>`;
+    const valueEl = field.querySelector('.detail-field-value');
 
     makeEditable(valueEl, {
       field: f.key,
@@ -478,18 +559,21 @@ function renderDealDetails(container, deal) {
         await updateDocument('deals', deal.id, { [f.key]: newValue });
         await logFieldEdit('deals', deal.id, f.label, oldValue, newValue);
         deal[f.key] = newValue;
+        const idx = deals.findIndex(d => d.id === deal.id);
+        if (idx !== -1) deals[idx] = { ...deals[idx], [f.key]: newValue };
       }
     });
 
     container.appendChild(field);
   });
 
-  // Contact field
+  // Contact field (dropdown on click)
   const contactField = document.createElement('div');
-  contactField.className = 'panel-field';
-  contactField.innerHTML = `<div class="panel-field-label">Contact</div>`;
+  contactField.className = 'detail-field';
+  contactField.innerHTML = `<div class="detail-field-label">Contact</div>`;
+
   const contactValue = document.createElement('div');
-  contactValue.className = 'panel-field-value' + (deal.contactName ? '' : ' empty');
+  contactValue.className = 'detail-field-value' + (deal.contactName ? '' : ' empty');
   contactValue.textContent = deal.contactName || 'Click to add...';
   contactValue.style.cursor = 'pointer';
 
@@ -510,18 +594,24 @@ function renderDealDetails(container, deal) {
           companyId: contact ? contact.companyId || '' : '',
           companyName: contact ? contact.companyName || '' : ''
         };
-        await updateDocument('deals', deal.id, updates);
-        await logFieldEdit('deals', deal.id, 'Contact', oldName, item.label);
-        Object.assign(deal, updates);
-        contactValue.textContent = item.label;
-        contactValue.classList.remove('empty');
-        contactValue.classList.add('flash-success');
-        setTimeout(() => contactValue.classList.remove('flash-success'), 600);
+        try {
+          await updateDocument('deals', deal.id, updates);
+          await logFieldEdit('deals', deal.id, 'Contact', oldName, item.label);
+          Object.assign(deal, updates);
+          contactValue.textContent = item.label;
+          contactValue.classList.remove('empty');
+          contactValue.classList.add('flash-success');
+          setTimeout(() => contactValue.classList.remove('flash-success'), 600);
+        } catch (err) {
+          console.error('Contact update failed:', err);
+          showToast('Failed to update contact', 'error');
+        }
       },
       placeholder: 'Search contacts...'
     });
     contactValue.appendChild(dropdown);
-    contactValue.querySelector('input').focus();
+    const input = contactValue.querySelector('input');
+    if (input) input.focus();
   });
 
   contactField.appendChild(contactValue);
@@ -529,96 +619,106 @@ function renderDealDetails(container, deal) {
 
   // Company (read-only, derived from contact)
   const companyField = document.createElement('div');
-  companyField.className = 'panel-field';
+  companyField.className = 'detail-field';
   companyField.innerHTML = `
-    <div class="panel-field-label">Company</div>
-    <div class="panel-field-value${deal.companyName ? '' : ' empty'}">${escapeHtml(deal.companyName || 'Linked via contact')}</div>
+    <div class="detail-field-label">Company</div>
+    <div class="detail-field-value${deal.companyName ? '' : ' empty'}">${escapeHtml(deal.companyName || 'Linked via contact')}</div>
   `;
   container.appendChild(companyField);
 }
 
-async function renderDealActivity(container, deal) {
-  const addBtn = document.createElement('button');
-  addBtn.className = 'btn btn-secondary';
-  addBtn.style.marginBottom = '1rem';
-  addBtn.textContent = '+ Add Activity';
+// ---------------------------------------------------------------------------
+// Deal Activity (composer + timeline)
+// ---------------------------------------------------------------------------
 
-  const formWrapper = document.createElement('div');
-  formWrapper.style.display = 'none';
-  formWrapper.innerHTML = `
-    <div class="add-activity-form">
-      <select id="activityType">
-        <option value="call">Call</option>
-        <option value="email">Email</option>
-        <option value="meeting">Meeting</option>
-        <option value="note">Note</option>
-      </select>
-      <textarea id="activityDesc" placeholder="What happened?"></textarea>
-      <div class="add-activity-actions">
-        <button class="btn btn-primary btn-sm" id="saveActivity">Save</button>
-        <button class="btn btn-ghost btn-sm" id="cancelActivity">Cancel</button>
-      </div>
+function renderDealActivity(container, deal) {
+  // Composer (always visible)
+  const composer = document.createElement('div');
+  composer.className = 'activity-composer';
+
+  let selectedType = 'call';
+
+  composer.innerHTML = `
+    <div class="activity-type-pills">
+      <button type="button" class="activity-type-pill active" data-type="call">Call</button>
+      <button type="button" class="activity-type-pill" data-type="email">Email</button>
+      <button type="button" class="activity-type-pill" data-type="meeting">Meeting</button>
+      <button type="button" class="activity-type-pill" data-type="note">Note</button>
     </div>
+    <textarea placeholder="Log an activity..."></textarea>
+    <button class="btn btn-primary" style="align-self:flex-end;margin-top:0.5rem;">Save</button>
   `;
 
-  addBtn.addEventListener('click', () => {
-    formWrapper.style.display = 'block';
-    addBtn.style.display = 'none';
+  // Type pill selection
+  composer.querySelectorAll('.activity-type-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      composer.querySelectorAll('.activity-type-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      selectedType = pill.dataset.type;
+    });
   });
 
-  container.appendChild(addBtn);
-  container.appendChild(formWrapper);
+  // Save handler
+  const saveBtn = composer.querySelector('.btn-primary');
+  const textarea = composer.querySelector('textarea');
 
-  formWrapper.querySelector('#cancelActivity').addEventListener('click', () => {
-    formWrapper.style.display = 'none';
-    addBtn.style.display = '';
-  });
-
-  formWrapper.querySelector('#saveActivity').addEventListener('click', async () => {
-    const type = formWrapper.querySelector('#activityType').value;
-    const desc = formWrapper.querySelector('#activityDesc').value.trim();
+  saveBtn.addEventListener('click', async () => {
+    const desc = textarea.value.trim();
     if (!desc) return;
 
-    await addActivity('deals', deal.id, { type, description: desc });
-    showToast('Activity logged', 'success');
-    formWrapper.style.display = 'none';
-    addBtn.style.display = '';
-    formWrapper.querySelector('#activityDesc').value = '';
+    try {
+      await addActivity('deals', deal.id, { type: selectedType, description: desc });
+      showToast('Activity logged', 'success');
+      textarea.value = '';
 
-    const timeline = container.querySelector('.activity-timeline');
-    if (timeline) timeline.remove();
-    await appendDealTimeline(container, deal);
+      // Refresh timeline
+      const timeline = container.querySelector('.detail-timeline');
+      if (timeline) timeline.remove();
+      await loadDealTimeline(container, deal);
+    } catch (err) {
+      console.error('Failed to log activity:', err);
+      showToast('Failed to log activity', 'error');
+    }
   });
 
-  await appendDealTimeline(container, deal);
+  container.appendChild(composer);
+
+  // Timeline
+  loadDealTimeline(container, deal);
 }
 
-async function appendDealTimeline(container, deal) {
-  const activities = await getActivity('deals', deal.id);
+async function loadDealTimeline(container, deal) {
+  let activities = [];
+  try {
+    activities = await getActivity('deals', deal.id);
+  } catch (err) {
+    console.error('Failed to load activities:', err);
+  }
 
   const timeline = document.createElement('div');
-  timeline.className = 'activity-timeline';
+  timeline.className = 'detail-timeline';
 
   if (activities.length === 0) {
     timeline.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem 0;font-size:0.85rem;">No activity yet.</div>';
   } else {
+    const iconMap = { call: '\uD83D\uDCDE', email: '\u2709\uFE0F', meeting: '\uD83E\uDD1D', note: '\uD83D\uDCDD', edit: '\u270F\uFE0F' };
+
     activities.forEach(act => {
-      const iconMap = { call: '📞', email: '✉️', meeting: '🤝', note: '📝', edit: '✏️' };
       const item = document.createElement('div');
       item.className = 'activity-item';
 
       let desc = escapeHtml(act.description || '');
       let diff = '';
       if (act.type === 'edit' && act.oldValue !== undefined) {
-        diff = `<div class="activity-diff">"${escapeHtml(act.oldValue || '(empty)')}" → "${escapeHtml(act.newValue || '(empty)')}"</div>`;
+        diff = `<div class="activity-diff">&ldquo;${escapeHtml(act.oldValue || '(empty)')}&rdquo; &rarr; &ldquo;${escapeHtml(act.newValue || '(empty)')}&rdquo;</div>`;
       }
 
       item.innerHTML = `
-        <div class="activity-icon ${act.type}">${iconMap[act.type] || '•'}</div>
-        <div class="activity-body">
+        <div class="activity-icon ${act.type}">${iconMap[act.type] || '\u2022'}</div>
+        <div class="activity-card">
           <div class="activity-desc">${desc}</div>
           ${diff}
-          <div class="activity-meta">${escapeHtml(act.createdByEmail || 'Unknown')} · ${timeAgo(act.createdAt)}</div>
+          <div class="activity-meta">${escapeHtml(act.createdByEmail || 'Unknown')} &middot; ${timeAgo(act.createdAt)}</div>
         </div>
       `;
       timeline.appendChild(item);
@@ -628,24 +728,37 @@ async function appendDealTimeline(container, deal) {
   container.appendChild(timeline);
 }
 
-function openSettingsPanel() {
+// ---------------------------------------------------------------------------
+// Back to List
+// ---------------------------------------------------------------------------
+
+function goBackToList() {
+  currentPage = 'list';
+  renderListView();
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Settings Modal
+// ---------------------------------------------------------------------------
+
+function openSettingsModal() {
   const content = document.createElement('div');
   content.className = 'pipeline-settings';
 
+  let editableStages = stages.map(s => ({ ...s }));
+
   function renderSettings() {
     content.innerHTML = `
-      <h3 style="margin-bottom:1rem;">Pipeline Stages</h3>
       <p style="font-size:0.8rem;color:var(--gray-dark);margin-bottom:1rem;">Drag to reorder. Won and Lost are locked as closed stages.</p>
       <div class="stage-list" id="stageList"></div>
-      <button class="btn btn-secondary" id="addStageBtn" style="width:100%;margin-bottom:1rem;">+ Add Stage</button>
-      <div style="display:flex;gap:0.5rem;">
-        <button class="btn btn-primary" id="saveStages" style="flex:1;">Save</button>
-        <button class="btn btn-ghost" id="cancelStages">Cancel</button>
+      <button class="btn btn-ghost" id="addStageBtn" style="width:100%;margin-bottom:1rem;">+ Add Stage</button>
+      <div class="modal-actions">
+        <button class="btn btn-primary btn-lg" id="saveStages">Save</button>
+        <span class="modal-cancel" id="cancelStages">Cancel</span>
       </div>
     `;
 
     const list = content.querySelector('#stageList');
-    let editableStages = stages.map(s => ({ ...s }));
 
     function renderStageList() {
       list.innerHTML = '';
@@ -656,15 +769,15 @@ function openSettingsPanel() {
 
         if (stage.closed) {
           item.innerHTML = `
-            <span class="drag-handle" style="visibility:hidden;">⠿</span>
+            <span class="drag-handle" style="visibility:hidden;">&#x2807;</span>
             <input type="text" value="${escapeHtml(stage.label)}" data-idx="${idx}">
             <span class="stage-lock">closed</span>
           `;
         } else {
           item.innerHTML = `
-            <span class="drag-handle">⠿</span>
+            <span class="drag-handle">&#x2807;</span>
             <input type="text" value="${escapeHtml(stage.label)}" data-idx="${idx}">
-            <button class="btn-remove-stage" data-idx="${idx}" title="Remove">✕</button>
+            <button class="btn-remove-stage" data-idx="${idx}" title="Remove">&#x2715;</button>
           `;
         }
 
@@ -692,7 +805,7 @@ function openSettingsPanel() {
           const stage = editableStages[idx];
           const dealsInStage = deals.filter(d => d.stage === stage.id);
           if (dealsInStage.length > 0) {
-            alert(`Cannot delete "${stage.label}" — ${dealsInStage.length} deal(s) are in this stage. Move them first.`);
+            alert(`Cannot delete "${stage.label}" \u2014 ${dealsInStage.length} deal(s) are in this stage. Move them first.`);
             return;
           }
           editableStages.splice(idx, 1);
@@ -721,9 +834,10 @@ function openSettingsPanel() {
       renderStageList();
     });
 
-    content.querySelector('#cancelStages').addEventListener('click', () => panel.close());
+    content.querySelector('#cancelStages').addEventListener('click', () => modal.close());
 
     content.querySelector('#saveStages').addEventListener('click', async () => {
+      // Flush any pending input changes
       list.querySelectorAll('input').forEach(input => {
         const idx = parseInt(input.dataset.idx);
         editableStages[idx].label = input.value.trim();
@@ -734,8 +848,8 @@ function openSettingsPanel() {
         await setDoc(firestoreDoc(db, 'settings', 'pipeline'), { stages: editableStages });
         stages = editableStages;
         showToast('Pipeline stages saved', 'success');
-        panel.close();
-        renderView();
+        modal.close();
+        renderListView();
       } catch (err) {
         console.error('Save stages failed:', err);
         showToast('Failed to save stages', 'error');
@@ -744,5 +858,5 @@ function openSettingsPanel() {
   }
 
   renderSettings();
-  panel.open('Pipeline Settings', content);
+  modal.open('Pipeline Settings', content);
 }
