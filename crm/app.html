@@ -165,15 +165,7 @@
       <div id="view-contacts" class="view-container"></div>
 
       <!-- Pipeline -->
-      <div id="view-pipeline" class="view-container">
-        <div class="empty-state">
-          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <div class="empty-title">Deal Pipeline</div>
-          <p class="empty-description">Deal pipeline coming in Phase 2.</p>
-        </div>
-      </div>
+      <div id="view-pipeline" class="view-container"></div>
 
       <!-- Tasks -->
       <div id="view-tasks" class="view-container">
@@ -233,6 +225,7 @@
     import { registerView, navigate, initRouter } from './js/router.js';
     import { showToast } from './js/ui.js';
     import * as contactsView from './js/views/contacts.js';
+    import * as pipelineView from './js/views/pipeline.js';
 
     // ── Auth guard ──────────────────────────
     onAuthStateChanged(auth, (user) => {
@@ -293,6 +286,16 @@
         contactsView.render();
       },
       destroy: contactsView.destroy
+    });
+
+    // Override pipeline with full view logic
+    registerView('pipeline', {
+      init: pipelineView.init,
+      render() {
+        document.getElementById('headerTitle').textContent = 'Pipeline';
+        pipelineView.render();
+      },
+      destroy: pipelineView.destroy
     });
 
     // ── Nav click handlers ──────────────────

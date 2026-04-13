@@ -1149,6 +1149,177 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 /* ═══════════════════════════════════════════════
+   KANBAN BOARD
+   ═══════════════════════════════════════════════ */
+
+.kanban-board {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 1rem;
+  min-height: 400px;
+}
+
+.kanban-column {
+  flex: 0 0 280px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 200px);
+}
+
+.kanban-column-header {
+  padding: 1rem;
+  border-bottom: 1px solid #E2E8F0;
+  flex-shrink: 0;
+}
+
+.kanban-column-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--off-black);
+  margin-bottom: 0.25rem;
+}
+
+.kanban-column-meta {
+  font-size: 0.75rem;
+  color: var(--gray);
+}
+
+.kanban-column-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.kanban-column-body.drag-over {
+  background: var(--accent-dim);
+}
+
+.deal-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 0.875rem;
+  cursor: grab;
+  transition: box-shadow var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+
+.deal-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: #CBD5E1;
+}
+
+.deal-card.dragging {
+  opacity: 0.5;
+  box-shadow: var(--shadow-md);
+}
+
+.deal-card-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--black);
+  margin-bottom: 0.35rem;
+}
+
+.deal-card-value {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.35rem;
+}
+
+.deal-card-meta {
+  font-size: 0.75rem;
+  color: var(--gray);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.badge-status.qualified {
+  background: rgba(79,123,247,0.12);
+  color: var(--accent);
+}
+
+.badge-status.won {
+  background: var(--success-dim);
+  color: #059669;
+}
+
+.pipeline-settings {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  max-width: 400px;
+}
+
+.stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.stage-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #FAFBFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+}
+
+.stage-item .drag-handle {
+  cursor: grab;
+  color: var(--gray-light);
+  font-size: 1rem;
+}
+
+.stage-item input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.85rem;
+  color: var(--off-black);
+  outline: none;
+  padding: 0.2rem;
+}
+
+.stage-item input:focus {
+  background: #fff;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 2px rgba(79,123,247,0.15);
+}
+
+.stage-item .stage-lock {
+  font-size: 0.7rem;
+  color: var(--gray);
+  font-style: italic;
+}
+
+.stage-item .btn-remove-stage {
+  color: var(--gray-light);
+  padding: 0.2rem;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration) var(--ease);
+}
+
+.stage-item .btn-remove-stage:hover {
+  color: var(--danger);
+}
+
+/* ═══════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════ */
 
