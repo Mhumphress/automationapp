@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -125,30 +126,51 @@
 
       <!-- Dashboard -->
       <div id="view-dashboard" class="view-container">
-        <div class="stats-grid">
-          <div class="stat-card">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card" data-stat="contacts">
             <div class="stat-label">Total Contacts</div>
             <div class="stat-value" id="statContacts">0</div>
             <div class="stat-change neutral">--</div>
+            <div class="stat-drilldown" id="drillContacts"></div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Active Projects</div>
+          <div class="stat-card" data-stat="deals">
+            <div class="stat-label">Active Deals</div>
             <div class="stat-value" id="statProjects">0</div>
             <div class="stat-change neutral">--</div>
+            <div class="stat-drilldown" id="drillDeals"></div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" data-stat="tasks">
             <div class="stat-label">Open Tasks</div>
             <div class="stat-value" id="statTasks">0</div>
             <div class="stat-change neutral">--</div>
+            <div class="stat-drilldown" id="drillTasks"></div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Revenue MTD</div>
+          <div class="stat-card" data-stat="revenue">
+            <div class="stat-label">Revenue</div>
             <div class="stat-value" id="statRevenue">$0</div>
             <div class="stat-change neutral">--</div>
+            <div class="stat-drilldown" id="drillRevenue"></div>
           </div>
         </div>
 
-        <div class="empty-state">
+        <div class="charts-grid" id="chartsGrid">
+          <div class="chart-card">
+            <div class="chart-card-title">Revenue by Month</div>
+            <div class="chart-canvas-wrap" id="revenueChartWrap">
+              <canvas id="revenueChart"></canvas>
+            </div>
+            <div id="revenueChartDrill"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-title">Deal Activity</div>
+            <div class="chart-canvas-wrap" id="activityChartWrap">
+              <canvas id="activityChart"></canvas>
+            </div>
+            <div id="activityChartDrill"></div>
+          </div>
+        </div>
+
+        <div class="empty-state" id="dashboardEmpty" style="display:none;">
           <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
           </svg>
@@ -223,11 +245,10 @@
     import { auth } from './js/config.js';
     import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
     import { registerView, navigate, initRouter } from './js/router.js';
-    import { showToast } from './js/ui.js';
+    import { showToast, escapeHtml, formatDate, timeAgo, formatCurrency as fmtCurrency } from './js/ui.js';
     import * as contactsView from './js/views/contacts.js';
     import * as pipelineView from './js/views/pipeline.js';
     import { queryDocuments } from './js/services/firestore.js';
-    import { formatCurrency as fmtCurrency } from './js/ui.js';
 
     // ── Auth guard ──────────────────────────
     onAuthStateChanged(auth, (user) => {
