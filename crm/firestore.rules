@@ -19,6 +19,18 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    match /companies/{companyId} {
+      allow read, write: if isAuth();
+    }
+
+    match /contacts/{contactId}/activity/{activityId} {
+      allow read, write: if isAuth();
+    }
+
+    match /deals/{dealId}/activity/{activityId} {
+      allow read, write: if isAuth();
+    }
+
     match /deals/{dealId} {
       allow read, write: if isAuth();
     }
