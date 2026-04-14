@@ -244,17 +244,10 @@
     import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './js/services/roles.js';
 
     // ── Auth guard ──────────────────────────
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, (user) => {
       if (!user) {
         window.location.replace('login.html');
         return;
-      }
-
-      // Ensure user document exists (first user gets admin)
-      try {
-        await bootstrapCurrentUser();
-      } catch (err) {
-        console.error('Bootstrap error:', err);
       }
 
       // Populate sidebar user info
@@ -268,14 +261,18 @@
 
       document.getElementById('userAvatar').textContent = initials;
       document.getElementById('userName').textContent = displayName;
-      // Fetch actual role from Firestore
-      getCurrentUserRole().then(role => {
-        document.getElementById('userRole').textContent = role || 'member';
-        if (role === 'admin') {
-          document.getElementById('adminNavSection').style.display = '';
-          document.getElementById('settingsNavItem').style.display = '';
-        }
-      });
+
+      // Bootstrap user doc then fetch role (non-blocking)
+      bootstrapCurrentUser()
+        .then(() => getCurrentUserRole())
+        .then(role => {
+          document.getElementById('userRole').textContent = role || 'member';
+          if (role === 'admin') {
+            document.getElementById('adminNavSection').style.display = '';
+            document.getElementById('settingsNavItem').style.display = '';
+          }
+        })
+        .catch(err => console.error('Role setup error:', err));
     });
 
     // ── Logout ──────────────────────────────
