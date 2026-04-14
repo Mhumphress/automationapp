@@ -23,9 +23,11 @@ service cloud.firestore {
     }
 
     // ── Users ────────────────────────────────
+    // Users can always read their own doc (needed for bootstrap).
+    // Reading other users' docs requires approved status.
     match /users/{userId} {
-      allow read: if isApprovedUser();
-      allow create: if isAdmin() || request.auth.uid == userId;
+      allow read: if request.auth.uid == userId || isApprovedUser();
+      allow create: if request.auth.uid == userId || isAdmin();
       allow update: if request.auth.uid == userId || isAdmin();
       allow delete: if isAdmin();
     }

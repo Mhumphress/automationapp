@@ -251,7 +251,11 @@
       }
 
       // Ensure user document exists (first user gets admin)
-      await bootstrapCurrentUser();
+      try {
+        await bootstrapCurrentUser();
+      } catch (err) {
+        console.error('Bootstrap error:', err);
+      }
 
       // Populate sidebar user info
       const displayName = user.displayName || user.email || 'User';
