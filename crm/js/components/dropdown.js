@@ -115,6 +115,24 @@ export function createDropdown({ fetchItems, onSelect, onCreate, placeholder = '
     }
   });
 
+  // Expose API on the container element
+  container.setSelected = function(item) {
+    selectedItem = item;
+    if (item) {
+      input.value = item.label;
+      input.style.color = 'var(--off-black)';
+      input.style.fontWeight = '500';
+    } else {
+      input.value = '';
+      input.style.color = '';
+      input.style.fontWeight = '';
+    }
+  };
+
+  container.getSelected = function() {
+    return selectedItem;
+  };
+
   return container;
 }
 

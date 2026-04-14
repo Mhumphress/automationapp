@@ -4,6 +4,7 @@ import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
+import { createContactFromDropdown } from '../utils/entity-create.js';
 
 let invoices = [];
 let contacts = [];
@@ -421,6 +422,14 @@ function openCreateModal() {
       sublabel: c.companyName || c.email || ''
     })),
     onSelect: (item) => { selectedClient = item; },
+    onCreate: async (name) => {
+      const result = await createContactFromDropdown(name);
+      if (result) {
+        await loadData();
+        selectedClient = result;
+        clientDropdown.setSelected && clientDropdown.setSelected(result);
+      }
+    },
     placeholder: 'Search clients...'
   });
   form.querySelector('#clientSlot').appendChild(clientDropdown);
@@ -667,6 +676,26 @@ function renderDetailFields(container, invoice) {
         } catch (err) {
           console.error('Client update failed:', err);
           showToast('Failed to update client', 'error');
+        }
+      },
+      onCreate: async (name) => {
+        const result = await createContactFromDropdown(name);
+        if (result) {
+          await loadData();
+          const oldName = invoice.clientName || '';
+          const updates = { clientId: result.id, clientName: result.label };
+          try {
+            await updateDocument('invoices', invoice.id, updates);
+            await logFieldEdit('invoices', invoice.id, 'Client', oldName, result.label);
+            Object.assign(invoice, updates);
+            clientValue.textContent = result.label;
+            clientValue.classList.remove('empty');
+            clientValue.classList.add('flash-success');
+            setTimeout(() => clientValue.classList.remove('flash-success'), 600);
+          } catch (err) {
+            console.error('Client update failed:', err);
+            showToast('Failed to update client', 'error');
+          }
         }
       },
       placeholder: 'Search clients...'

@@ -4,6 +4,7 @@ import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency } from '../ui.js';
+import { createCompanyFromDropdown } from '../utils/entity-create.js';
 
 let contacts = [];
 let companies = [];
@@ -330,10 +331,12 @@ function openCreateModal() {
     fetchItems: async () => companies.map(c => ({ id: c.id, label: c.name, sublabel: c.industry || '' })),
     onSelect: (item) => { selectedCompany = item; },
     onCreate: async (name) => {
-      const ref = await addDocument('companies', { name });
-      await loadData();
-      selectedCompany = { id: ref.id, label: name };
-      showToast(`Company "${name}" created`, 'success');
+      const result = await createCompanyFromDropdown(name);
+      if (result) {
+        await loadData();
+        selectedCompany = result;
+        dropdown.setSelected && dropdown.setSelected(result);
+      }
     },
     placeholder: 'Search or create company...'
   });
@@ -531,24 +534,25 @@ function renderDetailFields(container, contact) {
         setTimeout(() => companyValue.classList.remove('flash-success'), 600);
       },
       onCreate: async (name) => {
-        const ref = await addDocument('companies', { name });
-        await loadData();
-        const oldName = contact.companyName || '';
-        await updateDocument('contacts', contact.id, { companyId: ref.id, companyName: name });
-        await logFieldEdit('contacts', contact.id, 'Company', oldName, name);
-        contact.companyId = ref.id;
-        contact.companyName = name;
-        companyValue.classList.remove('editing', 'empty');
-        companyValue.innerHTML = '';
-        const newLink = document.createElement('span');
-        newLink.style.cssText = 'color:var(--accent);cursor:pointer;';
-        newLink.textContent = name;
-        newLink.addEventListener('click', () => {
-          const company = companies.find(c => c.id === ref.id);
-          if (company) showCompanyPage(company);
-        });
-        companyValue.appendChild(newLink);
-        showToast(`Company "${name}" created`, 'success');
+        const result = await createCompanyFromDropdown(name);
+        if (result) {
+          await loadData();
+          const oldName = contact.companyName || '';
+          await updateDocument('contacts', contact.id, { companyId: result.id, companyName: result.label });
+          await logFieldEdit('contacts', contact.id, 'Company', oldName, result.label);
+          contact.companyId = result.id;
+          contact.companyName = result.label;
+          companyValue.classList.remove('editing', 'empty');
+          companyValue.innerHTML = '';
+          const newLink = document.createElement('span');
+          newLink.style.cssText = 'color:var(--accent);cursor:pointer;';
+          newLink.textContent = result.label;
+          newLink.addEventListener('click', () => {
+            const company = companies.find(c => c.id === result.id);
+            if (company) showCompanyPage(company);
+          });
+          companyValue.appendChild(newLink);
+        }
       },
       placeholder: 'Search or create company...'
     });

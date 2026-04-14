@@ -5,6 +5,7 @@ import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
+import { createContactFromDropdown } from '../utils/entity-create.js';
 import { collection, getDocs, addDoc, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let clientSubs = [];
@@ -427,6 +428,14 @@ function openClientCreateModal() {
       sublabel: c.companyName || c.email || ''
     })),
     onSelect: (item) => { selectedClient = item; },
+    onCreate: async (name) => {
+      const result = await createContactFromDropdown(name);
+      if (result) {
+        await loadData();
+        selectedClient = result;
+        clientDropdown.setSelected && clientDropdown.setSelected(result);
+      }
+    },
     placeholder: 'Search clients...'
   });
   form.querySelector('#clientSlot').appendChild(clientDropdown);
@@ -804,6 +813,32 @@ function renderClientDetailFields(container, sub) {
         } catch (err) {
           console.error('Client update failed:', err);
           showToast('Failed to update client', 'error');
+        }
+      },
+      onCreate: async (name) => {
+        const result = await createContactFromDropdown(name);
+        if (result) {
+          await loadData();
+          const oldName = sub.contactName || '';
+          const contact = contacts.find(c => c.id === result.id);
+          const updates = {
+            contactId: result.id,
+            contactName: result.label,
+            companyId: contact ? (contact.companyId || '') : '',
+            companyName: contact ? (contact.companyName || '') : ''
+          };
+          try {
+            await updateDocument('subscriptions', sub.id, updates);
+            await logFieldEdit('subscriptions', sub.id, 'Client', oldName, result.label);
+            Object.assign(sub, updates);
+            clientValue.classList.remove('editing', 'empty');
+            clientValue.textContent = result.label;
+            clientValue.classList.add('flash-success');
+            setTimeout(() => clientValue.classList.remove('flash-success'), 600);
+          } catch (err) {
+            console.error('Client update failed:', err);
+            showToast('Failed to update client', 'error');
+          }
         }
       },
       placeholder: 'Search clients...'

@@ -5,6 +5,7 @@ import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
+import { createContactFromDropdown } from '../utils/entity-create.js';
 
 const DEFAULT_STAGES = [
   { id: 'lead', label: 'Lead', order: 0 },
@@ -374,6 +375,14 @@ function openCreateModal() {
       sublabel: c.companyName || ''
     })),
     onSelect: (item) => { selectedContact = item; },
+    onCreate: async (name) => {
+      const result = await createContactFromDropdown(name);
+      if (result) {
+        await loadData();
+        selectedContact = result;
+        dropdown.setSelected && dropdown.setSelected(result);
+      }
+    },
     placeholder: 'Search contacts...'
   });
   form.querySelector('#contactSlot').appendChild(dropdown);
@@ -605,6 +614,31 @@ function renderDealFields(container, deal) {
         } catch (err) {
           console.error('Contact update failed:', err);
           showToast('Failed to update contact', 'error');
+        }
+      },
+      onCreate: async (name) => {
+        const result = await createContactFromDropdown(name);
+        if (result) {
+          await loadData();
+          const contact = contacts.find(c => c.id === result.id);
+          const updates = {
+            contactId: result.id,
+            contactName: result.label,
+            companyId: contact ? contact.companyId || '' : '',
+            companyName: contact ? contact.companyName || '' : ''
+          };
+          try {
+            await updateDocument('deals', deal.id, updates);
+            await logFieldEdit('deals', deal.id, 'Contact', deal.contactName || '', result.label);
+            Object.assign(deal, updates);
+            contactValue.textContent = result.label;
+            contactValue.classList.remove('empty');
+            contactValue.classList.add('flash-success');
+            setTimeout(() => contactValue.classList.remove('flash-success'), 600);
+          } catch (err) {
+            console.error('Contact update failed:', err);
+            showToast('Failed to update contact', 'error');
+          }
         }
       },
       placeholder: 'Search contacts...'
