@@ -383,7 +383,8 @@
         document.getElementById('statsGrid').style.display = hasData ? '' : 'none';
         document.getElementById('chartsGrid').style.display = hasData ? '' : 'none';
 
-        // Notification banner
+        // Notification banner (clean up any existing one first)
+        document.querySelectorAll('.notification-banner').forEach(el => el.remove());
         if ('Notification' in window && Notification.permission === 'default') {
           const banner = document.createElement('div');
           banner.className = 'notification-banner';
