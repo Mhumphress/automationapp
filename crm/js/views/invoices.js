@@ -282,7 +282,7 @@ function createLineItemsEditor(container, onUpdate) {
     table.className = 'line-items-table';
     table.innerHTML = `<thead><tr>
       <th class="col-desc">Description</th>
-      <th class="col-qty">Qty</th>
+      <th class="col-qty">Hours / Qty</th>
       <th class="col-rate">Rate</th>
       <th class="col-amount">Amount</th>
       <th class="col-action"></th>
@@ -294,7 +294,7 @@ function createLineItemsEditor(container, onUpdate) {
       const amount = (item.quantity || 0) * (item.rate || 0);
       tr.innerHTML = `
         <td><input type="text" value="${escapeHtml(item.description)}" data-idx="${idx}" data-field="description" placeholder="Item description"></td>
-        <td><input type="number" value="${item.quantity}" data-idx="${idx}" data-field="quantity" min="0" step="1"></td>
+        <td><input type="number" value="${item.quantity}" data-idx="${idx}" data-field="quantity" min="0" step="0.5"></td>
         <td><input type="number" value="${item.rate}" data-idx="${idx}" data-field="rate" min="0" step="0.01"></td>
         <td class="amount-cell">${formatCurrency(amount)}</td>
         <td><span class="btn-remove-row" data-idx="${idx}">&times;</span></td>
@@ -1015,7 +1015,7 @@ function printInvoice(invoice) {
       <thead>
         <tr>
           <th style="text-align:left;">Description</th>
-          <th style="text-align:center;">Qty</th>
+          <th style="text-align:center;">Hours / Qty</th>
           <th style="text-align:right;">Rate</th>
           <th style="text-align:right;">Amount</th>
         </tr>

@@ -2098,11 +2098,16 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   box-shadow: 0 0 0 2px rgba(79,123,247,0.08);
 }
 
-.line-items-table .col-desc { width: 45%; }
-.line-items-table .col-qty { width: 12%; }
+.line-items-table .col-desc { width: 38%; }
+.line-items-table .col-qty { width: 15%; text-align: center; }
 .line-items-table .col-rate { width: 18%; }
 .line-items-table .col-amount { width: 18%; text-align: right; }
 .line-items-table .col-action { width: 7%; text-align: center; }
+
+.line-items-table .col-qty input {
+  text-align: center;
+  font-weight: 500;
+}
 
 .line-items-table .amount-cell {
   text-align: right;
