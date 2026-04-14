@@ -87,6 +87,15 @@
           Messages
         </button>
 
+        <!-- Admin -->
+        <div class="nav-section-label" id="adminNavSection" style="display:none;">Admin</div>
+        <button class="nav-item" data-view="settings" id="settingsNavItem" style="display:none;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Settings
+        </button>
+
       </nav>
 
       <!-- Footer / User -->
@@ -209,6 +218,9 @@
         </div>
       </div>
 
+      <!-- Settings -->
+      <div id="view-settings" class="view-container"></div>
+
     </main>
 
   </div>
@@ -227,14 +239,19 @@
     import * as tasksView from './js/views/tasks.js';
     import * as invoicesView from './js/views/invoices.js';
     import * as subscriptionsView from './js/views/subscriptions.js';
+    import * as settingsView from './js/views/settings.js';
     import { queryDocuments } from './js/services/firestore.js';
+    import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './js/services/roles.js';
 
     // ── Auth guard ──────────────────────────
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.replace('login.html');
         return;
       }
+
+      // Ensure user document exists (first user gets admin)
+      await bootstrapCurrentUser();
 
       // Populate sidebar user info
       const displayName = user.displayName || user.email || 'User';
@@ -247,13 +264,20 @@
 
       document.getElementById('userAvatar').textContent = initials;
       document.getElementById('userName').textContent = displayName;
-      // Role could come from Firestore — default to 'member' for now
-      document.getElementById('userRole').textContent = 'member';
+      // Fetch actual role from Firestore
+      getCurrentUserRole().then(role => {
+        document.getElementById('userRole').textContent = role || 'member';
+        if (role === 'admin') {
+          document.getElementById('adminNavSection').style.display = '';
+          document.getElementById('settingsNavItem').style.display = '';
+        }
+      });
     });
 
     // ── Logout ──────────────────────────────
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       try {
+        clearRoleCache();
         await signOut(auth);
       } catch (err) {
         showToast('Sign out failed. Please try again.', 'error');
@@ -268,7 +292,8 @@
       tasks:         'Tasks',
       invoices:      'Invoices',
       subscriptions: 'Subscriptions',
-      messages:      'Messages'
+      messages:      'Messages',
+      settings:      'Settings'
     };
 
     // ── Register views ──────────────────────
@@ -328,6 +353,16 @@
         subscriptionsView.render();
       },
       destroy: subscriptionsView.destroy
+    });
+
+    // Override settings with full view logic
+    registerView('settings', {
+      init: settingsView.init,
+      render() {
+        document.getElementById('headerTitle').textContent = 'Settings';
+        settingsView.render();
+      },
+      destroy: settingsView.destroy
     });
 
     // ── Dashboard ───────────────────────────

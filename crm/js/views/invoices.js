@@ -5,6 +5,7 @@ import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
+import { canDelete } from '../services/roles.js';
 
 let invoices = [];
 let contacts = [];
@@ -516,7 +517,7 @@ function openCreateModal() {
 // Detail Page
 // ---------------------------------------------------------------------------
 
-function showDetailPage(invoice) {
+async function showDetailPage(invoice) {
   currentPage = 'detail';
   const container = document.getElementById('view-invoices');
   container.innerHTML = '';
@@ -529,6 +530,7 @@ function showDetailPage(invoice) {
   container.appendChild(backBtn);
 
   // Header
+  const allowDelete = await canDelete(invoice);
   const effectiveStatus = (invoice.status === 'overdue' || isOverdue(invoice)) ? 'overdue' : (invoice.status || 'draft');
   const header = document.createElement('div');
   header.className = 'detail-header';
@@ -538,7 +540,7 @@ function showDetailPage(invoice) {
       <div class="detail-subtitle">${escapeHtml(invoice.clientName || '')} &middot; <span class="badge-status ${effectiveStatus}">${effectiveStatus.charAt(0).toUpperCase() + effectiveStatus.slice(1)}</span></div>
     </div>
     <button class="btn btn-ghost detail-pdf-btn">Download PDF</button>
-    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+    ${allowDelete ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
 
@@ -546,7 +548,8 @@ function showDetailPage(invoice) {
   header.querySelector('.detail-pdf-btn').addEventListener('click', () => printInvoice(invoice));
 
   // Delete handler
-  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+  const deleteBtn = header.querySelector('.detail-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
     if (!confirm(`Delete invoice ${invoice.invoiceNumber}? This cannot be undone.`)) return;
     try {
       await deleteDocument('invoices', invoice.id);

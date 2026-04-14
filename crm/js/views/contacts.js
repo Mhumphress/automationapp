@@ -5,6 +5,7 @@ import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency } from '../ui.js';
 import { createCompanyFromDropdown } from '../utils/entity-create.js';
+import { canDelete } from '../services/roles.js';
 
 let contacts = [];
 let companies = [];
@@ -377,7 +378,7 @@ function openCreateModal() {
 // Detail Page
 // ---------------------------------------------------------------------------
 
-function showDetailPage(contact) {
+async function showDetailPage(contact) {
   currentPage = 'detail';
   const container = document.getElementById('view-contacts');
   container.innerHTML = '';
@@ -390,6 +391,7 @@ function showDetailPage(contact) {
   container.appendChild(backBtn);
 
   // Header
+  const allowDelete = await canDelete(contact);
   const initials = ((contact.firstName || '')[0] || '') + ((contact.lastName || '')[0] || '');
   const companyLabel = contact.companyName ? ` at ${escapeHtml(contact.companyName)}` : '';
   const header = document.createElement('div');
@@ -400,12 +402,13 @@ function showDetailPage(contact) {
       <div class="detail-name">${escapeHtml(contact.firstName)} ${escapeHtml(contact.lastName)}</div>
       <div class="detail-subtitle">${contact.jobTitle ? escapeHtml(contact.jobTitle) : ''}${companyLabel}</div>
     </div>
-    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+    ${allowDelete ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
 
   // Delete handler
-  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+  const deleteBtn = header.querySelector('.detail-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
     if (!confirm(`Delete ${contact.firstName} ${contact.lastName}? This cannot be undone.`)) return;
     try {
       await deleteDocument('contacts', contact.id);

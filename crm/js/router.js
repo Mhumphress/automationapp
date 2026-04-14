@@ -2,6 +2,8 @@
 //  router.js — Client-side hash-based view router
 // ─────────────────────────────────────────────
 
+import { auth } from './config.js';
+
 const views = {};          // { name: { init, render, destroy } }
 const initialised = {};    // track which views have had init() called
 let currentView = null;
@@ -27,6 +29,12 @@ export function registerView(name, { init, render, destroy } = {}) {
  * @param {string} viewName
  */
 export function navigate(viewName) {
+  // Auth guard — redirect if session expired
+  if (!auth.currentUser) {
+    window.location.replace('login.html');
+    return;
+  }
+
   // Validate view exists
   if (!views[viewName]) {
     console.warn(`[router] Unknown view: "${viewName}"`);

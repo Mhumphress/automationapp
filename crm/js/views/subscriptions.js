@@ -6,6 +6,7 @@ import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
+import { canDelete } from '../services/roles.js';
 import { collection, getDocs, addDoc, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let clientSubs = [];
@@ -569,7 +570,7 @@ function openInternalCreateModal() {
 // Client Subscription — Detail Page
 // ---------------------------------------------------------------------------
 
-function showClientDetailPage(sub) {
+async function showClientDetailPage(sub) {
   currentPage = 'detail';
   const container = document.getElementById('view-subscriptions');
   container.innerHTML = '';
@@ -582,6 +583,7 @@ function showClientDetailPage(sub) {
   container.appendChild(backBtn);
 
   // Header
+  const allowDelete = await canDelete(sub);
   const status = sub.status || 'active';
   const statusLabel = status === 'past_due' ? 'Past Due' : status.charAt(0).toUpperCase() + status.slice(1);
   const header = document.createElement('div');
@@ -591,12 +593,13 @@ function showClientDetailPage(sub) {
       <div class="detail-name">${escapeHtml(sub.planName || 'Subscription')}</div>
       <div class="detail-subtitle">${escapeHtml(sub.contactName || '')} &middot; <span class="badge-status ${escapeHtml(status)}">${escapeHtml(statusLabel)}</span></div>
     </div>
-    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+    ${allowDelete ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
 
   // Delete handler
-  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+  const deleteBtn = header.querySelector('.detail-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
     if (!confirm(`Delete subscription "${sub.planName}"? This cannot be undone.`)) return;
     try {
       await deleteDocument('subscriptions', sub.id);
@@ -990,7 +993,7 @@ async function loadPaymentList(container, sub) {
 // Internal Subscription — Detail Page
 // ---------------------------------------------------------------------------
 
-function showInternalDetailPage(sub) {
+async function showInternalDetailPage(sub) {
   currentPage = 'detail';
   const container = document.getElementById('view-subscriptions');
   container.innerHTML = '';
@@ -1003,6 +1006,7 @@ function showInternalDetailPage(sub) {
   container.appendChild(backBtn);
 
   // Header
+  const allowDelete = await canDelete(sub);
   const header = document.createElement('div');
   header.className = 'detail-header';
   header.innerHTML = `
@@ -1010,12 +1014,13 @@ function showInternalDetailPage(sub) {
       <div class="detail-name">${escapeHtml(sub.serviceName || 'Expense')}</div>
       <div class="detail-subtitle">${escapeHtml(sub.vendor || '')}</div>
     </div>
-    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+    ${allowDelete ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
 
   // Delete handler
-  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+  const deleteBtn = header.querySelector('.detail-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
     if (!confirm(`Delete "${sub.serviceName}"? This cannot be undone.`)) return;
     try {
       await deleteDocument('internal_subs', sub.id);

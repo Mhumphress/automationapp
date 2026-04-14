@@ -2,85 +2,145 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helper functions ─────────────────────
+
     function isAuth() {
       return request.auth != null;
     }
 
+    function isApprovedUser() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function isAdmin() {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isApprovedUser() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    function isOwner() {
+      return resource.data.createdBy == request.auth.uid;
+    }
+
+    // ── Users ────────────────────────────────
     match /users/{userId} {
-      allow read: if isAuth();
-      allow write: if request.auth.uid == userId || isAdmin();
+      allow read: if isApprovedUser();
+      allow create: if isAdmin() || request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || isAdmin();
+      allow delete: if isAdmin();
     }
 
+    // ── CRM Data Collections ─────────────────
     match /contacts/{contactId} {
-      allow read, write: if isAuth();
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
+
+      match /activity/{activityId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update, delete: if false;
+      }
     }
 
     match /companies/{companyId} {
-      allow read, write: if isAuth();
-    }
-
-    match /contacts/{contactId}/activity/{activityId} {
-      allow read, write: if isAuth();
-    }
-
-    match /deals/{dealId}/activity/{activityId} {
-      allow read, write: if isAuth();
-    }
-
-    match /tasks/{taskId}/activity/{activityId} {
-      allow read, write: if isAuth();
-    }
-
-    match /invoices/{invoiceId}/activity/{activityId} {
-      allow read, write: if isAuth();
-    }
-
-    match /subscriptions/{subId}/activity/{activityId} {
-      allow read, write: if isAuth();
-    }
-
-    match /subscriptions/{subId}/payments/{paymentId} {
-      allow read, write: if isAuth();
-    }
-
-    match /internal_subs/{id} {
-      allow read, write: if isAuth();
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
     }
 
     match /deals/{dealId} {
-      allow read, write: if isAuth();
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
+
+      match /activity/{activityId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update, delete: if false;
+      }
     }
 
     match /tasks/{taskId} {
-      allow read, write: if isAuth();
-    }
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
 
-    match /notes/{noteId} {
-      allow read, write: if isAuth();
+      match /activity/{activityId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update, delete: if false;
+      }
     }
 
     match /invoices/{invoiceId} {
-      allow read, write: if isAuth();
-    }
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
 
-    match /payments/{paymentId} {
-      allow read, write: if isAuth();
+      match /activity/{activityId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update, delete: if false;
+      }
     }
 
     match /subscriptions/{subId} {
-      allow read, write: if isAuth();
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
+
+      match /activity/{activityId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update, delete: if false;
+      }
+
+      match /payments/{paymentId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update: if isApprovedUser();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /internal_subs/{id} {
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
+    }
+
+    match /notes/{noteId} {
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin();
     }
 
     match /messages/{messageId} {
-      allow read, write: if isAuth();
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin() || (isApprovedUser() && isOwner());
     }
 
+    // ── Settings ─────────────────────────────
     match /settings/{settingId} {
-      allow read: if isAuth();
+      allow read: if isApprovedUser();
       allow write: if isAdmin();
     }
   }

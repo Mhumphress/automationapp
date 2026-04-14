@@ -6,6 +6,7 @@ import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
+import { canDelete } from '../services/roles.js';
 
 const DEFAULT_STAGES = [
   { id: 'lead', label: 'Lead', order: 0 },
@@ -434,7 +435,7 @@ function openCreateModal() {
 // Deal Detail Page
 // ---------------------------------------------------------------------------
 
-function showDealDetail(deal) {
+async function showDealDetail(deal) {
   currentPage = 'detail';
   const container = document.getElementById('view-pipeline');
   container.innerHTML = '';
@@ -447,6 +448,7 @@ function showDealDetail(deal) {
   container.appendChild(backBtn);
 
   // Header
+  const allowDelete = await canDelete(deal);
   const header = document.createElement('div');
   header.className = 'detail-header';
   header.innerHTML = `
@@ -455,12 +457,13 @@ function showDealDetail(deal) {
       <div class="detail-name">${escapeHtml(deal.name)}</div>
       <div class="detail-subtitle" style="color:var(--accent);font-family:var(--font-display);font-size:1.25rem;font-weight:600;">${formatCurrency(deal.value || 0)}</div>
     </div>
-    <button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>
+    ${allowDelete ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
 
   // Delete handler
-  header.querySelector('.detail-delete-btn').addEventListener('click', async () => {
+  const deleteBtn = header.querySelector('.detail-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', async () => {
     if (!confirm(`Delete "${deal.name}"? This cannot be undone.`)) return;
     try {
       await deleteDocument('deals', deal.id);
