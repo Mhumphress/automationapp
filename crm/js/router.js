@@ -29,12 +29,6 @@ export function registerView(name, { init, render, destroy } = {}) {
  * @param {string} viewName
  */
 export function navigate(viewName) {
-  // Auth guard — redirect if session expired
-  if (!auth.currentUser) {
-    window.location.replace('login.html');
-    return;
-  }
-
   // Validate view exists
   if (!views[viewName]) {
     console.warn(`[router] Unknown view: "${viewName}"`);
@@ -90,6 +84,11 @@ export function initRouter(defaultView = 'dashboard') {
   navigate(startView);
 
   window.addEventListener('hashchange', () => {
+    // Auth guard — redirect if session expired mid-use
+    if (!auth.currentUser) {
+      window.location.replace('login.html');
+      return;
+    }
     const next = window.location.hash.replace('#', '');
     if (next && views[next] && next !== currentView) {
       navigate(next);
