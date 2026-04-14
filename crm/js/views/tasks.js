@@ -5,6 +5,7 @@ import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
 import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatDate } from '../ui.js';
+import { createContactFromDropdown } from '../utils/entity-create.js';
 
 let tasks = [];
 let contacts = [];
@@ -341,6 +342,14 @@ function openCreateModal() {
       sublabel: c.companyName || ''
     })),
     onSelect: (item) => { selectedContact = item; },
+    onCreate: async (name) => {
+      const result = await createContactFromDropdown(name);
+      if (result) {
+        await loadData();
+        selectedContact = result;
+        contactDropdown.setSelected(result);
+      }
+    },
     placeholder: 'Search contacts...'
   });
   form.querySelector('#contactSlot').appendChild(contactDropdown);
@@ -608,6 +617,21 @@ function renderDetailFields(container, task) {
         } catch (err) {
           console.error('Contact update failed:', err);
           showToast('Failed to update contact', 'error');
+        }
+      },
+      onCreate: async (name) => {
+        const result = await createContactFromDropdown(name);
+        if (result) {
+          await loadData();
+          const oldName = task.contactName || '';
+          const updates = { contactId: result.id, contactName: result.label };
+          await updateDocument('tasks', task.id, updates);
+          await logFieldEdit('tasks', task.id, 'Contact', oldName, result.label);
+          Object.assign(task, updates);
+          contactValue.textContent = result.label;
+          contactValue.classList.remove('empty');
+          contactValue.classList.add('flash-success');
+          setTimeout(() => contactValue.classList.remove('flash-success'), 600);
         }
       },
       placeholder: 'Search contacts...'
