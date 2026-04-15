@@ -2,8 +2,6 @@
 //  router.js — Client-side hash-based view router
 // ─────────────────────────────────────────────
 
-import { auth } from './config.js';
-
 const views = {};          // { name: { init, render, destroy } }
 const initialised = {};    // track which views have had init() called
 let currentView = null;
@@ -84,11 +82,6 @@ export function initRouter(defaultView = 'dashboard') {
   navigate(startView);
 
   window.addEventListener('hashchange', () => {
-    // Auth guard — redirect if session expired mid-use
-    if (!auth.currentUser) {
-      window.location.replace('login.html');
-      return;
-    }
     const next = window.location.hash.replace('#', '');
     if (next && views[next] && next !== currentView) {
       navigate(next);

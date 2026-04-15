@@ -244,7 +244,13 @@
     import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './js/services/roles.js';
 
     // ── Auth guard ──────────────────────────
+    // Wait for Firebase Auth to restore session before deciding.
+    // onAuthStateChanged may fire with null before persistence loads.
+    let authHandled = false;
     onAuthStateChanged(auth, (user) => {
+      if (authHandled) return;          // only act on first resolution
+      authHandled = true;
+
       if (!user) {
         window.location.replace('login.html');
         return;
