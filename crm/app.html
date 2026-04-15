@@ -50,6 +50,12 @@
           </svg>
           Contacts
         </button>
+        <button class="nav-item" data-view="companies">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/>
+          </svg>
+          Companies
+        </button>
         <button class="nav-item" data-view="pipeline">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -195,6 +201,9 @@
       <!-- Contacts -->
       <div id="view-contacts" class="view-container"></div>
 
+      <!-- Companies -->
+      <div id="view-companies" class="view-container"></div>
+
       <!-- Pipeline -->
       <div id="view-pipeline" class="view-container"></div>
 
@@ -235,6 +244,7 @@
     import { registerView, navigate, initRouter } from './js/router.js';
     import { showToast, escapeHtml, formatDate, timeAgo, formatCurrency as fmtCurrency } from './js/ui.js';
     import * as contactsView from './js/views/contacts.js';
+    import * as companiesView from './js/views/companies.js';
     import * as pipelineView from './js/views/pipeline.js';
     import * as tasksView from './js/views/tasks.js';
     import * as invoicesView from './js/views/invoices.js';
@@ -295,6 +305,7 @@
     const viewTitles = {
       dashboard:     'Dashboard',
       contacts:      'Contacts',
+      companies:     'Companies',
       pipeline:      'Pipeline',
       tasks:         'Tasks',
       invoices:      'Invoices',
@@ -320,6 +331,16 @@
         contactsView.render();
       },
       destroy: contactsView.destroy
+    });
+
+    // Override companies with full view logic
+    registerView('companies', {
+      init: companiesView.init,
+      render() {
+        document.getElementById('headerTitle').textContent = 'Companies';
+        companiesView.render();
+      },
+      destroy: companiesView.destroy
     });
 
     // Override pipeline with full view logic
