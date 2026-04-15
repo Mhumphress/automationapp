@@ -15,10 +15,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // App Check — verifies requests come from your actual website
-initializeAppCheck(app, {
-  provider: new ReCaptchaEnterpriseProvider('6Ld_1rcsAAAAAJXP7udmGMNbWxCcsui1m-VwCo1U'),
-  isTokenAutoRefreshEnabled: true
-});
+try {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider('6Ld_1rcsAAAAAJXP7udmGMNbWxCcsui1m-VwCo1U'),
+    isTokenAutoRefreshEnabled: true
+  });
+} catch (err) {
+  console.error('App Check init failed:', err);
+}
 
 const db = getFirestore(app);
 const auth = getAuth(app);
