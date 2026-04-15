@@ -1,6 +1,6 @@
 import { db, auth } from '../config.js';
 import {
-  doc, getDoc, setDoc, getDocs, collection, query, limit, serverTimestamp
+  doc, getDoc, setDoc, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let cachedRole = null;
@@ -16,20 +16,17 @@ export async function getCurrentUserRole() {
   const user = auth.currentUser;
   if (!user) return null;
 
-  const userRef = doc(db, 'users', user.uid);
-  const snap = await getDoc(userRef);
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    const snap = await getDoc(userRef);
 
-  if (snap.exists()) {
-    cachedRole = snap.data().role || 'member';
-  } else {
-    // First login — create user document as member
-    await setDoc(userRef, {
-      email: user.email,
-      displayName: user.displayName || user.email,
-      role: 'member',
-      createdAt: serverTimestamp(),
-      createdBy: user.uid
-    });
+    if (snap.exists()) {
+      cachedRole = snap.data().role || 'member';
+    } else {
+      cachedRole = 'member';
+    }
+  } catch (err) {
+    console.error('Role fetch error:', err);
     cachedRole = 'member';
   }
 
@@ -53,28 +50,30 @@ export function clearRoleCache() {
 
 /**
  * Bootstrap: ensure current user has a user document.
- * If no users collection docs exist yet, make the first user an admin.
+ * First user to log in gets 'admin' role automatically.
  */
 export async function bootstrapCurrentUser() {
   const user = auth.currentUser;
   if (!user) return;
 
-  const userRef = doc(db, 'users', user.uid);
-  const snap = await getDoc(userRef);
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    const snap = await getDoc(userRef);
 
-  if (!snap.exists()) {
-    const existing = await getDocs(query(collection(db, 'users'), limit(1)));
-    const role = existing.empty ? 'admin' : 'member';
-
-    await setDoc(userRef, {
-      email: user.email,
-      displayName: user.displayName || user.email,
-      role,
-      createdAt: serverTimestamp(),
-      createdBy: user.uid
-    });
-
-    cachedRole = role;
+    if (!snap.exists()) {
+      // First user gets admin — subsequent users should be
+      // invited via the Settings page by an admin.
+      await setDoc(userRef, {
+        email: user.email,
+        displayName: user.displayName || user.email,
+        role: 'admin',
+        createdAt: serverTimestamp(),
+        createdBy: user.uid
+      });
+      cachedRole = 'admin';
+    }
+  } catch (err) {
+    console.error('Bootstrap error:', err);
   }
 }
 
