@@ -1,5 +1,5 @@
 import { db, auth } from '../config.js';
-import { collection, getDocs, doc, updateDoc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { collection, collectionGroup, getDocs, doc, updateDoc, query, orderBy, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
 
@@ -58,6 +58,50 @@ export async function render() {
         }
       });
     });
+
+    // ── Audit Log Section ──
+    const auditSection = document.createElement('div');
+    auditSection.className = 'settings-section';
+    auditSection.style.marginTop = '2rem';
+    auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><div class="loading">Loading recent activity...</div>';
+    container.appendChild(auditSection);
+
+    try {
+      const actSnap = await getDocs(
+        query(collectionGroup(db, 'activity'), orderBy('createdAt', 'desc'), fbLimit(50))
+      );
+
+      if (actSnap.empty) {
+        auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><p style="color:var(--gray-dark);padding:1rem;">No activity recorded yet.</p>';
+      } else {
+        let auditHtml = '<h2 class="section-title">Audit Log</h2>';
+        auditHtml += '<table class="data-table"><thead><tr><th>Time</th><th>User</th><th>Entity</th><th>Action</th></tr></thead><tbody>';
+
+        actSnap.docs.forEach(d => {
+          const act = d.data();
+          const parentRef = d.ref.parent.parent;
+          const entityType = parentRef?.parent?.id || 'unknown';
+          const entityId = parentRef?.id || '';
+          const time = act.createdAt?.toDate ? act.createdAt.toDate().toLocaleString() : '\u2014';
+          const user = act.createdByEmail || '\u2014';
+          const entity = entityType.charAt(0).toUpperCase() + entityType.slice(1);
+          const action = act.description || act.type || '\u2014';
+
+          auditHtml += `<tr>
+            <td style="white-space:nowrap;font-size:0.8rem;">${escapeHtml(time)}</td>
+            <td>${escapeHtml(user)}</td>
+            <td><span class="badge badge-status">${escapeHtml(entity)}</span></td>
+            <td>${escapeHtml(action)}</td>
+          </tr>`;
+        });
+
+        auditHtml += '</tbody></table>';
+        auditSection.innerHTML = auditHtml;
+      }
+    } catch (err) {
+      console.error('Audit log error:', err);
+      auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><p style="color:var(--gray-dark);padding:1rem;">Unable to load audit log.</p>';
+    }
   } catch (err) {
     container.innerHTML = '<div class="empty-state"><div class="empty-title">Error</div><p class="empty-description">Failed to load users.</p></div>';
     console.error(err);

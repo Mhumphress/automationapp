@@ -301,6 +301,27 @@
       }
     });
 
+    // ── Inactivity timeout (30 min) ────────
+    let inactivityTimer = null;
+    const TIMEOUT_MS = 30 * 60 * 1000;
+
+    function resetInactivityTimer() {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(async () => {
+        try {
+          clearRoleCache();
+          await signOut(auth);
+        } catch (e) {
+          console.error('Auto-logout failed:', e);
+        }
+      }, TIMEOUT_MS);
+    }
+
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => {
+      document.addEventListener(evt, resetInactivityTimer, { passive: true });
+    });
+    resetInactivityTimer();
+
     // ── View title map ──────────────────────
     const viewTitles = {
       dashboard:     'Dashboard',

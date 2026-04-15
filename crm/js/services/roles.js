@@ -50,7 +50,7 @@ export function clearRoleCache() {
 
 /**
  * Bootstrap: ensure current user has a user document.
- * First user to log in gets 'admin' role automatically.
+ * New users get 'member' role. Admins must be promoted via Settings.
  */
 export async function bootstrapCurrentUser() {
   const user = auth.currentUser;
@@ -61,16 +61,14 @@ export async function bootstrapCurrentUser() {
     const snap = await getDoc(userRef);
 
     if (!snap.exists()) {
-      // First user gets admin — subsequent users should be
-      // invited via the Settings page by an admin.
       await setDoc(userRef, {
         email: user.email,
         displayName: user.displayName || user.email,
-        role: 'admin',
+        role: 'member',
         createdAt: serverTimestamp(),
         createdBy: user.uid
       });
-      cachedRole = 'admin';
+      cachedRole = 'member';
     }
   } catch (err) {
     console.error('Bootstrap error:', err);
