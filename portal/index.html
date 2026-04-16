@@ -48,6 +48,29 @@
           </div>
           <button type="submit" id="loginBtn" class="auth-btn">Sign In</button>
         </form>
+        <p class="subtitle" style="margin-top:1rem;font-size:0.85rem;">New customer? <a href="#" id="showRegister" style="color:#0d9488;">Create an account</a></p>
+      </div>
+
+      <div id="registerView" class="auth-view">
+        <h1>Create Account</h1>
+        <p class="subtitle">Register for your customer portal</p>
+        <div id="registerError" class="auth-error"></div>
+        <form id="registerForm" class="auth-form" autocomplete="on">
+          <div class="input-group">
+            <label for="registerEmail">Email</label>
+            <input type="email" id="registerEmail" name="email" placeholder="you@company.com" required autocomplete="email">
+          </div>
+          <div class="input-group">
+            <label for="registerPassword">Password</label>
+            <input type="password" id="registerPassword" name="password" placeholder="Create a password" required autocomplete="new-password">
+          </div>
+          <div class="input-group">
+            <label for="registerConfirm">Confirm Password</label>
+            <input type="password" id="registerConfirm" name="confirmPassword" placeholder="Confirm your password" required autocomplete="new-password">
+          </div>
+          <button type="submit" id="registerBtn" class="auth-btn">Create Account</button>
+        </form>
+        <p class="subtitle" style="margin-top:1rem;font-size:0.85rem;">Already have an account? <a href="#" id="showLogin" style="color:#0d9488;">Sign in</a></p>
       </div>
     </div>
 

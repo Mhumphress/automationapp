@@ -1073,6 +1073,21 @@ async function provisionTenant(deal) {
 
     const tenantId = tenantRef.id;
 
+    // 1b. Create tenant owner user (using contact email for portal login matching)
+    const contact = contacts.find(c => c.id === deal.contactId);
+    const ownerEmail = contact ? (contact.email || '') : '';
+    const ownerName = contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() : deal.contactName || '';
+    if (ownerEmail) {
+      // Use a placeholder UID — will be linked when user registers at portal
+      await addTenantUser(tenantId, `pending_${Date.now()}`, {
+        email: ownerEmail,
+        displayName: ownerName,
+        role: 'owner',
+        status: 'pending',
+        invitedBy: 'system'
+      });
+    }
+
     // 2. Log tenant activity
     await addTenantActivity(tenantId, {
       type: 'status_change',
@@ -1103,7 +1118,6 @@ async function provisionTenant(deal) {
     });
 
     // 4. Create mirrored invoice in internal CRM
-    const contact = contacts.find(c => c.id === deal.contactId);
     await addCrmDocument('invoices', {
       invoiceNumber,
       clientId: deal.contactId || '',

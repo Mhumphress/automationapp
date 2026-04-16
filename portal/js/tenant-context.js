@@ -1,6 +1,6 @@
 import { db, auth } from './config.js';
 import {
-  collection, getDocs, getDoc, doc, query, where
+  collection, getDocs, getDoc, doc, setDoc, query, where
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let currentTenant = null;
@@ -15,7 +15,7 @@ export async function loadTenantContext() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  // Find all tenants where this user is a member
+  // Find all tenants where this user is a member (by UID)
   const tenantsSnap = await getDocs(collection(db, 'tenants'));
   const userTenants = [];
 
@@ -27,6 +27,36 @@ export async function loadTenantContext() {
         ...tenantDoc.data(),
         userRole: userDoc.data().role
       });
+    }
+  }
+
+  // If no UID match, search by email and auto-link
+  if (userTenants.length === 0 && user.email) {
+    for (const tenantDoc of tenantsSnap.docs) {
+      const usersSnap = await getDocs(collection(db, 'tenants', tenantDoc.id, 'users'));
+      for (const userSnapDoc of usersSnap.docs) {
+        const userData = userSnapDoc.data();
+        if (userData.email && userData.email.toLowerCase() === user.email.toLowerCase() && userSnapDoc.id !== user.uid) {
+          // Found a match by email — create a new user doc with the correct UID
+          await setDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid), {
+            ...userData,
+            email: user.email,
+            displayName: user.displayName || user.email
+          });
+          // Update the tenant's ownerUserId if this was the owner
+          if (userData.role === 'owner') {
+            const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            await updateDoc(doc(db, 'tenants', tenantDoc.id), { ownerUserId: user.uid });
+          }
+          userTenants.push({
+            id: tenantDoc.id,
+            ...tenantDoc.data(),
+            userRole: userData.role
+          });
+          break;
+        }
+      }
+      if (userTenants.length > 0) break;
     }
   }
 

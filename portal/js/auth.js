@@ -1,6 +1,7 @@
 import { auth } from './config.js';
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
@@ -13,6 +14,23 @@ onAuthStateChanged(auth, (user) => {
 
 // --- DOM refs ---
 const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const showRegisterLink = document.getElementById('showRegister');
+const showLoginLink = document.getElementById('showLogin');
+const loginView = document.getElementById('loginView');
+const registerView = document.getElementById('registerView');
+
+// --- Toggle login/register ---
+if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  loginView.classList.remove('active');
+  registerView.classList.add('active');
+});
+if (showLoginLink) showLoginLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  registerView.classList.remove('active');
+  loginView.classList.add('active');
+});
 
 // --- Login ---
 loginForm.addEventListener('submit', async (e) => {
@@ -37,6 +55,44 @@ loginForm.addEventListener('submit', async (e) => {
     showError('loginError', mapAuthError(err.code));
   } finally {
     setLoading('loginBtn', false);
+  }
+});
+
+// --- Register ---
+if (registerForm) registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  clearError('registerError');
+
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  const confirmPassword = document.getElementById('registerConfirm').value;
+
+  if (!email || !password || !confirmPassword) {
+    showError('registerError', 'Please fill in all fields.');
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showError('registerError', 'Passwords do not match.');
+    return;
+  }
+
+  if (password.length < 6) {
+    showError('registerError', 'Password must be at least 6 characters.');
+    return;
+  }
+
+  setLoading('registerBtn', true);
+
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+    // onAuthStateChanged will redirect to app.html
+    // The portal app.html will check if this user belongs to a tenant
+  } catch (err) {
+    console.error('Register Error:', err.code, err.message);
+    showError('registerError', mapAuthError(err.code));
+  } finally {
+    setLoading('registerBtn', false);
   }
 });
 
