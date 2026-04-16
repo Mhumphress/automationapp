@@ -42,10 +42,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active';
     }
 
-    // ── Users ────────────────────────────────
+    // ── Users (CRM access) ────────────────────
+    // Only admins can create CRM user docs. No self-registration.
+    // This prevents portal users from gaining CRM access.
     match /users/{userId} {
       allow read: if request.auth.uid == userId || isApprovedUser();
-      allow create: if request.auth.uid == userId || isAdmin();
+      allow create: if isAdmin();
       allow update: if request.auth.uid == userId || isAdmin();
       allow delete: if isAdmin();
     }

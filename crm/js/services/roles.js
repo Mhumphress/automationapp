@@ -1,14 +1,36 @@
 import { db, auth } from '../config.js';
 import {
-  doc, getDoc, setDoc, serverTimestamp
+  doc, getDoc, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let cachedRole = null;
+let cachedApproved = null;
+
+/**
+ * Check if the current user has a user document in the CRM.
+ * Returns false for portal-only users who don't have a CRM user doc.
+ */
+export async function isApprovedCrmUser() {
+  if (cachedApproved !== null) return cachedApproved;
+
+  const user = auth.currentUser;
+  if (!user) { cachedApproved = false; return false; }
+
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    const snap = await getDoc(userRef);
+    cachedApproved = snap.exists();
+  } catch (err) {
+    console.error('Approval check error:', err);
+    cachedApproved = false;
+  }
+
+  return cachedApproved;
+}
 
 /**
  * Fetch the current user's role from Firestore.
- * Creates a user document with 'member' role if none exists.
- * Caches the result for the session.
+ * Returns null if user has no CRM user document (not approved).
  */
 export async function getCurrentUserRole() {
   if (cachedRole) return cachedRole;
@@ -23,11 +45,11 @@ export async function getCurrentUserRole() {
     if (snap.exists()) {
       cachedRole = snap.data().role || 'member';
     } else {
-      cachedRole = 'member';
+      cachedRole = null; // Not an approved CRM user
     }
   } catch (err) {
     console.error('Role fetch error:', err);
-    cachedRole = 'member';
+    cachedRole = null;
   }
 
   return cachedRole;
@@ -46,33 +68,16 @@ export async function isAdmin() {
  */
 export function clearRoleCache() {
   cachedRole = null;
+  cachedApproved = null;
 }
 
 /**
- * Bootstrap: ensure current user has a user document.
- * New users get 'member' role. Admins must be promoted via Settings.
+ * Bootstrap: check if current user has a CRM user document.
+ * Does NOT auto-create one — only admins can add CRM users.
+ * Returns true if the user is an approved CRM user, false otherwise.
  */
 export async function bootstrapCurrentUser() {
-  const user = auth.currentUser;
-  if (!user) return;
-
-  try {
-    const userRef = doc(db, 'users', user.uid);
-    const snap = await getDoc(userRef);
-
-    if (!snap.exists()) {
-      await setDoc(userRef, {
-        email: user.email,
-        displayName: user.displayName || user.email,
-        role: 'member',
-        createdAt: serverTimestamp(),
-        createdBy: user.uid
-      });
-      cachedRole = 'member';
-    }
-  } catch (err) {
-    console.error('Bootstrap error:', err);
-  }
+  return await isApprovedCrmUser();
 }
 
 /**

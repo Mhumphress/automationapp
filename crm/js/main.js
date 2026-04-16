@@ -40,10 +40,23 @@ onAuthStateChanged(auth, (user) => {
   document.getElementById('userAvatar').textContent = initials;
   document.getElementById('userName').textContent = displayName;
 
-  // Bootstrap user doc then fetch role (non-blocking)
+  // Check if user is an approved CRM user (no auto-create)
   bootstrapCurrentUser()
-    .then(() => getCurrentUserRole())
+    .then(approved => {
+      if (!approved) {
+        // Not an approved CRM user — deny access
+        document.querySelector('.app-main').innerHTML = `
+          <div class="empty-state" style="margin-top:4rem;">
+            <div class="empty-title">Access Denied</div>
+            <p class="empty-description">Your account does not have access to the CRM. Contact an administrator.</p>
+          </div>
+        `;
+        return;
+      }
+      return getCurrentUserRole();
+    })
     .then(role => {
+      if (!role) return; // Access denied, already handled above
       document.getElementById('userRole').textContent = role || 'member';
       if (role === 'admin') {
         document.getElementById('adminNavSection').style.display = '';
