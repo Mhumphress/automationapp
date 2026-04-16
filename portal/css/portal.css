@@ -49,22 +49,27 @@
   min-height: 300px;
 }
 
-/* Status banner */
+/* Status banner — sits at top of main content, does not displace layout */
 .status-banner {
-  padding: 0.75rem 1.5rem;
-  font-size: 0.85rem;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.8rem;
   font-weight: 500;
   text-align: center;
+  border-radius: 0;
+  margin: 0 -1.5rem 0 -1.5rem;
+  width: calc(100% + 3rem);
 }
 
 .status-banner.past-due {
-  background: var(--warning-dim);
+  background: #fef3c7;
   color: #92400e;
+  border-bottom: 1px solid #fde68a;
 }
 
 .status-banner.suspended {
-  background: var(--danger-dim);
+  background: #fee2e2;
   color: #991b1b;
+  border-bottom: 1px solid #fecaca;
 }
 
 /* Onboarding wizard */
