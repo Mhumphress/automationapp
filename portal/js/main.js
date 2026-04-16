@@ -95,7 +95,7 @@ onAuthStateChanged(auth, async (user) => {
 
     // Build sidebar and register views
     buildSidebar();
-    registerAllViews();
+    await registerAllViews();
     initRouter('dashboard');
 
   } catch (err) {
@@ -243,7 +243,7 @@ function getVerticalModuleNav(verticalId) {
 
 // ── Register all views ──
 
-function registerAllViews() {
+async function registerAllViews() {
   // Dashboard
   registerView('dashboard', {
     render() {
@@ -281,9 +281,33 @@ function registerAllViews() {
     }
   });
 
-  // Placeholder views for modules (will be implemented in Plans 6-9)
-  const moduleViews = [
-    'contacts', 'invoicing', 'tasks', 'scheduling', 'reporting',
+  // ── Shared modules (real implementations) ──
+
+  // Dynamically import shared modules
+  const contactsMod = await import('./views/shared/contacts.js');
+  registerView('contacts', {
+    init: contactsMod.init,
+    render() { document.getElementById('headerTitle').textContent = term('client') + 's'; contactsMod.render(); },
+    destroy: contactsMod.destroy
+  });
+
+  const tasksMod = await import('./views/shared/tasks.js');
+  registerView('tasks', {
+    init: tasksMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Tasks'; tasksMod.render(); },
+    destroy: tasksMod.destroy
+  });
+
+  const invoicingMod = await import('./views/shared/invoicing.js');
+  registerView('invoicing', {
+    init: invoicingMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Invoicing'; invoicingMod.render(); },
+    destroy: invoicingMod.destroy
+  });
+
+  // Placeholder views for modules not yet implemented
+  const placeholderViews = [
+    'scheduling', 'reporting',
     'tickets', 'inventory', 'checkin',
     'jobs', 'dispatching', 'quoting',
     'bom', 'work-orders',
@@ -292,8 +316,7 @@ function registerAllViews() {
     'appointments', 'service-menu', 'staff-calendar', 'loyalty'
   ];
 
-  moduleViews.forEach(name => {
-    // Create view container if it doesn't exist
+  placeholderViews.forEach(name => {
     if (!document.getElementById(`view-${name}`)) {
       const div = document.createElement('div');
       div.id = `view-${name}`;
