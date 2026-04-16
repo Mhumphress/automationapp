@@ -9,6 +9,9 @@ import * as tasksView from './views/tasks.js';
 import * as invoicesView from './views/invoices.js';
 import * as subscriptionsView from './views/subscriptions.js';
 import * as settingsView from './views/settings.js';
+import * as tenantsView from './views/tenants.js';
+import * as packagesView from './views/packages.js';
+import * as renewalsView from './views/renewals.js';
 import { queryDocuments } from './services/firestore.js';
 import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './services/roles.js';
 
@@ -45,6 +48,10 @@ onAuthStateChanged(auth, (user) => {
       if (role === 'admin') {
         document.getElementById('adminNavSection').style.display = '';
         document.getElementById('settingsNavItem').style.display = '';
+        document.getElementById('platformNavSection').style.display = '';
+        document.getElementById('tenantsNavItem').style.display = '';
+        document.getElementById('packagesNavItem').style.display = '';
+        document.getElementById('renewalsNavItem').style.display = '';
       }
     })
     .catch(err => console.error('Role setup error:', err));
@@ -91,7 +98,10 @@ const viewTitles = {
   invoices:      'Invoices',
   subscriptions: 'Subscriptions',
   messages:      'Messages',
-  settings:      'Settings'
+  settings:      'Settings',
+  tenants:       'Tenants',
+  packages:      'Packages',
+  renewals:      'Renewals'
 };
 
 // ── Register views ──────────────────────
@@ -171,6 +181,34 @@ registerView('settings', {
     settingsView.render();
   },
   destroy: settingsView.destroy
+});
+
+// Override platform views with full view logic
+registerView('tenants', {
+  init: tenantsView.init,
+  render() {
+    document.getElementById('headerTitle').textContent = 'Tenants';
+    tenantsView.render();
+  },
+  destroy: tenantsView.destroy
+});
+
+registerView('packages', {
+  init: packagesView.init,
+  render() {
+    document.getElementById('headerTitle').textContent = 'Packages';
+    packagesView.render();
+  },
+  destroy: packagesView.destroy
+});
+
+registerView('renewals', {
+  init: renewalsView.init,
+  render() {
+    document.getElementById('headerTitle').textContent = 'Renewals';
+    renewalsView.render();
+  },
+  destroy: renewalsView.destroy
 });
 
 // ── Dashboard ───────────────────────────
