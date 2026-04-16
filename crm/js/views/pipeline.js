@@ -1183,18 +1183,30 @@ async function provisionTenant(deal) {
 
     const tenantId = tenantRef.id;
 
-    // 1b. Create tenant owner user (using contact email for portal login matching)
+    // 1b. Create tenant owner user placeholder + lookup mapping
     const contact = contacts.find(c => c.id === deal.contactId);
     const ownerEmail = contact ? (contact.email || '') : '';
     const ownerName = contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() : deal.contactName || '';
     if (ownerEmail) {
-      // Use a placeholder UID — will be linked when user registers at portal
+      // Create placeholder user doc (will be replaced when user registers)
       await addTenantUser(tenantId, `pending_${Date.now()}`, {
         email: ownerEmail,
         displayName: ownerName,
         role: 'owner',
         status: 'pending',
         invitedBy: 'system'
+      });
+
+      // Create user_tenants lookup so portal can find the tenant by email
+      const { doc: fbDoc, setDoc: fbSetDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      const { db: fbDb } = await import('../config.js');
+      const emailKey = ownerEmail.toLowerCase().trim();
+      await fbSetDoc(fbDoc(fbDb, 'user_tenants', emailKey), {
+        tenantId,
+        email: ownerEmail,
+        role: 'owner',
+        companyName: deal.companyName || deal.contactName || '',
+        createdAt: new Date()
       });
     }
 

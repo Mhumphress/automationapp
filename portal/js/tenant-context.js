@@ -15,80 +15,106 @@ export async function loadTenantContext() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  // Find all tenants where this user is a member (by UID)
-  const tenantsSnap = await getDocs(collection(db, 'tenants'));
-  const userTenants = [];
-
-  for (const tenantDoc of tenantsSnap.docs) {
+  // Step 1: Check if user already has a direct tenant user doc
+  // (returning users who have been linked before)
+  const lastTenantId = localStorage.getItem('portal_tenant_id');
+  if (lastTenantId) {
     try {
-      const userDoc = await getDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid));
+      const userDoc = await getDoc(doc(db, 'tenants', lastTenantId, 'users', user.uid));
       if (userDoc.exists()) {
-        userTenants.push({
-          id: tenantDoc.id,
-          ...tenantDoc.data(),
-          userRole: userDoc.data().role
-        });
+        const tenantDoc = await getDoc(doc(db, 'tenants', lastTenantId));
+        if (tenantDoc.exists()) {
+          const tenantData = { id: tenantDoc.id, ...tenantDoc.data(), userRole: userDoc.data().role };
+          await selectTenant(tenantData);
+          return { tenants: [tenantData], selected: tenantData };
+        }
       }
     } catch (err) {
-      // Permission denied for this tenant — skip it
+      // Permission denied or doc doesn't exist — continue to lookup
     }
   }
 
-  // If no UID match, search by email and auto-link
-  if (userTenants.length === 0 && user.email) {
-    for (const tenantDoc of tenantsSnap.docs) {
-      try {
-        const usersSnap = await getDocs(collection(db, 'tenants', tenantDoc.id, 'users'));
-        for (const userSnapDoc of usersSnap.docs) {
-          const userData = userSnapDoc.data();
-          if (userData.email && userData.email.toLowerCase() === user.email.toLowerCase() && userSnapDoc.id !== user.uid) {
-            // Found a match by email — create a new user doc with the correct UID
-            await setDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid), {
-              ...userData,
-              email: user.email,
-              displayName: user.displayName || user.email
-            });
-            // Delete the old placeholder user doc
-            try {
-              await deleteDoc(doc(db, 'tenants', tenantDoc.id, 'users', userSnapDoc.id));
-            } catch (e) {
-              console.warn('Could not delete old placeholder user doc:', e);
-            }
-            // Update the tenant's ownerUserId if this was the owner
-            if (userData.role === 'owner') {
-              try {
-                await updateDoc(doc(db, 'tenants', tenantDoc.id), { ownerUserId: user.uid });
-              } catch (e) {
-                console.warn('Could not update ownerUserId:', e);
-              }
-            }
-            userTenants.push({
-              id: tenantDoc.id,
-              ...tenantDoc.data(),
-              userRole: userData.role
-            });
-            break;
-          }
-        }
-      } catch (err) {
-        // Permission denied for this tenant — skip it
-      }
-      if (userTenants.length > 0) break;
+  // Step 2: Look up tenant by email via user_tenants mapping
+  if (!user.email) throw new Error('NO_TENANT');
+
+  const emailKey = user.email.toLowerCase().trim();
+  let mapping = null;
+  try {
+    const mappingDoc = await getDoc(doc(db, 'user_tenants', emailKey));
+    if (mappingDoc.exists()) {
+      mapping = mappingDoc.data();
     }
+  } catch (err) {
+    console.error('Failed to read user_tenants mapping:', err);
   }
 
-  if (userTenants.length === 0) {
+  if (!mapping || !mapping.tenantId) {
     throw new Error('NO_TENANT');
   }
 
-  // Check localStorage for last-used tenant
-  const lastTenantId = localStorage.getItem('portal_tenant_id');
-  let selected = userTenants.find(t => t.id === lastTenantId);
-  if (!selected) selected = userTenants[0];
+  // Step 3: Create the user doc in the tenant (self-registration)
+  const tenantId = mapping.tenantId;
+  try {
+    // Check if user doc already exists
+    let userDoc = null;
+    try {
+      const existingDoc = await getDoc(doc(db, 'tenants', tenantId, 'users', user.uid));
+      if (existingDoc.exists()) {
+        userDoc = existingDoc.data();
+      }
+    } catch (e) {
+      // Permission denied — user doc doesn't exist yet, we'll create it
+    }
 
-  await selectTenant(selected);
+    if (!userDoc) {
+      // Create user doc with the correct UID
+      const newUserData = {
+        email: user.email,
+        displayName: user.displayName || user.email,
+        role: mapping.role || 'user',
+        status: 'active',
+        linkedAt: new Date()
+      };
+      await setDoc(doc(db, 'tenants', tenantId, 'users', user.uid), newUserData);
+      userDoc = newUserData;
 
-  return { tenants: userTenants, selected };
+      // Clean up placeholder user docs with matching email
+      try {
+        const usersSnap = await getDocs(collection(db, 'tenants', tenantId, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          if (uDoc.id !== user.uid && uDoc.data().email && uDoc.data().email.toLowerCase() === emailKey) {
+            await deleteDoc(doc(db, 'tenants', tenantId, 'users', uDoc.id));
+          }
+        }
+      } catch (e) {
+        // If cleanup fails, that's OK — the user is linked
+      }
+
+      // Update tenant ownerUserId if this user is the owner
+      if (mapping.role === 'owner') {
+        try {
+          await updateDoc(doc(db, 'tenants', tenantId), { ownerUserId: user.uid });
+        } catch (e) {
+          // Non-critical
+        }
+      }
+    }
+
+    // Step 4: Load the tenant doc
+    const tenantDoc = await getDoc(doc(db, 'tenants', tenantId));
+    if (!tenantDoc.exists()) {
+      throw new Error('NO_TENANT');
+    }
+
+    const tenantData = { id: tenantDoc.id, ...tenantDoc.data(), userRole: userDoc.role || mapping.role || 'user' };
+    await selectTenant(tenantData);
+    return { tenants: [tenantData], selected: tenantData };
+
+  } catch (err) {
+    if (err.message === 'NO_TENANT') throw err;
+    console.error('Failed to link user to tenant:', err);
+    throw new Error('NO_TENANT');
+  }
 }
 
 export async function selectTenant(tenantData) {

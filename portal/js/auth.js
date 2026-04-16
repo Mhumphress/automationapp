@@ -23,13 +23,13 @@ const registerView = document.getElementById('registerView');
 // --- Toggle login/register ---
 if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => {
   e.preventDefault();
-  loginView.classList.remove('active');
-  registerView.classList.add('active');
+  if (loginView) loginView.classList.remove('active');
+  if (registerView) registerView.classList.add('active');
 });
 if (showLoginLink) showLoginLink.addEventListener('click', (e) => {
   e.preventDefault();
-  registerView.classList.remove('active');
-  loginView.classList.add('active');
+  if (registerView) registerView.classList.remove('active');
+  if (loginView) loginView.classList.add('active');
 });
 
 // --- Login ---
@@ -52,7 +52,13 @@ if (loginForm) loginForm.addEventListener('submit', async (e) => {
     // onAuthStateChanged will handle redirect
   } catch (err) {
     console.error('Portal Auth Error:', err.code, err.message);
-    showError('loginError', mapAuthError(err.code));
+    const msg = mapAuthError(err.code);
+    // If user not found, suggest registration
+    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
+      showError('loginError', msg + ' If you\'re a new customer, click "Create an account" below.');
+    } else {
+      showError('loginError', msg);
+    }
   } finally {
     setLoading('loginBtn', false);
   }
@@ -87,7 +93,6 @@ if (registerForm) registerForm.addEventListener('submit', async (e) => {
   try {
     await createUserWithEmailAndPassword(auth, email, password);
     // onAuthStateChanged will redirect to app.html
-    // The portal app.html will check if this user belongs to a tenant
   } catch (err) {
     console.error('Register Error:', err.code, err.message);
     showError('registerError', mapAuthError(err.code));
@@ -130,11 +135,16 @@ function mapAuthError(code) {
   const errors = {
     'auth/invalid-email': 'Please enter a valid email address.',
     'auth/user-disabled': 'This account has been disabled. Contact support.',
-    'auth/user-not-found': 'No account found with that email.',
+    'auth/user-not-found': 'No account found with that email. You may need to create an account first.',
     'auth/wrong-password': 'Incorrect password. Please try again.',
     'auth/invalid-credential': 'Invalid email or password. Please try again.',
+    'auth/invalid-login-credentials': 'Invalid email or password. Please try again.',
+    'auth/email-already-in-use': 'An account with that email already exists. Try signing in instead.',
+    'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
     'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
-    'auth/network-request-failed': 'Network error. Check your connection.'
+    'auth/network-request-failed': 'Network error. Check your connection.',
+    'auth/operation-not-allowed': 'This sign-in method is not enabled. Contact support.',
+    'auth/internal-error': 'An unexpected error occurred. Please try again.'
   };
-  return errors[code] || 'Something went wrong. Please try again.';
+  return errors[code] || `Authentication error (${code || 'unknown'}). Please try again.`;
 }

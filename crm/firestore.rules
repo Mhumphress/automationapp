@@ -169,6 +169,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── User-Tenant Mapping ───────────────────
+    // Lookup table so portal users can find their tenant.
+    // Written by admin during provisioning, read by the user themselves.
+    match /user_tenants/{emailKey} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // ── Product Catalog ─────────────────────
     match /packages/{packageId} {
       allow read: if isApprovedUser();
@@ -199,7 +207,8 @@ service cloud.firestore {
 
       match /users/{userId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
-        allow create: if isAdmin() || isTenantAdmin(tenantId);
+        // Allow user to create their own doc (self-registration via portal)
+        allow create: if isAdmin() || isTenantAdmin(tenantId) || (isAuth() && userId == request.auth.uid);
         allow update: if isAdmin() || isTenantAdmin(tenantId);
         allow delete: if isAdmin() || isTenantOwner(tenantId);
       }
