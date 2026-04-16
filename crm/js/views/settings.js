@@ -109,7 +109,11 @@ export async function render() {
             <p style="color:var(--gray);font-size:0.8rem;margin-top:0.75rem;">After creating the index, wait a few minutes for it to build, then reload this page.</p>
           </div>`;
       } else {
-        auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><p style="color:var(--gray-dark);padding:1rem;">Unable to load audit log. Check the browser console for details.</p>';
+        auditSection.innerHTML = `<h2 class="section-title">Audit Log</h2>
+          <div style="padding:1rem;">
+            <p style="color:var(--danger);margin-bottom:0.5rem;">Unable to load audit log.</p>
+            <pre style="background:var(--bg);padding:0.75rem;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;">${escapeHtml(err.code || '')} — ${escapeHtml(err.message || String(err))}</pre>
+          </div>`;
       }
     }
   } catch (err) {
