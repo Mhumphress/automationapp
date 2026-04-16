@@ -50,19 +50,22 @@ function renderView() {
   const summarySection = document.createElement('div');
   summarySection.className = 'settings-section';
   const activeTenants = tenants.filter(t => t.status === 'active' || t.status === 'past_due');
-  const mrr = activeTenants.reduce((sum, t) => {
+  function getMonthlyPrice(t) {
     const pkg = packages.find(p => p.id === t.packageId);
-    const price = t.priceOverride != null ? t.priceOverride : (pkg ? pkg.basePrice : 0);
-    return sum + price;
-  }, 0);
+    if (t.priceOverride != null) {
+      return t.billingCycle === 'annual' ? t.priceOverride / 12 : t.priceOverride;
+    }
+    if (!pkg) return 0;
+    return t.billingCycle === 'annual' ? (pkg.annualPrice || pkg.basePrice * 12) / 12 : pkg.basePrice;
+  }
+
+  const mrr = activeTenants.reduce((sum, t) => sum + getMonthlyPrice(t), 0);
 
   const byVertical = {};
   activeTenants.forEach(t => {
     const v = verticals.find(v2 => v2.id === t.vertical);
     const label = v ? v.name : t.vertical;
-    const pkg = packages.find(p => p.id === t.packageId);
-    const price = t.priceOverride != null ? t.priceOverride : (pkg ? pkg.basePrice : 0);
-    byVertical[label] = (byVertical[label] || 0) + price;
+    byVertical[label] = (byVertical[label] || 0) + getMonthlyPrice(t);
   });
 
   summarySection.innerHTML = `

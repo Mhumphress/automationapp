@@ -228,7 +228,7 @@ function showDetail(inv) {
       const sendBtn = document.createElement('button');
       sendBtn.className = 'btn btn-primary btn-sm';
       sendBtn.textContent = 'Mark as Sent';
-      sendBtn.addEventListener('click', async () => { await updateDocument('invoices_crm', inv.id, { status: 'sent' }); inv.status = 'sent'; showDetail(inv); });
+      sendBtn.addEventListener('click', async () => { try { await updateDocument('invoices_crm', inv.id, { status: 'sent' }); inv.status = 'sent'; showDetail(inv); } catch (err) { console.error('Status update failed:', err); alert('Failed to update status'); } });
       actions.appendChild(sendBtn);
     }
 
@@ -236,7 +236,7 @@ function showDetail(inv) {
     paidBtn.className = 'btn btn-primary btn-sm';
     paidBtn.style.background = '#059669';
     paidBtn.textContent = 'Mark as Paid';
-    paidBtn.addEventListener('click', async () => { await updateDocument('invoices_crm', inv.id, { status: 'paid' }); inv.status = 'paid'; showDetail(inv); });
+    paidBtn.addEventListener('click', async () => { try { await updateDocument('invoices_crm', inv.id, { status: 'paid' }); inv.status = 'paid'; showDetail(inv); } catch (err) { console.error('Status update failed:', err); alert('Failed to update status'); } });
     actions.appendChild(paidBtn);
 
     container.appendChild(actions);

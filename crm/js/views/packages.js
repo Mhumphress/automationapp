@@ -136,7 +136,7 @@ function openPackageEditor(pkg) {
   form.className = 'modal-form';
 
   const allFeatureSlugs = features.filter(f =>
-    f.verticals.includes(pkg.vertical) || f.verticals.includes('all')
+    (f.verticals || []).includes(pkg.vertical) || (f.verticals || []).includes('all')
   );
   const allAddonSlugs = addons;
 

@@ -1134,7 +1134,15 @@ function openSettingsModal() {
 // ---------------------------------------------------------------------------
 
 async function provisionTenant(deal) {
-  if (!confirm(`Provision a new tenant for "${deal.companyName || deal.contactName}"?\n\nThis will create:\n- Tenant account\n- First invoice\n- Owner user\n- CRM subscription record\n\nContinue?`)) return;
+  // Validate contact has an email
+  const provContact = contacts.find(c => c.id === deal.contactId);
+  const provEmail = provContact ? (provContact.email || '') : '';
+  if (!provEmail) {
+    showToast('Contact must have an email address to provision a tenant. Edit the contact first.', 'error');
+    return;
+  }
+
+  if (!confirm(`Provision a new tenant for "${deal.companyName || deal.contactName}"?\n\nEmail: ${provEmail}\n\nThis will create:\n- Tenant account\n- First invoice\n- Owner user\n- CRM subscription record\n\nContinue?`)) return;
 
   try {
     const { getPackage } = await import('../services/catalog.js');

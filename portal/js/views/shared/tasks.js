@@ -75,11 +75,13 @@ function renderKanban() {
           const moveBtn = document.createElement('button');
           moveBtn.className = 'btn btn-ghost btn-sm';
           moveBtn.textContent = status === 'todo' ? 'Start' : 'Complete';
-          moveBtn.addEventListener('click', async (e) => {
+          moveBtn.addEventListener('click', gateWrite(async (e) => {
             e.stopPropagation();
-            await updateDocument('tasks', task.id, { status: nextStatus });
-            await render();
-          });
+            try {
+              await updateDocument('tasks', task.id, { status: nextStatus });
+              await render();
+            } catch (err) { console.error('Task update failed:', err); }
+          }));
           actions.appendChild(moveBtn);
         }
 
@@ -87,13 +89,15 @@ function renderKanban() {
         delBtn.className = 'btn btn-ghost btn-sm';
         delBtn.style.color = 'var(--danger)';
         delBtn.textContent = 'Delete';
-        delBtn.addEventListener('click', async (e) => {
+        delBtn.addEventListener('click', gateWrite(async (e) => {
           e.stopPropagation();
           if (confirm('Delete this task?')) {
-            await deleteDocument('tasks', task.id);
-            await render();
+            try {
+              await deleteDocument('tasks', task.id);
+              await render();
+            } catch (err) { console.error('Task delete failed:', err); }
           }
-        });
+        }));
         actions.appendChild(delBtn);
 
         card.appendChild(actions);

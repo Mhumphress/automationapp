@@ -1,5 +1,5 @@
 import { db, auth } from '../config.js';
-import { collection, getDocs, doc, updateDoc, query, orderBy, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { collection, getDocs, doc, updateDoc, query, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
 
@@ -20,7 +20,7 @@ export async function render() {
   container.innerHTML = '<div class="loading">Loading users...</div>';
 
   try {
-    const snap = await getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc')));
+    const snap = await getDocs(collection(db, 'users'));
     const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     let html = '<div class="settings-section"><h2 class="section-title">User Management</h2>';
@@ -93,7 +93,7 @@ export async function render() {
                   _entityId: parentDoc.id
                 });
               });
-            }).catch(() => {})
+            }).catch(err => console.warn('Activity query skipped:', err.code || err.message))
           );
         });
       });

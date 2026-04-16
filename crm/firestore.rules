@@ -42,6 +42,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active';
     }
 
+    // Check if user has a valid user_tenants mapping for this tenant
+    function hasValidTenantMapping(tenantId) {
+      return isAuth()
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/user_tenants/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/user_tenants/$(request.auth.token.email)).data.tenantId == tenantId;
+    }
+
     // ── Users (CRM access) ────────────────────
     // Only admins can create CRM user docs. No self-registration.
     // This prevents portal users from gaining CRM access.
@@ -160,9 +168,9 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isApprovedUser() && isOwner());
     }
 
-    // ── Activity (collection group query for audit log) ──
+    // ── Activity (collection group for CRM audit log — admin only) ──
     match /{path=**}/activity/{activityId} {
-      allow read: if isApprovedUser();
+      allow read: if isAdmin();
     }
 
     // ── Settings ─────────────────────────────
@@ -172,16 +180,14 @@ service cloud.firestore {
     }
 
     // ── User-Tenant Mapping ───────────────────
-    // Lookup table so portal users can find their tenant.
-    // Written by admin during provisioning, read by the user themselves.
+    // Portal users can only read their OWN mapping (by email).
     match /user_tenants/{emailKey} {
-      allow read: if isAuth();
+      allow read: if isAuth() && request.auth.token.email != null
+                  && emailKey == request.auth.token.email;
       allow write: if isAdmin();
     }
 
     // ── Product Catalog (readable by any authenticated user) ──
-    // Portal users need to read packages/verticals/features to load
-    // their workspace. This is non-sensitive catalog data.
     match /packages/{packageId} {
       allow read: if isAuth();
       allow write: if isAdmin();
@@ -204,28 +210,37 @@ service cloud.firestore {
 
     // ── Tenants ─────────────────────────────
     match /tenants/{tenantId} {
-      // Tenant members and admins can read. Also allow if user just
-      // self-registered (their user doc exists under this tenant).
+      // Only admins and verified tenant members can read
       allow read: if isAdmin() || isTenantMember(tenantId);
       allow create: if isAdmin();
-      allow update: if isAdmin() || isTenantOwner(tenantId);
+      // Only admins can update tenant doc (billing, status, package)
+      allow update: if isAdmin();
       allow delete: if isAdmin();
 
+      // Tenant users
       match /users/{userId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
-        // Allow user to create their own doc (self-registration via portal)
-        allow create: if isAdmin() || isTenantAdmin(tenantId) || (isAuth() && userId == request.auth.uid);
-        allow update: if isAdmin() || isTenantAdmin(tenantId);
-        allow delete: if isAdmin() || isTenantOwner(tenantId);
+        // Self-registration: user can create their OWN doc IF they have
+        // a valid user_tenants mapping for THIS tenant, and the role
+        // matches what was provisioned in the mapping.
+        allow create: if isAdmin()
+          || (isTenantAdmin(tenantId) && tenantIsActive(tenantId))
+          || (isAuth() && userId == request.auth.uid
+              && hasValidTenantMapping(tenantId)
+              && request.resource.data.role == get(/databases/$(database)/documents/user_tenants/$(request.auth.token.email)).data.role);
+        allow update: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
+        allow delete: if isAdmin() || (isTenantOwner(tenantId) && tenantIsActive(tenantId));
       }
 
+      // Invitations — gated by tenantIsActive
       match /invitations/{inviteId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
-        allow create: if isAdmin() || isTenantAdmin(tenantId);
-        allow update: if isAdmin() || isTenantAdmin(tenantId);
-        allow delete: if isAdmin() || isTenantAdmin(tenantId);
+        allow read: if isAdmin() || isTenantAdmin(tenantId);
+        allow create: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
+        allow update: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
+        allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
+      // Tenant billing — admin only
       match /invoices/{invoiceId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
         allow create: if isAdmin();
@@ -240,9 +255,10 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
+      // Activity — members can read and create, never edit/delete
       match /activity/{activityId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
-        allow create: if isAdmin() || isTenantMember(tenantId);
+        allow create: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow update, delete: if false;
       }
 
@@ -252,12 +268,14 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Settings — admin/tenant-admin can write, gated by active status
       match /settings/{settingId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
-        allow write: if isAdmin() || isTenantAdmin(tenantId);
+        allow write: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
-      // Tenant CRM data — shared collections
+      // ── Tenant CRM data — all gated by membership + active status ──
+
       match /contacts/{docId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
@@ -288,7 +306,6 @@ service cloud.firestore {
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
-      // Vertical-specific collections
       match /tickets/{docId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));

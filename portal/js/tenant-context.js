@@ -1,6 +1,6 @@
 import { db, auth } from './config.js';
 import {
-  collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc
+  collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let currentTenant = null;
@@ -73,7 +73,8 @@ export async function loadTenantContext() {
         displayName: user.displayName || user.email,
         role: mapping.role || 'user',
         status: 'active',
-        linkedAt: new Date()
+        createdAt: serverTimestamp(),
+        linkedAt: serverTimestamp()
       };
       await setDoc(doc(db, 'tenants', tenantId, 'users', user.uid), newUserData);
       userDoc = newUserData;
@@ -195,7 +196,7 @@ export function isSuspended() {
 }
 
 export function canWrite() {
-  return currentTenant && currentTenant.status === 'active';
+  return currentTenant && !isSuspended() && !isReadOnly();
 }
 
 export function gateWrite(fn) {

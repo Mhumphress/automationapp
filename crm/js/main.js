@@ -266,9 +266,13 @@ registerView('dashboard', {
     // Update stat values
     document.getElementById('statContacts').textContent = contactsList.length;
     document.getElementById('statProjects').textContent = activeDeals.length;
-    const tasksList = await queryDocuments('tasks');
-      const openTasks = tasksList.filter(t => t.status !== 'done');
-      document.getElementById('statTasks').textContent = openTasks.length;
+    let tasksList = [];
+    let openTasks = [];
+    try {
+      tasksList = await queryDocuments('tasks');
+      openTasks = tasksList.filter(t => t.status !== 'done');
+    } catch (err) { console.error('Tasks load error:', err); }
+    document.getElementById('statTasks').textContent = openTasks.length;
     document.getElementById('statRevenue').textContent = fmtCurrency(revenue);
 
     // Show/hide empty state vs content
