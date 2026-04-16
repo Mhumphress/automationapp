@@ -589,3 +589,7 @@ document.getElementById('sidebarOverlay').addEventListener('click', () => {
 
 // ── Init router ─────────────────────────
 initRouter('dashboard');
+
+// ── Dashboard empty-state button ────────
+const dashboardAddBtn = document.getElementById('dashboardAddBtn');
+if (dashboardAddBtn) dashboardAddBtn.addEventListener('click', () => { window.location.hash = 'contacts'; });
