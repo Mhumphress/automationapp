@@ -7,6 +7,9 @@ import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
 import { canDelete } from '../services/roles.js';
+import { getVerticals, getPackagesByVertical } from '../services/catalog.js';
+import { createTenant, addTenantUser, addTenantActivity } from '../services/tenants.js';
+import { addDocument as addCrmDocument } from '../services/firestore.js';
 
 const DEFAULT_STAGES = [
   { id: 'lead', label: 'Lead', order: 0 },
@@ -356,9 +359,32 @@ function openCreateModal() {
       <label>Contact</label>
       <div id="contactSlot"></div>
     </div>
-    <div class="modal-field">
-      <label>Expected Close</label>
-      <input type="date" name="expectedClose">
+    <div class="modal-form-grid">
+      <div class="modal-field">
+        <label>Vertical (optional)</label>
+        <select name="vertical" id="dealVertical">
+          <option value="">— None —</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Package (optional)</label>
+        <select name="packageId" id="dealPackage">
+          <option value="">— Select vertical first —</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-form-grid">
+      <div class="modal-field">
+        <label>Billing Cycle</label>
+        <select name="billingCycle">
+          <option value="monthly">Monthly</option>
+          <option value="annual">Annual</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Expected Close</label>
+        <input type="date" name="expectedClose">
+      </div>
     </div>
     <div class="modal-field">
       <label>Notes</label>
@@ -390,6 +416,34 @@ function openCreateModal() {
   });
   form.querySelector('#contactSlot').appendChild(dropdown);
 
+  // Populate vertical dropdown
+  const verticalSelect = form.querySelector('#dealVertical');
+  const packageSelect = form.querySelector('#dealPackage');
+  getVerticals().then(verts => {
+    verts.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.name;
+      verticalSelect.appendChild(opt);
+    });
+  });
+
+  verticalSelect.addEventListener('change', async () => {
+    packageSelect.innerHTML = '<option value="">— Loading... —</option>';
+    if (!verticalSelect.value) {
+      packageSelect.innerHTML = '<option value="">— Select vertical first —</option>';
+      return;
+    }
+    const pkgs = await getPackagesByVertical(verticalSelect.value);
+    packageSelect.innerHTML = '<option value="">— Select package —</option>';
+    pkgs.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.name} — ${formatCurrency(p.basePrice)}/mo`;
+      packageSelect.appendChild(opt);
+    });
+  });
+
   modal.open('New Deal', form);
 
   form.querySelector('.modal-cancel').addEventListener('click', () => modal.close());
@@ -417,7 +471,11 @@ function openCreateModal() {
       companyId,
       companyName,
       expectedClose: fd.get('expectedClose') || '',
-      notes: fd.get('notes').trim()
+      notes: fd.get('notes').trim(),
+      vertical: fd.get('vertical') || '',
+      packageId: fd.get('packageId') || '',
+      billingCycle: fd.get('billingCycle') || 'monthly',
+      priceOverride: null
     };
 
     try {
@@ -483,6 +541,29 @@ async function showDealDetail(deal) {
   pillsContainer.className = 'stage-pills';
   renderStagePills(pillsContainer, deal, container);
   container.appendChild(pillsContainer);
+
+  // Provision Tenant button (only for won deals with a package)
+  if (deal.stage === 'won' && deal.packageId && deal.vertical) {
+    const provisionSection = document.createElement('div');
+    provisionSection.style.cssText = 'margin:1rem 0;padding:1rem;background:var(--success-dim);border-radius:8px;display:flex;align-items:center;justify-content:space-between;';
+    provisionSection.innerHTML = `
+      <div>
+        <div style="font-weight:600;color:#059669;">Deal Won</div>
+        <div style="font-size:0.85rem;color:#065f46;">Ready to provision tenant for ${escapeHtml(deal.companyName || deal.contactName || 'this customer')}.</div>
+      </div>
+    `;
+    const provBtn = document.createElement('button');
+    provBtn.className = 'btn btn-primary';
+    provBtn.textContent = 'Provision Tenant';
+    provBtn.addEventListener('click', () => provisionTenant(deal));
+    provisionSection.appendChild(provBtn);
+    container.appendChild(provisionSection);
+  } else if (deal.stage === 'won' && (!deal.packageId || !deal.vertical)) {
+    const warnSection = document.createElement('div');
+    warnSection.style.cssText = 'margin:1rem 0;padding:1rem;background:var(--warning-dim);border-radius:8px;font-size:0.85rem;color:#92400e;';
+    warnSection.textContent = 'Deal won but no vertical/package set. Edit the deal fields below to add a vertical and package, then provision.';
+    container.appendChild(warnSection);
+  }
 
   // Two-column layout
   const layout = document.createElement('div');
@@ -664,6 +745,44 @@ function renderDealFields(container, deal) {
     <div class="detail-field-value${deal.companyName ? '' : ' empty'}">${escapeHtml(deal.companyName || 'Linked via contact')}</div>
   `;
   container.appendChild(companyField);
+
+  // Vertical (editable inline-select style)
+  if (deal.vertical || deal.packageId) {
+    const vertField = document.createElement('div');
+    vertField.className = 'detail-field';
+    vertField.innerHTML = `
+      <div class="detail-field-label">Vertical</div>
+      <div class="detail-field-value">${escapeHtml(deal.vertical || 'Not set')}</div>
+    `;
+    container.appendChild(vertField);
+
+    const pkgField = document.createElement('div');
+    pkgField.className = 'detail-field';
+    pkgField.innerHTML = `
+      <div class="detail-field-label">Package</div>
+      <div class="detail-field-value">${escapeHtml(deal.packageId || 'Not set')}</div>
+    `;
+    container.appendChild(pkgField);
+
+    const cycleField = document.createElement('div');
+    cycleField.className = 'detail-field';
+    cycleField.innerHTML = `
+      <div class="detail-field-label">Billing Cycle</div>
+      <div class="detail-field-value">${escapeHtml(deal.billingCycle || 'monthly')}</div>
+    `;
+    container.appendChild(cycleField);
+  }
+
+  // Tenant link (if provisioned)
+  if (deal.tenantId) {
+    const tenantField = document.createElement('div');
+    tenantField.className = 'detail-field';
+    tenantField.innerHTML = `
+      <div class="detail-field-label">Tenant ID</div>
+      <div class="detail-field-value" style="color:var(--accent);font-family:monospace;font-size:0.8rem;">${escapeHtml(deal.tenantId)}</div>
+    `;
+    container.appendChild(tenantField);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -898,4 +1017,149 @@ function openSettingsModal() {
 
   renderSettings();
   modal.open('Pipeline Settings', content);
+}
+
+// ---------------------------------------------------------------------------
+// Tenant Provisioning
+// ---------------------------------------------------------------------------
+
+async function provisionTenant(deal) {
+  if (!confirm(`Provision a new tenant for "${deal.companyName || deal.contactName}"?\n\nThis will create:\n- Tenant account\n- First invoice\n- Owner user\n- CRM subscription record\n\nContinue?`)) return;
+
+  try {
+    const { getPackage } = await import('../services/catalog.js');
+    const pkg = await getPackage(deal.packageId);
+    if (!pkg) {
+      showToast('Package not found', 'error');
+      return;
+    }
+
+    const effectivePrice = deal.priceOverride != null ? deal.priceOverride : pkg.basePrice;
+
+    // Calculate next renewal date
+    const now = new Date();
+    const nextRenewal = new Date(now);
+    if (deal.billingCycle === 'annual') {
+      nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
+    } else {
+      nextRenewal.setMonth(nextRenewal.getMonth() + 1);
+    }
+
+    // 1. Create tenant
+    const tenantRef = await createTenant({
+      companyName: deal.companyName || deal.contactName || 'New Tenant',
+      vertical: deal.vertical,
+      packageId: deal.packageId,
+      tier: pkg.tier,
+      addOns: [],
+      priceOverride: deal.priceOverride,
+      billingCycle: deal.billingCycle || 'monthly',
+      status: 'active',
+      gracePeriodEnd: null,
+      features: pkg.features || [],
+      featureOverrides: {},
+      userLimit: pkg.userLimit || 0,
+      ownerUserId: '',
+      contactId: deal.contactId || '',
+      companyId: deal.companyId || '',
+      dealId: deal.id,
+      scheduledChange: null,
+      trialEndsAt: null,
+      onboardingStep: 'pending',
+      dataExportRequested: false,
+      dataExportGeneratedAt: null,
+      nextRenewalDate: nextRenewal
+    });
+
+    const tenantId = tenantRef.id;
+
+    // 2. Log tenant activity
+    await addTenantActivity(tenantId, {
+      type: 'status_change',
+      description: 'Tenant account created from deal',
+      metadata: { dealId: deal.id, packageId: deal.packageId, tier: pkg.tier }
+    });
+
+    // 3. Create first invoice on tenant
+    const { addTenantInvoice } = await import('../services/tenants.js');
+    const invoiceNumber = `INV-T-${String(Date.now()).slice(-6)}`;
+    const dueDate = new Date(now);
+    dueDate.setDate(dueDate.getDate() + 30);
+
+    await addTenantInvoice(tenantId, {
+      invoiceNumber,
+      amount: effectivePrice,
+      status: 'draft',
+      issuedDate: now,
+      dueDate,
+      paidDate: null,
+      lineItems: [{
+        description: `${pkg.name} — ${deal.billingCycle === 'annual' ? 'Annual' : 'Monthly'} subscription`,
+        quantity: 1,
+        rate: effectivePrice,
+        amount: effectivePrice
+      }],
+      linkedCrmInvoiceId: ''
+    });
+
+    // 4. Create mirrored invoice in internal CRM
+    const contact = contacts.find(c => c.id === deal.contactId);
+    await addCrmDocument('invoices', {
+      invoiceNumber,
+      clientId: deal.contactId || '',
+      clientName: deal.contactName || '',
+      clientCompany: deal.companyName || '',
+      clientEmail: contact ? contact.email || '' : '',
+      clientPhone: contact ? contact.phone || '' : '',
+      issueDate: now.toISOString().split('T')[0],
+      dueDate: dueDate.toISOString().split('T')[0],
+      lineItems: [{
+        description: `${pkg.name} — ${deal.billingCycle === 'annual' ? 'Annual' : 'Monthly'} subscription`,
+        quantity: 1,
+        rate: effectivePrice,
+        amount: effectivePrice
+      }],
+      subtotal: effectivePrice,
+      taxRate: 0,
+      taxAmount: 0,
+      total: effectivePrice,
+      status: 'draft',
+      notes: `Auto-generated from deal: ${deal.name}\nTenant ID: ${tenantId}`
+    });
+
+    // 5. Create internal CRM subscription record
+    await addCrmDocument('subscriptions', {
+      contactId: deal.contactId || '',
+      contactName: deal.contactName || '',
+      companyId: deal.companyId || '',
+      companyName: deal.companyName || '',
+      planName: pkg.name,
+      amount: effectivePrice,
+      cycle: deal.billingCycle || 'monthly',
+      startDate: now.toISOString().split('T')[0],
+      nextRenewal: nextRenewal.toISOString().split('T')[0],
+      status: 'active',
+      notes: `Tenant ID: ${tenantId}\nDeal: ${deal.name}`
+    });
+
+    // 6. Log activity on the deal
+    await addActivity('deals', deal.id, {
+      type: 'note',
+      description: `Tenant provisioned (ID: ${tenantId}). Package: ${pkg.name}.`
+    });
+
+    // 7. Update deal with tenant reference
+    await updateDocument('deals', deal.id, { tenantId });
+
+    showToast('Tenant provisioned successfully!', 'success');
+
+    // Refresh and show detail
+    await loadData();
+    deal.tenantId = tenantId;
+    showDealDetail(deal);
+
+  } catch (err) {
+    console.error('Provision tenant failed:', err);
+    showToast('Failed to provision tenant: ' + err.message, 'error');
+  }
 }
