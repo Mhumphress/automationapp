@@ -179,32 +179,36 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ── Product Catalog ─────────────────────
+    // ── Product Catalog (readable by any authenticated user) ──
+    // Portal users need to read packages/verticals/features to load
+    // their workspace. This is non-sensitive catalog data.
     match /packages/{packageId} {
-      allow read: if isApprovedUser();
+      allow read: if isAuth();
       allow write: if isAdmin();
     }
 
     match /addons/{addonId} {
-      allow read: if isApprovedUser();
+      allow read: if isAuth();
       allow write: if isAdmin();
     }
 
     match /features/{featureId} {
-      allow read: if isApprovedUser();
+      allow read: if isAuth();
       allow write: if isAdmin();
     }
 
     match /verticals/{verticalId} {
-      allow read: if isApprovedUser();
+      allow read: if isAuth();
       allow write: if isAdmin();
     }
 
     // ── Tenants ─────────────────────────────
     match /tenants/{tenantId} {
+      // Tenant members and admins can read. Also allow if user just
+      // self-registered (their user doc exists under this tenant).
       allow read: if isAdmin() || isTenantMember(tenantId);
       allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow update: if isAdmin() || isTenantOwner(tenantId);
       allow delete: if isAdmin();
 
       match /users/{userId} {
