@@ -542,27 +542,51 @@ async function showDealDetail(deal) {
   renderStagePills(pillsContainer, deal, container);
   container.appendChild(pillsContainer);
 
-  // Provision Tenant button (only for won deals with a package)
-  if (deal.stage === 'won' && deal.packageId && deal.vertical) {
+  // Provision Tenant section (for all won deals)
+  if (deal.stage === 'won' && !deal.tenantId) {
     const provisionSection = document.createElement('div');
-    provisionSection.style.cssText = 'margin:1rem 0;padding:1rem;background:var(--success-dim);border-radius:8px;display:flex;align-items:center;justify-content:space-between;';
-    provisionSection.innerHTML = `
+    const hasPackage = deal.packageId && deal.vertical;
+    provisionSection.style.cssText = `margin:1rem 0;padding:1rem;background:${hasPackage ? 'var(--success-dim)' : 'var(--warning-dim)'};border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;`;
+
+    if (hasPackage) {
+      provisionSection.innerHTML = `
+        <div>
+          <div style="font-weight:600;color:#059669;">Deal Won — Ready to Provision</div>
+          <div style="font-size:0.85rem;color:#065f46;">Create a tenant account for ${escapeHtml(deal.companyName || deal.contactName || 'this customer')}.</div>
+        </div>
+      `;
+      const provBtn = document.createElement('button');
+      provBtn.className = 'btn btn-primary';
+      provBtn.textContent = 'Provision Tenant';
+      provBtn.addEventListener('click', () => provisionTenant(deal));
+      provisionSection.appendChild(provBtn);
+    } else {
+      provisionSection.innerHTML = `
+        <div>
+          <div style="font-weight:600;color:#92400e;">Deal Won — Needs Configuration</div>
+          <div style="font-size:0.85rem;color:#92400e;">Set a <strong>Vertical</strong> and <strong>Package</strong> in the Platform Subscription section below, then come back to provision.</div>
+        </div>
+      `;
+    }
+
+    container.appendChild(provisionSection);
+  } else if (deal.stage === 'won' && deal.tenantId) {
+    const provisionedSection = document.createElement('div');
+    provisionedSection.style.cssText = 'margin:1rem 0;padding:1rem;background:var(--accent-dim);border-radius:8px;display:flex;align-items:center;justify-content:space-between;';
+    provisionedSection.innerHTML = `
       <div>
-        <div style="font-weight:600;color:#059669;">Deal Won</div>
-        <div style="font-size:0.85rem;color:#065f46;">Ready to provision tenant for ${escapeHtml(deal.companyName || deal.contactName || 'this customer')}.</div>
+        <div style="font-weight:600;color:var(--accent);">Tenant Provisioned</div>
+        <div style="font-size:0.85rem;color:var(--gray-dark);">Tenant ID: <code style="font-size:0.8rem;">${escapeHtml(deal.tenantId)}</code></div>
       </div>
     `;
-    const provBtn = document.createElement('button');
-    provBtn.className = 'btn btn-primary';
-    provBtn.textContent = 'Provision Tenant';
-    provBtn.addEventListener('click', () => provisionTenant(deal));
-    provisionSection.appendChild(provBtn);
-    container.appendChild(provisionSection);
-  } else if (deal.stage === 'won' && (!deal.packageId || !deal.vertical)) {
-    const warnSection = document.createElement('div');
-    warnSection.style.cssText = 'margin:1rem 0;padding:1rem;background:var(--warning-dim);border-radius:8px;font-size:0.85rem;color:#92400e;';
-    warnSection.textContent = 'Deal won but no vertical/package set. Edit the deal fields below to add a vertical and package, then provision.';
-    container.appendChild(warnSection);
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn btn-ghost btn-sm';
+    viewBtn.textContent = 'View Tenant';
+    viewBtn.addEventListener('click', () => {
+      window.location.hash = 'tenants';
+    });
+    provisionedSection.appendChild(viewBtn);
+    container.appendChild(provisionedSection);
   }
 
   // Two-column layout
@@ -746,32 +770,134 @@ function renderDealFields(container, deal) {
   `;
   container.appendChild(companyField);
 
-  // Vertical (editable inline-select style)
-  if (deal.vertical || deal.packageId) {
-    const vertField = document.createElement('div');
-    vertField.className = 'detail-field';
-    vertField.innerHTML = `
-      <div class="detail-field-label">Vertical</div>
-      <div class="detail-field-value">${escapeHtml(deal.vertical || 'Not set')}</div>
-    `;
-    container.appendChild(vertField);
+  // ── Platform Fields (Vertical, Package, Billing Cycle) — always shown, always editable ──
+  const platformSection = document.createElement('div');
+  platformSection.style.marginTop = '1.5rem';
+  const platformTitle = document.createElement('div');
+  platformTitle.className = 'detail-section-title';
+  platformTitle.textContent = 'Platform Subscription';
+  platformSection.appendChild(platformTitle);
 
-    const pkgField = document.createElement('div');
-    pkgField.className = 'detail-field';
-    pkgField.innerHTML = `
-      <div class="detail-field-label">Package</div>
-      <div class="detail-field-value">${escapeHtml(deal.packageId || 'Not set')}</div>
-    `;
-    container.appendChild(pkgField);
+  // Vertical dropdown
+  const vertField = document.createElement('div');
+  vertField.className = 'detail-field';
+  vertField.innerHTML = `<div class="detail-field-label">Vertical</div>`;
+  const vertValue = document.createElement('div');
+  vertValue.className = 'detail-field-value';
+  vertValue.style.cursor = 'pointer';
 
-    const cycleField = document.createElement('div');
-    cycleField.className = 'detail-field';
-    cycleField.innerHTML = `
-      <div class="detail-field-label">Billing Cycle</div>
-      <div class="detail-field-value">${escapeHtml(deal.billingCycle || 'monthly')}</div>
-    `;
-    container.appendChild(cycleField);
+  async function renderVerticalSelector() {
+    vertValue.textContent = deal.vertical || 'Click to select...';
+    if (!deal.vertical) vertValue.classList.add('empty');
+    else vertValue.classList.remove('empty');
   }
+
+  vertValue.addEventListener('click', async () => {
+    const verts = await getVerticals();
+    vertValue.innerHTML = '';
+    const select = document.createElement('select');
+    select.style.cssText = 'width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;';
+    select.innerHTML = `<option value="">— Select Vertical —</option>` +
+      verts.map(v => `<option value="${v.id}" ${deal.vertical === v.id ? 'selected' : ''}>${escapeHtml(v.name)}</option>`).join('');
+
+    select.addEventListener('change', async () => {
+      const oldVal = deal.vertical || '';
+      deal.vertical = select.value;
+      deal.packageId = '';  // Reset package when vertical changes
+      await updateDocument('deals', deal.id, { vertical: deal.vertical, packageId: '' });
+      await logFieldEdit('deals', deal.id, 'Vertical', oldVal, deal.vertical);
+      renderVerticalSelector();
+      renderPackageSelector();
+      showToast('Vertical updated', 'success');
+    });
+
+    select.addEventListener('blur', () => { renderVerticalSelector(); });
+    vertValue.appendChild(select);
+    select.focus();
+  });
+
+  renderVerticalSelector();
+  vertField.appendChild(vertValue);
+  platformSection.appendChild(vertField);
+
+  // Package dropdown
+  const pkgField = document.createElement('div');
+  pkgField.className = 'detail-field';
+  pkgField.innerHTML = `<div class="detail-field-label">Package</div>`;
+  const pkgValue = document.createElement('div');
+  pkgValue.className = 'detail-field-value';
+  pkgValue.style.cursor = 'pointer';
+
+  async function renderPackageSelector() {
+    pkgValue.textContent = deal.packageId || 'Click to select...';
+    if (!deal.packageId) pkgValue.classList.add('empty');
+    else pkgValue.classList.remove('empty');
+  }
+
+  pkgValue.addEventListener('click', async () => {
+    if (!deal.vertical) {
+      showToast('Select a vertical first', 'error');
+      return;
+    }
+    const pkgs = await getPackagesByVertical(deal.vertical);
+    pkgValue.innerHTML = '';
+    const select = document.createElement('select');
+    select.style.cssText = 'width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;';
+    select.innerHTML = `<option value="">— Select Package —</option>` +
+      pkgs.map(p => `<option value="${p.id}" ${deal.packageId === p.id ? 'selected' : ''}>${escapeHtml(p.name)} — ${formatCurrency(p.basePrice)}/mo</option>`).join('');
+
+    select.addEventListener('change', async () => {
+      const oldVal = deal.packageId || '';
+      deal.packageId = select.value;
+      await updateDocument('deals', deal.id, { packageId: deal.packageId });
+      await logFieldEdit('deals', deal.id, 'Package', oldVal, deal.packageId);
+      renderPackageSelector();
+      showToast('Package updated', 'success');
+    });
+
+    select.addEventListener('blur', () => { renderPackageSelector(); });
+    pkgValue.appendChild(select);
+    select.focus();
+  });
+
+  renderPackageSelector();
+  pkgField.appendChild(pkgValue);
+  platformSection.appendChild(pkgField);
+
+  // Billing Cycle dropdown
+  const cycleField = document.createElement('div');
+  cycleField.className = 'detail-field';
+  cycleField.innerHTML = `<div class="detail-field-label">Billing Cycle</div>`;
+  const cycleValue = document.createElement('div');
+  cycleValue.className = 'detail-field-value';
+  cycleValue.style.cursor = 'pointer';
+  cycleValue.textContent = deal.billingCycle || 'monthly';
+
+  cycleValue.addEventListener('click', async () => {
+    cycleValue.innerHTML = '';
+    const select = document.createElement('select');
+    select.style.cssText = 'width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;';
+    select.innerHTML = `
+      <option value="monthly" ${(deal.billingCycle || 'monthly') === 'monthly' ? 'selected' : ''}>Monthly</option>
+      <option value="annual" ${deal.billingCycle === 'annual' ? 'selected' : ''}>Annual</option>
+    `;
+
+    select.addEventListener('change', async () => {
+      const oldVal = deal.billingCycle || 'monthly';
+      deal.billingCycle = select.value;
+      await updateDocument('deals', deal.id, { billingCycle: deal.billingCycle });
+      await logFieldEdit('deals', deal.id, 'Billing Cycle', oldVal, deal.billingCycle);
+      cycleValue.textContent = deal.billingCycle;
+      showToast('Billing cycle updated', 'success');
+    });
+
+    select.addEventListener('blur', () => { cycleValue.textContent = deal.billingCycle || 'monthly'; });
+    cycleValue.appendChild(select);
+    select.focus();
+  });
+
+  cycleField.appendChild(cycleValue);
+  platformSection.appendChild(cycleField);
 
   // Tenant link (if provisioned)
   if (deal.tenantId) {
@@ -781,8 +907,10 @@ function renderDealFields(container, deal) {
       <div class="detail-field-label">Tenant ID</div>
       <div class="detail-field-value" style="color:var(--accent);font-family:monospace;font-size:0.8rem;">${escapeHtml(deal.tenantId)}</div>
     `;
-    container.appendChild(tenantField);
+    platformSection.appendChild(tenantField);
   }
+
+  container.appendChild(platformSection);
 }
 
 // ---------------------------------------------------------------------------
