@@ -770,7 +770,7 @@ function renderDealFields(container, deal) {
   `;
   container.appendChild(companyField);
 
-  // ── Platform Fields (Vertical, Package, Billing Cycle) — always shown, always editable ──
+  // ── Platform Fields (Vertical, Package, Billing Cycle) — persistent selects ──
   const platformSection = document.createElement('div');
   platformSection.style.marginTop = '1.5rem';
   const platformTitle = document.createElement('div');
@@ -778,126 +778,85 @@ function renderDealFields(container, deal) {
   platformTitle.textContent = 'Platform Subscription';
   platformSection.appendChild(platformTitle);
 
-  // Vertical dropdown
+  const selectStyle = 'width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:0.9rem;background:white;';
+
+  // Vertical select
   const vertField = document.createElement('div');
   vertField.className = 'detail-field';
   vertField.innerHTML = `<div class="detail-field-label">Vertical</div>`;
-  const vertValue = document.createElement('div');
-  vertValue.className = 'detail-field-value';
-  vertValue.style.cursor = 'pointer';
-
-  async function renderVerticalSelector() {
-    vertValue.textContent = deal.vertical || 'Click to select...';
-    if (!deal.vertical) vertValue.classList.add('empty');
-    else vertValue.classList.remove('empty');
-  }
-
-  vertValue.addEventListener('click', async () => {
-    const verts = await getVerticals();
-    vertValue.innerHTML = '';
-    const select = document.createElement('select');
-    select.style.cssText = 'width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;';
-    select.innerHTML = `<option value="">— Select Vertical —</option>` +
-      verts.map(v => `<option value="${v.id}" ${deal.vertical === v.id ? 'selected' : ''}>${escapeHtml(v.name)}</option>`).join('');
-
-    select.addEventListener('change', async () => {
-      const oldVal = deal.vertical || '';
-      deal.vertical = select.value;
-      deal.packageId = '';  // Reset package when vertical changes
-      await updateDocument('deals', deal.id, { vertical: deal.vertical, packageId: '' });
-      await logFieldEdit('deals', deal.id, 'Vertical', oldVal, deal.vertical);
-      renderVerticalSelector();
-      renderPackageSelector();
-      showToast('Vertical updated', 'success');
-    });
-
-    select.addEventListener('blur', () => { renderVerticalSelector(); });
-    vertValue.appendChild(select);
-    select.focus();
-  });
-
-  renderVerticalSelector();
-  vertField.appendChild(vertValue);
+  const vertSelect = document.createElement('select');
+  vertSelect.style.cssText = selectStyle;
+  vertSelect.innerHTML = `<option value="">— Select Vertical —</option>`;
+  vertField.appendChild(vertSelect);
   platformSection.appendChild(vertField);
 
-  // Package dropdown
+  // Package select
   const pkgField = document.createElement('div');
   pkgField.className = 'detail-field';
   pkgField.innerHTML = `<div class="detail-field-label">Package</div>`;
-  const pkgValue = document.createElement('div');
-  pkgValue.className = 'detail-field-value';
-  pkgValue.style.cursor = 'pointer';
-
-  async function renderPackageSelector() {
-    pkgValue.textContent = deal.packageId || 'Click to select...';
-    if (!deal.packageId) pkgValue.classList.add('empty');
-    else pkgValue.classList.remove('empty');
-  }
-
-  pkgValue.addEventListener('click', async () => {
-    if (!deal.vertical) {
-      showToast('Select a vertical first', 'error');
-      return;
-    }
-    const pkgs = await getPackagesByVertical(deal.vertical);
-    pkgValue.innerHTML = '';
-    const select = document.createElement('select');
-    select.style.cssText = 'width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;';
-    select.innerHTML = `<option value="">— Select Package —</option>` +
-      pkgs.map(p => `<option value="${p.id}" ${deal.packageId === p.id ? 'selected' : ''}>${escapeHtml(p.name)} — ${formatCurrency(p.basePrice)}/mo</option>`).join('');
-
-    select.addEventListener('change', async () => {
-      const oldVal = deal.packageId || '';
-      deal.packageId = select.value;
-      await updateDocument('deals', deal.id, { packageId: deal.packageId });
-      await logFieldEdit('deals', deal.id, 'Package', oldVal, deal.packageId);
-      renderPackageSelector();
-      showToast('Package updated', 'success');
-    });
-
-    select.addEventListener('blur', () => { renderPackageSelector(); });
-    pkgValue.appendChild(select);
-    select.focus();
-  });
-
-  renderPackageSelector();
-  pkgField.appendChild(pkgValue);
+  const pkgSelect = document.createElement('select');
+  pkgSelect.style.cssText = selectStyle;
+  pkgSelect.innerHTML = `<option value="">— Select vertical first —</option>`;
+  pkgField.appendChild(pkgSelect);
   platformSection.appendChild(pkgField);
 
-  // Billing Cycle dropdown
+  // Billing cycle select
   const cycleField = document.createElement('div');
   cycleField.className = 'detail-field';
   cycleField.innerHTML = `<div class="detail-field-label">Billing Cycle</div>`;
-  const cycleValue = document.createElement('div');
-  cycleValue.className = 'detail-field-value';
-  cycleValue.style.cursor = 'pointer';
-  cycleValue.textContent = deal.billingCycle || 'monthly';
+  const cycleSelect = document.createElement('select');
+  cycleSelect.style.cssText = selectStyle;
+  cycleSelect.innerHTML = `
+    <option value="monthly" ${(deal.billingCycle || 'monthly') === 'monthly' ? 'selected' : ''}>Monthly</option>
+    <option value="annual" ${deal.billingCycle === 'annual' ? 'selected' : ''}>Annual</option>
+  `;
+  cycleField.appendChild(cycleSelect);
+  platformSection.appendChild(cycleField);
 
-  cycleValue.addEventListener('click', async () => {
-    cycleValue.innerHTML = '';
-    const select = document.createElement('select');
-    select.style.cssText = 'width:100%;padding:0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;';
-    select.innerHTML = `
-      <option value="monthly" ${(deal.billingCycle || 'monthly') === 'monthly' ? 'selected' : ''}>Monthly</option>
-      <option value="annual" ${deal.billingCycle === 'annual' ? 'selected' : ''}>Annual</option>
-    `;
+  // Populate verticals and wire up cascading logic
+  getVerticals().then(async (verts) => {
+    vertSelect.innerHTML = `<option value="">— Select Vertical —</option>` +
+      verts.map(v => `<option value="${v.id}" ${deal.vertical === v.id ? 'selected' : ''}>${escapeHtml(v.name)}</option>`).join('');
 
-    select.addEventListener('change', async () => {
-      const oldVal = deal.billingCycle || 'monthly';
-      deal.billingCycle = select.value;
-      await updateDocument('deals', deal.id, { billingCycle: deal.billingCycle });
-      await logFieldEdit('deals', deal.id, 'Billing Cycle', oldVal, deal.billingCycle);
-      cycleValue.textContent = deal.billingCycle;
-      showToast('Billing cycle updated', 'success');
-    });
-
-    select.addEventListener('blur', () => { cycleValue.textContent = deal.billingCycle || 'monthly'; });
-    cycleValue.appendChild(select);
-    select.focus();
+    // If vertical already set, load packages
+    if (deal.vertical) {
+      await loadPackageOptions(deal.vertical);
+    }
   });
 
-  cycleField.appendChild(cycleValue);
-  platformSection.appendChild(cycleField);
+  async function loadPackageOptions(verticalSlug) {
+    pkgSelect.innerHTML = `<option value="">— Loading... —</option>`;
+    const pkgs = await getPackagesByVertical(verticalSlug);
+    pkgSelect.innerHTML = `<option value="">— Select Package —</option>` +
+      pkgs.map(p => `<option value="${p.id}" ${deal.packageId === p.id ? 'selected' : ''}>${escapeHtml(p.name)} — ${formatCurrency(p.basePrice)}/mo</option>`).join('');
+  }
+
+  vertSelect.addEventListener('change', async () => {
+    const oldVal = deal.vertical || '';
+    deal.vertical = vertSelect.value;
+    deal.packageId = '';
+    pkgSelect.innerHTML = `<option value="">— Select Package —</option>`;
+    await updateDocument('deals', deal.id, { vertical: deal.vertical, packageId: '' });
+    if (oldVal !== deal.vertical) await logFieldEdit('deals', deal.id, 'Vertical', oldVal, deal.vertical);
+    if (deal.vertical) await loadPackageOptions(deal.vertical);
+    showToast('Vertical updated', 'success');
+  });
+
+  pkgSelect.addEventListener('change', async () => {
+    const oldVal = deal.packageId || '';
+    deal.packageId = pkgSelect.value;
+    await updateDocument('deals', deal.id, { packageId: deal.packageId });
+    if (oldVal !== deal.packageId) await logFieldEdit('deals', deal.id, 'Package', oldVal, deal.packageId);
+    showToast('Package updated', 'success');
+  });
+
+  cycleSelect.addEventListener('change', async () => {
+    const oldVal = deal.billingCycle || 'monthly';
+    deal.billingCycle = cycleSelect.value;
+    await updateDocument('deals', deal.id, { billingCycle: deal.billingCycle });
+    if (oldVal !== deal.billingCycle) await logFieldEdit('deals', deal.id, 'Billing Cycle', oldVal, deal.billingCycle);
+    showToast('Billing cycle updated', 'success');
+  });
 
   // Tenant link (if provisioned)
   if (deal.tenantId) {
