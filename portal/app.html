@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Portal - Automation App</title>
+  <link rel="icon" type="image/svg+xml" href="../logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../crm/css/app.css">
+  <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+
+  <div class="app-layout">
+
+    <!-- ════════════════ SIDEBAR ════════════════ -->
+    <aside class="sidebar portal-sidebar" id="sidebar">
+
+      <!-- Logo -->
+      <a href="#dashboard" class="sidebar-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor">
+          <g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="10" y1="38" x2="24" y2="8"/><line x1="38" y1="38" x2="24" y2="8"/><line x1="15" y1="26" x2="33" y2="26"/>
+          </g>
+          <circle cx="24" cy="8" r="3"/><circle cx="10" cy="38" r="3"/><circle cx="38" cy="38" r="3"/>
+          <circle cx="15" cy="26" r="2.5"/><circle cx="33" cy="26" r="2.5"/>
+        </svg>
+        <span id="portalBrandName">Customer Portal</span>
+      </a>
+
+      <div class="portal-badge">Customer Portal</div>
+
+      <!-- Navigation (built dynamically by main.js) -->
+      <nav class="sidebar-nav" id="portalNav"></nav>
+
+      <!-- Footer / User -->
+      <div class="sidebar-footer">
+        <div class="user-avatar" id="userAvatar">--</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">Loading...</div>
+          <div class="user-role" id="userRole">user</div>
+        </div>
+        <button class="btn-logout" id="logoutBtn" title="Sign out">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- ════════════════ HEADER ════════════════ -->
+    <header class="app-header">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <button class="mobile-header-btn" id="menuToggle" title="Toggle menu">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <h1 id="headerTitle">Dashboard</h1>
+      </div>
+      <div id="headerActions"></div>
+    </header>
+
+    <!-- Status Banner (for past_due / suspended) -->
+    <div id="statusBanner" class="status-banner" style="display:none;"></div>
+
+    <!-- ════════════════ MAIN ════════════════ -->
+    <main class="app-main" id="appMain">
+
+      <!-- Loading state -->
+      <div id="portalLoading" class="portal-loading">
+        <div class="loading">Loading your workspace...</div>
+      </div>
+
+      <!-- No tenant state -->
+      <div id="noTenantState" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-title">No Active Subscription</div>
+          <p class="empty-description">Your account doesn't have an active subscription. Please contact support.</p>
+        </div>
+      </div>
+
+      <!-- Suspended state -->
+      <div id="suspendedState" style="display:none;">
+        <div class="empty-state">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+          <div class="empty-title">Account Suspended</div>
+          <p class="empty-description">Your account has been suspended due to non-payment. Please contact us to restore access.</p>
+          <a href="mailto:mh@automationapp.org" class="btn btn-primary" style="margin-top:1rem;">Contact Support</a>
+        </div>
+      </div>
+
+      <!-- Dashboard -->
+      <div id="view-dashboard" class="view-container"></div>
+
+      <!-- Account Management -->
+      <div id="view-subscription" class="view-container"></div>
+      <div id="view-billing" class="view-container"></div>
+      <div id="view-team" class="view-container"></div>
+      <div id="view-account-settings" class="view-container"></div>
+
+      <!-- Shared Modules -->
+      <div id="view-contacts" class="view-container"></div>
+      <div id="view-invoicing" class="view-container"></div>
+      <div id="view-tasks" class="view-container"></div>
+      <div id="view-scheduling" class="view-container"></div>
+      <div id="view-reporting" class="view-container"></div>
+
+      <!-- Vertical-specific (created dynamically) -->
+
+    </main>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toastContainer"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

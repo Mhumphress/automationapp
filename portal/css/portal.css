@@ -1,0 +1,166 @@
+/* ═══════════════════════════════════════════════
+   Portal Overrides — teal accent, distinct from CRM
+   ═══════════════════════════════════════════════ */
+
+:root {
+  --portal-accent: #0d9488;
+  --portal-accent-dim: rgba(13, 148, 136, 0.1);
+  --portal-accent-dark: #0f766e;
+}
+
+.portal-sidebar {
+  background: #134e4a;
+}
+
+.portal-sidebar .sidebar-logo svg {
+  color: #5eead4;
+}
+
+.portal-sidebar .nav-item.active {
+  background: rgba(94, 234, 212, 0.12);
+  color: #5eead4;
+}
+
+.portal-sidebar .nav-item:hover:not(.active) {
+  background: rgba(255,255,255,0.06);
+}
+
+.portal-sidebar .nav-section-label {
+  color: rgba(94, 234, 212, 0.5);
+}
+
+.portal-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #5eead4;
+  background: rgba(94, 234, 212, 0.1);
+  padding: 0.25rem 0.75rem;
+  margin: 0 1rem 0.5rem;
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.portal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+/* Status banner */
+.status-banner {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.status-banner.past-due {
+  background: var(--warning-dim);
+  color: #92400e;
+}
+
+.status-banner.suspended {
+  background: var(--danger-dim);
+  color: #991b1b;
+}
+
+/* Onboarding wizard */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.onboarding-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+
+.onboarding-card h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.onboarding-card p {
+  color: var(--gray-dark);
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.onboarding-card .btn-primary {
+  background: var(--portal-accent);
+}
+
+.onboarding-card .btn-primary:hover {
+  background: var(--portal-accent-dark);
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.onboarding-step:last-child {
+  border-bottom: none;
+}
+
+.onboarding-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--portal-accent-dim);
+  color: var(--portal-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.onboarding-step-num.done {
+  background: var(--portal-accent);
+  color: white;
+}
+
+/* Override accent colors in portal */
+.portal-sidebar ~ .app-main .btn-primary,
+.portal-sidebar ~ .app-main .stage-pill.active {
+  background: var(--portal-accent);
+}
+
+.portal-sidebar ~ .app-main .btn-primary:hover {
+  background: var(--portal-accent-dark);
+}
+
+/* Upgrade prompt */
+.upgrade-prompt {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.upgrade-prompt h3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.upgrade-prompt p {
+  color: var(--gray-dark);
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
