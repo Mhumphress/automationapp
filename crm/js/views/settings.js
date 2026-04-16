@@ -100,7 +100,17 @@ export async function render() {
       }
     } catch (err) {
       console.error('Audit log error:', err);
-      auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><p style="color:var(--gray-dark);padding:1rem;">Unable to load audit log.</p>';
+      const indexMatch = err.message && err.message.match(/(https:\/\/console\.firebase\.google\.com\S+)/);
+      if (indexMatch) {
+        auditSection.innerHTML = `<h2 class="section-title">Audit Log</h2>
+          <div style="padding:1rem;">
+            <p style="color:var(--gray-dark);margin-bottom:0.75rem;">A Firestore index is required for the audit log.</p>
+            <a href="${escapeHtml(indexMatch[1])}" target="_blank" rel="noopener" class="btn btn-primary">Create Index in Firebase Console</a>
+            <p style="color:var(--gray);font-size:0.8rem;margin-top:0.75rem;">After creating the index, wait a few minutes for it to build, then reload this page.</p>
+          </div>`;
+      } else {
+        auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><p style="color:var(--gray-dark);padding:1rem;">Unable to load audit log. Check the browser console for details.</p>';
+      }
     }
   } catch (err) {
     container.innerHTML = '<div class="empty-state"><div class="empty-title">Error</div><p class="empty-description">Failed to load users.</p></div>';
