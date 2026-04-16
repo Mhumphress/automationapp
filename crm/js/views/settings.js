@@ -1,5 +1,5 @@
 import { db, auth } from '../config.js';
-import { collection, collectionGroup, getDocs, doc, updateDoc, query, orderBy, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { collection, getDocs, doc, updateDoc, query, orderBy, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
 
@@ -67,24 +67,57 @@ export async function render() {
     container.appendChild(auditSection);
 
     try {
-      const actSnap = await getDocs(
-        query(collectionGroup(db, 'activity'), orderBy('createdAt', 'desc'), fbLimit(50))
+      // Query each parent collection's activity subcollection individually
+      // to avoid needing collectionGroup rules/indexes
+      const parentCollections = ['contacts', 'deals', 'tasks', 'invoices', 'subscriptions'];
+      const allActivities = [];
+
+      const parentSnaps = await Promise.all(
+        parentCollections.map(col => getDocs(collection(db, col)))
       );
 
-      if (actSnap.empty) {
+      const activityQueries = [];
+      parentSnaps.forEach((snap, i) => {
+        const colName = parentCollections[i];
+        snap.docs.forEach(parentDoc => {
+          activityQueries.push(
+            getDocs(query(
+              collection(db, colName, parentDoc.id, 'activity'),
+              orderBy('createdAt', 'desc'),
+              fbLimit(10)
+            )).then(actSnap => {
+              actSnap.docs.forEach(d => {
+                allActivities.push({
+                  ...d.data(),
+                  _entityType: colName,
+                  _entityId: parentDoc.id
+                });
+              });
+            }).catch(() => {})
+          );
+        });
+      });
+
+      await Promise.all(activityQueries);
+
+      // Sort by createdAt desc and take top 50
+      allActivities.sort((a, b) => {
+        const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+        const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+        return tb - ta;
+      });
+      const recent = allActivities.slice(0, 50);
+
+      if (recent.length === 0) {
         auditSection.innerHTML = '<h2 class="section-title">Audit Log</h2><p style="color:var(--gray-dark);padding:1rem;">No activity recorded yet.</p>';
       } else {
         let auditHtml = '<h2 class="section-title">Audit Log</h2>';
         auditHtml += '<table class="data-table"><thead><tr><th>Time</th><th>User</th><th>Entity</th><th>Action</th></tr></thead><tbody>';
 
-        actSnap.docs.forEach(d => {
-          const act = d.data();
-          const parentRef = d.ref.parent.parent;
-          const entityType = parentRef?.parent?.id || 'unknown';
-          const entityId = parentRef?.id || '';
+        recent.forEach(act => {
           const time = act.createdAt?.toDate ? act.createdAt.toDate().toLocaleString() : '\u2014';
           const user = act.createdByEmail || '\u2014';
-          const entity = entityType.charAt(0).toUpperCase() + entityType.slice(1);
+          const entity = act._entityType.charAt(0).toUpperCase() + act._entityType.slice(1);
           const action = act.description || act.type || '\u2014';
 
           auditHtml += `<tr>
@@ -100,21 +133,8 @@ export async function render() {
       }
     } catch (err) {
       console.error('Audit log error:', err);
-      const indexMatch = err.message && err.message.match(/(https:\/\/console\.firebase\.google\.com\S+)/);
-      if (indexMatch) {
-        auditSection.innerHTML = `<h2 class="section-title">Audit Log</h2>
-          <div style="padding:1rem;">
-            <p style="color:var(--gray-dark);margin-bottom:0.75rem;">A Firestore index is required for the audit log.</p>
-            <a href="${escapeHtml(indexMatch[1])}" target="_blank" rel="noopener" class="btn btn-primary">Create Index in Firebase Console</a>
-            <p style="color:var(--gray);font-size:0.8rem;margin-top:0.75rem;">After creating the index, wait a few minutes for it to build, then reload this page.</p>
-          </div>`;
-      } else {
-        auditSection.innerHTML = `<h2 class="section-title">Audit Log</h2>
-          <div style="padding:1rem;">
-            <p style="color:var(--danger);margin-bottom:0.5rem;">Unable to load audit log.</p>
-            <pre style="background:var(--bg);padding:0.75rem;border-radius:6px;font-size:0.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;">${escapeHtml(err.code || '')} — ${escapeHtml(err.message || String(err))}</pre>
-          </div>`;
-      }
+      auditSection.innerHTML = `<h2 class="section-title">Audit Log</h2>
+        <p style="color:var(--gray-dark);padding:1rem;">Unable to load audit log.</p>`;
     }
   } catch (err) {
     container.innerHTML = '<div class="empty-state"><div class="empty-title">Error</div><p class="empty-description">Failed to load users.</p></div>';
