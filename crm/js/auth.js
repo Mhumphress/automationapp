@@ -33,6 +33,7 @@ loginForm.addEventListener('submit', async (e) => {
     await signInWithEmailAndPassword(auth, email, password);
     // onAuthStateChanged will handle redirect
   } catch (err) {
+    console.error('Firebase Auth Error:', err.code, err.message);
     showError('loginError', mapAuthError(err.code));
   } finally {
     setLoading('loginBtn', false);
