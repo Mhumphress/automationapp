@@ -33,7 +33,7 @@ if (showLoginLink) showLoginLink.addEventListener('click', (e) => {
 });
 
 // --- Login ---
-loginForm.addEventListener('submit', async (e) => {
+if (loginForm) loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   clearError('loginError');
 

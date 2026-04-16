@@ -1,25 +1,26 @@
 import { db, auth } from '../config.js';
 import {
   collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, orderBy, where, serverTimestamp, Timestamp
+  serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// All queries use simple getDocs (no orderBy, no where) to avoid
+// Firestore composite index requirements. Sort/filter client-side.
 
 // ── Tenant CRUD ─────────────────────────
 
 export async function getTenants() {
-  const q = query(collection(db, 'tenants'), orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'tenants'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+    const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+    const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+    return tb - ta;
+  });
 }
 
 export async function getTenantsByStatus(status) {
-  const q = query(
-    collection(db, 'tenants'),
-    where('status', '==', status),
-    orderBy('createdAt', 'desc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const all = await getTenants();
+  return all.filter(t => t.status === status);
 }
 
 export async function getTenant(tenantId) {
@@ -51,9 +52,12 @@ export async function updateTenant(tenantId, data) {
 // ── Tenant Users ────────────────────────
 
 export async function getTenantUsers(tenantId) {
-  const q = query(collection(db, 'tenants', tenantId, 'users'), orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'tenants', tenantId, 'users'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+    const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+    const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+    return tb - ta;
+  });
 }
 
 export async function addTenantUser(tenantId, userId, data) {
@@ -84,23 +88,23 @@ export async function addTenantActivity(tenantId, entry) {
 }
 
 export async function getTenantActivity(tenantId) {
-  const q = query(
-    collection(db, 'tenants', tenantId, 'activity'),
-    orderBy('createdAt', 'desc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'tenants', tenantId, 'activity'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+    const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+    const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+    return tb - ta;
+  });
 }
 
 // ── Tenant Invoices ─────────────────────
 
 export async function getTenantInvoices(tenantId) {
-  const q = query(
-    collection(db, 'tenants', tenantId, 'invoices'),
-    orderBy('issuedDate', 'desc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'tenants', tenantId, 'invoices'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+    const ta = a.issuedDate?.toDate ? a.issuedDate.toDate() : new Date(a.issuedDate || 0);
+    const tb = b.issuedDate?.toDate ? b.issuedDate.toDate() : new Date(b.issuedDate || 0);
+    return tb - ta;
+  });
 }
 
 export async function addTenantInvoice(tenantId, data) {
@@ -119,12 +123,12 @@ export async function updateTenantInvoice(tenantId, invoiceId, data) {
 // ── Tenant Payments ─────────────────────
 
 export async function getTenantPayments(tenantId) {
-  const q = query(
-    collection(db, 'tenants', tenantId, 'payments'),
-    orderBy('processedAt', 'desc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'tenants', tenantId, 'payments'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+    const ta = a.processedAt?.toDate ? a.processedAt.toDate() : new Date(0);
+    const tb = b.processedAt?.toDate ? b.processedAt.toDate() : new Date(0);
+    return tb - ta;
+  });
 }
 
 export async function addTenantPayment(tenantId, data) {
@@ -146,13 +150,10 @@ export async function addTenantNotification(tenantId, data) {
 }
 
 export async function getTenantNotifications(tenantId) {
-  const q = query(
-    collection(db, 'tenants', tenantId, 'notifications'),
-    orderBy('sentAt', 'desc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'tenants', tenantId, 'notifications'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+    const ta = a.sentAt?.toDate ? a.sentAt.toDate() : new Date(0);
+    const tb = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(0);
+    return tb - ta;
+  });
 }
-
-// Re-export for convenience
-export { Timestamp, serverTimestamp };

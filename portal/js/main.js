@@ -104,7 +104,15 @@ onAuthStateChanged(auth, async (user) => {
     if (err.message === 'NO_TENANT') {
       document.getElementById('noTenantState').style.display = 'flex';
     } else {
-      document.getElementById('noTenantState').style.display = 'flex';
+      const errorState = document.getElementById('noTenantState');
+      errorState.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-title">Something went wrong</div>
+          <p class="empty-description">Failed to load your account. Please try refreshing the page or contact support.</p>
+          <pre style="background:var(--bg);padding:0.75rem;border-radius:6px;font-size:0.8rem;margin-top:1rem;max-width:500px;overflow-x:auto;">${escapeHtml(err.message || String(err))}</pre>
+        </div>
+      `;
+      errorState.style.display = 'flex';
     }
   }
 });

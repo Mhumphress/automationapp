@@ -7,7 +7,7 @@ import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
 import { canDelete } from '../services/roles.js';
-import { getVerticals, getPackages as getCatalogPackages } from '../services/catalog.js';
+import { getVerticals, getPackagesByVertical } from '../services/catalog.js';
 import { createTenant, addTenantUser, addTenantActivity } from '../services/tenants.js';
 import { addDocument as addCrmDocument } from '../services/firestore.js';
 
@@ -426,7 +426,7 @@ function openCreateModal() {
       opt.textContent = v.name;
       verticalSelect.appendChild(opt);
     });
-  });
+  }).catch(err => console.error('Failed to load verticals:', err));
 
   verticalSelect.addEventListener('change', async () => {
     packageSelect.innerHTML = '<option value="">— Loading... —</option>';
@@ -435,8 +435,7 @@ function openCreateModal() {
       return;
     }
     try {
-      const allPkgs = await getCatalogPackages();
-      const pkgs = allPkgs.filter(p => p.vertical === verticalSelect.value);
+      const pkgs = await getPackagesByVertical(verticalSelect.value);
       packageSelect.innerHTML = '<option value="">— Select package —</option>';
       pkgs.forEach(p => {
         const opt = document.createElement('option');
@@ -823,13 +822,15 @@ function renderDealFields(container, deal) {
     if (deal.vertical) {
       await loadPackageOptions(deal.vertical);
     }
+  }).catch(err => {
+    console.error('Failed to load verticals:', err);
+    vertSelect.innerHTML = `<option value="">— Error loading —</option>`;
   });
 
   async function loadPackageOptions(verticalSlug) {
     pkgSelect.innerHTML = `<option value="">— Loading... —</option>`;
     try {
-      const allPkgs = await getCatalogPackages();
-      const pkgs = allPkgs.filter(p => p.vertical === verticalSlug);
+      const pkgs = await getPackagesByVertical(verticalSlug);
       pkgSelect.innerHTML = `<option value="">— Select Package —</option>` +
         pkgs.map(p => `<option value="${p.id}" ${deal.packageId === p.id ? 'selected' : ''}>${escapeHtml(p.name)} — ${formatCurrency(p.basePrice)}/mo</option>`).join('');
     } catch (err) {
@@ -839,30 +840,45 @@ function renderDealFields(container, deal) {
   }
 
   vertSelect.addEventListener('change', async () => {
-    const oldVal = deal.vertical || '';
-    deal.vertical = vertSelect.value;
-    deal.packageId = '';
-    pkgSelect.innerHTML = `<option value="">— Select Package —</option>`;
-    await updateDocument('deals', deal.id, { vertical: deal.vertical, packageId: '' });
-    if (oldVal !== deal.vertical) await logFieldEdit('deals', deal.id, 'Vertical', oldVal, deal.vertical);
-    if (deal.vertical) await loadPackageOptions(deal.vertical);
-    showToast('Vertical updated', 'success');
+    try {
+      const oldVal = deal.vertical || '';
+      deal.vertical = vertSelect.value;
+      deal.packageId = '';
+      pkgSelect.innerHTML = `<option value="">— Select Package —</option>`;
+      await updateDocument('deals', deal.id, { vertical: deal.vertical, packageId: '' });
+      if (oldVal !== deal.vertical) await logFieldEdit('deals', deal.id, 'Vertical', oldVal, deal.vertical);
+      if (deal.vertical) await loadPackageOptions(deal.vertical);
+      showToast('Vertical updated', 'success');
+    } catch (err) {
+      console.error('Vertical update failed:', err);
+      showToast('Failed to update vertical', 'error');
+    }
   });
 
   pkgSelect.addEventListener('change', async () => {
-    const oldVal = deal.packageId || '';
-    deal.packageId = pkgSelect.value;
-    await updateDocument('deals', deal.id, { packageId: deal.packageId });
-    if (oldVal !== deal.packageId) await logFieldEdit('deals', deal.id, 'Package', oldVal, deal.packageId);
-    showToast('Package updated', 'success');
+    try {
+      const oldVal = deal.packageId || '';
+      deal.packageId = pkgSelect.value;
+      await updateDocument('deals', deal.id, { packageId: deal.packageId });
+      if (oldVal !== deal.packageId) await logFieldEdit('deals', deal.id, 'Package', oldVal, deal.packageId);
+      showToast('Package updated', 'success');
+    } catch (err) {
+      console.error('Package update failed:', err);
+      showToast('Failed to update package', 'error');
+    }
   });
 
   cycleSelect.addEventListener('change', async () => {
-    const oldVal = deal.billingCycle || 'monthly';
-    deal.billingCycle = cycleSelect.value;
-    await updateDocument('deals', deal.id, { billingCycle: deal.billingCycle });
-    if (oldVal !== deal.billingCycle) await logFieldEdit('deals', deal.id, 'Billing Cycle', oldVal, deal.billingCycle);
-    showToast('Billing cycle updated', 'success');
+    try {
+      const oldVal = deal.billingCycle || 'monthly';
+      deal.billingCycle = cycleSelect.value;
+      await updateDocument('deals', deal.id, { billingCycle: deal.billingCycle });
+      if (oldVal !== deal.billingCycle) await logFieldEdit('deals', deal.id, 'Billing Cycle', oldVal, deal.billingCycle);
+      showToast('Billing cycle updated', 'success');
+    } catch (err) {
+      console.error('Billing cycle update failed:', err);
+      showToast('Failed to update billing cycle', 'error');
+    }
   });
 
   // Tenant link (if provisioned)

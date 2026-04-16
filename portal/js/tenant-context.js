@@ -1,6 +1,6 @@
 import { db, auth } from './config.js';
 import {
-  collection, getDocs, getDoc, doc, setDoc, query, where
+  collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let currentTenant = null;
@@ -20,41 +20,58 @@ export async function loadTenantContext() {
   const userTenants = [];
 
   for (const tenantDoc of tenantsSnap.docs) {
-    const userDoc = await getDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid));
-    if (userDoc.exists()) {
-      userTenants.push({
-        id: tenantDoc.id,
-        ...tenantDoc.data(),
-        userRole: userDoc.data().role
-      });
+    try {
+      const userDoc = await getDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid));
+      if (userDoc.exists()) {
+        userTenants.push({
+          id: tenantDoc.id,
+          ...tenantDoc.data(),
+          userRole: userDoc.data().role
+        });
+      }
+    } catch (err) {
+      // Permission denied for this tenant — skip it
     }
   }
 
   // If no UID match, search by email and auto-link
   if (userTenants.length === 0 && user.email) {
     for (const tenantDoc of tenantsSnap.docs) {
-      const usersSnap = await getDocs(collection(db, 'tenants', tenantDoc.id, 'users'));
-      for (const userSnapDoc of usersSnap.docs) {
-        const userData = userSnapDoc.data();
-        if (userData.email && userData.email.toLowerCase() === user.email.toLowerCase() && userSnapDoc.id !== user.uid) {
-          // Found a match by email — create a new user doc with the correct UID
-          await setDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid), {
-            ...userData,
-            email: user.email,
-            displayName: user.displayName || user.email
-          });
-          // Update the tenant's ownerUserId if this was the owner
-          if (userData.role === 'owner') {
-            const { updateDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-            await updateDoc(doc(db, 'tenants', tenantDoc.id), { ownerUserId: user.uid });
+      try {
+        const usersSnap = await getDocs(collection(db, 'tenants', tenantDoc.id, 'users'));
+        for (const userSnapDoc of usersSnap.docs) {
+          const userData = userSnapDoc.data();
+          if (userData.email && userData.email.toLowerCase() === user.email.toLowerCase() && userSnapDoc.id !== user.uid) {
+            // Found a match by email — create a new user doc with the correct UID
+            await setDoc(doc(db, 'tenants', tenantDoc.id, 'users', user.uid), {
+              ...userData,
+              email: user.email,
+              displayName: user.displayName || user.email
+            });
+            // Delete the old placeholder user doc
+            try {
+              await deleteDoc(doc(db, 'tenants', tenantDoc.id, 'users', userSnapDoc.id));
+            } catch (e) {
+              console.warn('Could not delete old placeholder user doc:', e);
+            }
+            // Update the tenant's ownerUserId if this was the owner
+            if (userData.role === 'owner') {
+              try {
+                await updateDoc(doc(db, 'tenants', tenantDoc.id), { ownerUserId: user.uid });
+              } catch (e) {
+                console.warn('Could not update ownerUserId:', e);
+              }
+            }
+            userTenants.push({
+              id: tenantDoc.id,
+              ...tenantDoc.data(),
+              userRole: userData.role
+            });
+            break;
           }
-          userTenants.push({
-            id: tenantDoc.id,
-            ...tenantDoc.data(),
-            userRole: userData.role
-          });
-          break;
         }
+      } catch (err) {
+        // Permission denied for this tenant — skip it
       }
       if (userTenants.length > 0) break;
     }
@@ -80,15 +97,25 @@ export async function selectTenant(tenantData) {
   localStorage.setItem('portal_tenant_id', tenantData.id);
 
   // Load package
+  currentPackage = null;
   if (tenantData.packageId) {
-    const pkgSnap = await getDoc(doc(db, 'packages', tenantData.packageId));
-    currentPackage = pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } : null;
+    try {
+      const pkgSnap = await getDoc(doc(db, 'packages', tenantData.packageId));
+      currentPackage = pkgSnap.exists() ? { id: pkgSnap.id, ...pkgSnap.data() } : null;
+    } catch (err) {
+      console.error('Failed to load package:', err);
+    }
   }
 
   // Load vertical
+  currentVertical = null;
   if (tenantData.vertical) {
-    const vSnap = await getDoc(doc(db, 'verticals', tenantData.vertical));
-    currentVertical = vSnap.exists() ? { id: vSnap.id, ...vSnap.data() } : null;
+    try {
+      const vSnap = await getDoc(doc(db, 'verticals', tenantData.vertical));
+      currentVertical = vSnap.exists() ? { id: vSnap.id, ...vSnap.data() } : null;
+    } catch (err) {
+      console.error('Failed to load vertical:', err);
+    }
   }
 
   // Compute effective features
@@ -96,10 +123,11 @@ export async function selectTenant(tenantData) {
   const pkgFeatures = currentPackage ? (currentPackage.features || []) : [];
   pkgFeatures.forEach(f => effectiveFeatures.add(f));
 
-  // Add-on features (add-ons that map to features)
+  // Add-on features — handle both string arrays and object arrays
   if (tenantData.addOns) {
     tenantData.addOns.forEach(ao => {
-      if (ao.slug) effectiveFeatures.add(ao.slug);
+      if (typeof ao === 'string') effectiveFeatures.add(ao);
+      else if (ao && ao.slug) effectiveFeatures.add(ao.slug);
     });
   }
 
@@ -165,7 +193,7 @@ export function term(key) {
   return currentVertical.terminology[key] || key;
 }
 
-// ── Status toast (needs portal toast container) ──
+// ── Status toast ──
 
 function showStatusToast(message) {
   const container = document.getElementById('toastContainer');

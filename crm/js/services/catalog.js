@@ -1,15 +1,17 @@
 import { db } from '../config.js';
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, orderBy, where, serverTimestamp
+  collection, doc, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// All queries use simple getDocs (no orderBy, no where) to avoid
+// needing Firestore composite indexes. Sorting and filtering is
+// done client-side since catalog data is small.
 
 // ── Verticals ───────────────────────────
 
 export async function getVerticals() {
-  const q = query(collection(db, 'verticals'), orderBy('name', 'asc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'verticals'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 export async function getVertical(slug) {
@@ -25,15 +27,13 @@ export async function setVertical(slug, data) {
 // ── Features ────────────────────────────
 
 export async function getFeatures() {
-  const q = query(collection(db, 'features'), orderBy('name', 'asc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'features'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 export async function getFeaturesByVertical(verticalSlug) {
-  const q = query(collection(db, 'features'), where('verticals', 'array-contains', verticalSlug));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const all = await getFeatures();
+  return all.filter(f => f.verticals && f.verticals.includes(verticalSlug));
 }
 
 export async function setFeature(slug, data) {
@@ -47,19 +47,13 @@ export async function deleteFeature(slug) {
 // ── Packages ────────────────────────────
 
 export async function getPackages() {
-  const q = query(collection(db, 'packages'), orderBy('sortOrder', 'asc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'packages'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
 export async function getPackagesByVertical(verticalSlug) {
-  const q = query(
-    collection(db, 'packages'),
-    where('vertical', '==', verticalSlug),
-    orderBy('sortOrder', 'asc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const all = await getPackages();
+  return all.filter(p => p.vertical === verticalSlug);
 }
 
 export async function getPackage(packageId) {
@@ -79,9 +73,8 @@ export async function deletePackage(packageId) {
 // ── Add-ons ─────────────────────────────
 
 export async function getAddons() {
-  const q = query(collection(db, 'addons'), orderBy('name', 'asc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'addons'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 export async function setAddon(slug, data) {
