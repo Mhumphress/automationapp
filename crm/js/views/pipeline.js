@@ -7,7 +7,7 @@ import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
 import { canDelete } from '../services/roles.js';
-import { getVerticals, getPackagesByVertical } from '../services/catalog.js';
+import { getVerticals, getPackages as getCatalogPackages } from '../services/catalog.js';
 import { createTenant, addTenantUser, addTenantActivity } from '../services/tenants.js';
 import { addDocument as addCrmDocument } from '../services/firestore.js';
 
@@ -434,14 +434,20 @@ function openCreateModal() {
       packageSelect.innerHTML = '<option value="">— Select vertical first —</option>';
       return;
     }
-    const pkgs = await getPackagesByVertical(verticalSelect.value);
-    packageSelect.innerHTML = '<option value="">— Select package —</option>';
-    pkgs.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = `${p.name} — ${formatCurrency(p.basePrice)}/mo`;
-      packageSelect.appendChild(opt);
-    });
+    try {
+      const allPkgs = await getCatalogPackages();
+      const pkgs = allPkgs.filter(p => p.vertical === verticalSelect.value);
+      packageSelect.innerHTML = '<option value="">— Select package —</option>';
+      pkgs.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.name} — ${formatCurrency(p.basePrice)}/mo`;
+        packageSelect.appendChild(opt);
+      });
+    } catch (err) {
+      console.error('Failed to load packages:', err);
+      packageSelect.innerHTML = '<option value="">— Error loading packages —</option>';
+    }
   });
 
   modal.open('New Deal', form);
@@ -634,14 +640,9 @@ function renderStagePills(pillsContainer, deal, pageContainer) {
         await updateDocument('deals', deal.id, { stage: stage.id });
         await logFieldEdit('deals', deal.id, 'Stage', oldStage?.label || deal.stage, newStage.label);
         deal.stage = stage.id;
-        // Re-render pills to show new active state
-        renderStagePills(pillsContainer, deal, pageContainer);
-        // Update subtitle value display
-        const subtitle = pageContainer.querySelector('.detail-subtitle');
-        if (subtitle) {
-          subtitle.style.color = 'var(--accent)';
-        }
         showToast(`Stage: ${newStage.label}`, 'success');
+        // Re-render full detail page so provision section appears/disappears
+        showDealDetail(deal);
       } catch (err) {
         console.error('Stage change failed:', err);
         showToast('Failed to change stage', 'error');
@@ -826,9 +827,15 @@ function renderDealFields(container, deal) {
 
   async function loadPackageOptions(verticalSlug) {
     pkgSelect.innerHTML = `<option value="">— Loading... —</option>`;
-    const pkgs = await getPackagesByVertical(verticalSlug);
-    pkgSelect.innerHTML = `<option value="">— Select Package —</option>` +
-      pkgs.map(p => `<option value="${p.id}" ${deal.packageId === p.id ? 'selected' : ''}>${escapeHtml(p.name)} — ${formatCurrency(p.basePrice)}/mo</option>`).join('');
+    try {
+      const allPkgs = await getCatalogPackages();
+      const pkgs = allPkgs.filter(p => p.vertical === verticalSlug);
+      pkgSelect.innerHTML = `<option value="">— Select Package —</option>` +
+        pkgs.map(p => `<option value="${p.id}" ${deal.packageId === p.id ? 'selected' : ''}>${escapeHtml(p.name)} — ${formatCurrency(p.basePrice)}/mo</option>`).join('');
+    } catch (err) {
+      console.error('Failed to load packages:', err);
+      pkgSelect.innerHTML = `<option value="">— Error loading —</option>`;
+    }
   }
 
   vertSelect.addEventListener('change', async () => {
