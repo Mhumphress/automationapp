@@ -158,14 +158,12 @@
   color: white;
 }
 
-/* Override accent colors in portal */
-.portal-sidebar ~ .app-main .btn-primary,
-.portal-sidebar ~ .app-main .stage-pill.active {
-  background: var(--portal-accent);
-}
-
-.portal-sidebar ~ .app-main .btn-primary:hover {
-  background: var(--portal-accent-dark);
+/* Portal buttons follow the themed --accent vars.
+   .btn-primary in the base CSS already reads var(--accent) / var(--accent-strong),
+   so no overrides are needed here — themes drive the color. */
+.stage-pill.active {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* Upgrade prompt */
