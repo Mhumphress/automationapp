@@ -278,9 +278,15 @@ function openEditForm(inv) {
       </div>
     </details>
 
-    <div style="display:flex;justify-content:flex-end;margin-top:1rem;gap:1rem;align-items:center;">
+    <div class="modal-field" style="margin-top:1rem;max-width:180px;">
+      <label>Tax Rate (%)</label>
+      <input type="number" name="taxRate" min="0" max="100" step="0.001" value="${inv.taxRate || 0}">
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:1rem;gap:1rem;align-items:center;flex-wrap:wrap;">
       <span id="invoiceSubtotal" style="color:var(--gray);">Subtotal: ${formatCurrency(0)}</span>
       <span id="invoiceDiscount" style="color:#059669;">Discount: ${formatCurrency(0)}</span>
+      <span id="invoiceTax" style="color:var(--gray);">Tax: ${formatCurrency(0)}</span>
       <span id="invoiceTotal" style="font-size:1.1rem;font-weight:600;">Total: ${formatCurrency(0)}</span>
     </div>
 
@@ -324,16 +330,21 @@ function openEditForm(inv) {
       if (dType === 'percent') discount = Math.round(subtotal * (Math.min(dVal, 100) / 100) * 100) / 100;
       else discount = Math.min(dVal, subtotal);
     }
-    const total = Math.max(0, subtotal - discount);
+    const afterDiscount = Math.max(0, subtotal - discount);
+    const taxRate = parseFloat(form.querySelector('[name="taxRate"]').value) || 0;
+    const tax = taxRate > 0 ? Math.round(afterDiscount * (taxRate / 100) * 100) / 100 : 0;
+    const total = afterDiscount + tax;
 
     form.querySelector('#invoiceSubtotal').textContent = `Subtotal: ${formatCurrency(subtotal)}`;
     form.querySelector('#invoiceDiscount').textContent = `Discount: ${formatCurrency(discount)}`;
     form.querySelector('#invoiceDiscount').style.display = discount > 0 ? '' : 'none';
+    form.querySelector('#invoiceTax').textContent = `Tax: ${formatCurrency(tax)}`;
+    form.querySelector('#invoiceTax').style.display = tax > 0 ? '' : 'none';
     form.querySelector('#invoiceTotal').textContent = `Total: ${formatCurrency(total)}`;
   }
 
   form.addEventListener('input', (e) => {
-    if (e.target.name && (e.target.name.startsWith('qty_') || e.target.name.startsWith('rate_') || e.target.name === 'discountValue' || e.target.name === 'discountType')) {
+    if (e.target.name && (e.target.name.startsWith('qty_') || e.target.name.startsWith('rate_') || e.target.name === 'discountValue' || e.target.name === 'discountType' || e.target.name === 'taxRate')) {
       recalcTotals();
     }
   });
@@ -390,10 +401,13 @@ function openEditForm(inv) {
         lineItems.push({ description: label, quantity: 1, rate: -discountAmount, amount: -discountAmount, isDiscount: true });
       }
     }
-    const total = Math.max(0, subtotal - discountAmount);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const taxRate = parseFloat(fd.get('taxRate')) || 0;
+    const taxAmount = taxRate > 0 ? Math.round(afterDiscount * (taxRate / 100) * 100) / 100 : 0;
+    const total = afterDiscount + taxAmount;
 
     try {
-      await updateDocument('invoices_crm', inv.id, {
+      const patch = {
         clientName: fd.get('clientName').trim(),
         issueDate: fd.get('issueDate'),
         dueDate: fd.get('dueDate'),
@@ -403,21 +417,13 @@ function openEditForm(inv) {
         discountType: dVal > 0 && dReason ? dType : '',
         discountValue: dVal > 0 && dReason ? dVal : 0,
         discountAmount,
-        taxRate: 0,
-        taxAmount: 0,
+        taxRate,
+        taxAmount,
         total,
         notes: fd.get('notes').trim()
-      });
-      // Merge the updated values into the in-memory invoice so showDetail shows them
-      Object.assign(inv, {
-        clientName: fd.get('clientName').trim(),
-        issueDate: fd.get('issueDate'),
-        dueDate: fd.get('dueDate'),
-        lineItems, subtotal, discountReason: dVal > 0 && dReason ? dReason : '',
-        discountType: dVal > 0 && dReason ? dType : '',
-        discountValue: dVal > 0 && dReason ? dVal : 0,
-        discountAmount, total, notes: fd.get('notes').trim()
-      });
+      };
+      await updateDocument('invoices_crm', inv.id, patch);
+      Object.assign(inv, patch);
       showDetail(inv);
     } catch (err) {
       console.error('Update invoice failed:', err);
@@ -568,13 +574,19 @@ function showDetail(inv) {
     const totals = document.createElement('div');
     totals.style.cssText = 'text-align:right;margin-top:1rem;font-size:0.95rem;';
     const hasDiscount = (inv.discountAmount || 0) > 0;
+    const hasTax = (inv.taxAmount || 0) > 0;
     const rows = [];
-    if (hasDiscount) {
+    if (hasDiscount || hasTax) {
       rows.push(`<div>Subtotal: ${formatCurrency(inv.subtotal || 0)}</div>`);
+    }
+    if (hasDiscount) {
       const discountLabel = inv.discountType === 'percent'
         ? `Discount (${inv.discountValue}% ${escapeHtml(inv.discountReason || '')})`
         : `Discount (${escapeHtml(inv.discountReason || '')})`;
       rows.push(`<div style="color:#059669;">${discountLabel}: -${formatCurrency(inv.discountAmount || 0)}</div>`);
+    }
+    if (hasTax) {
+      rows.push(`<div>Tax (${inv.taxRate}%): ${formatCurrency(inv.taxAmount || 0)}</div>`);
     }
     rows.push(`<div style="font-size:1.1rem;font-weight:600;margin-top:0.35rem;">Total: ${formatCurrency(inv.total || 0)}</div>`);
     totals.innerHTML = rows.join('');

@@ -272,7 +272,10 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
     if (ticket.invoiceId) throw new Error('Ticket already has an invoice');
     if (ticket.status !== 'completed') throw new Error('Ticket must be completed to generate an invoice');
 
-    const laborRate = settingsSnap.exists() ? (settingsSnap.data().laborRate || 0) : 0;
+    const settingsData = settingsSnap.exists() ? settingsSnap.data() : {};
+    const laborRate = settingsData.laborRate || 0;
+    const taxRate = Number(settingsData.taxRate) || 0;
+    const warrantyDays = Number(settingsData.warrantyDays) || 0;
 
     // Compute line items
     const lineItems = [];
@@ -338,11 +341,18 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
       }
     }
 
-    const total = Math.max(0, subtotal - discountAmount);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const taxAmount = taxRate > 0 ? Math.round(afterDiscount * (taxRate / 100) * 100) / 100 : 0;
+    const total = afterDiscount + taxAmount;
 
     const invoiceNumber = `INV-${ticket.ticketNumber}`;
     const invoiceRef = doc(invoicesCol);
     const activityRef = doc(activityCol);
+
+    // Warranty: set on ticket at invoice generation so it starts from the day the device left
+    const warrantyExpiresAt = warrantyDays > 0
+      ? Timestamp.fromDate(new Date(Date.now() + warrantyDays * 86400000))
+      : null;
 
     const invoiceData = {
       invoiceNumber,
@@ -358,8 +368,8 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
       discountType: opts.discount?.type || '',
       discountValue: opts.discount?.value || 0,
       discountAmount,
-      taxRate: 0,
-      taxAmount: 0,
+      taxRate,
+      taxAmount,
       total,
       status: 'draft',
       notes: `Auto-generated from ticket ${ticket.ticketNumber}`,
@@ -381,6 +391,8 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
     };
     tx.update(ticketRef, {
       invoiceId: invoiceRef.id,
+      warrantyExpiresAt,
+      warrantyDays,
       history: [historyEntry, ...(ticket.history || [])].slice(0, HISTORY_CAP),
       updatedAt: serverTimestamp(),
       updatedBy: user ? user.uid : null

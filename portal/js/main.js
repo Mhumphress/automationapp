@@ -313,6 +313,13 @@ async function registerAllViews() {
     destroy: invoicingMod.destroy
   });
 
+  const reportingMod = await import('./views/shared/reporting.js');
+  registerView('reporting', {
+    init: reportingMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Reporting'; reportingMod.render(); },
+    destroy: reportingMod.destroy
+  });
+
   const inventoryMod = await import('./views/repair/inventory.js');
   registerView('inventory', {
     init: inventoryMod.init,
@@ -336,7 +343,7 @@ async function registerAllViews() {
 
   // Placeholder views for modules not yet implemented
   const placeholderViews = [
-    'scheduling', 'reporting',
+    'scheduling',
     'jobs', 'dispatching', 'quoting',
     'bom', 'work-orders',
     'projects', 'time-tracking', 'proposals',
@@ -565,9 +572,19 @@ async function renderAccountSettings() {
     </div>
     <div class="settings-section" style="margin-top:1.5rem;">
       <h2 class="section-title">Billing Defaults</h2>
-      <div class="modal-field">
-        <label>Labor Rate (per hour)</label>
-        <input type="number" id="laborRateInput" min="0" step="0.01" ${canEdit ? '' : 'disabled'} value="${generalSettings.laborRate ?? 0}">
+      <div class="modal-form-grid">
+        <div class="modal-field">
+          <label>Labor Rate (per hour)</label>
+          <input type="number" id="laborRateInput" min="0" step="0.01" ${canEdit ? '' : 'disabled'} value="${generalSettings.laborRate ?? 0}">
+        </div>
+        <div class="modal-field">
+          <label>Sales Tax (%)</label>
+          <input type="number" id="taxRateInput" min="0" max="100" step="0.001" ${canEdit ? '' : 'disabled'} value="${generalSettings.taxRate ?? 0}">
+        </div>
+        <div class="modal-field">
+          <label>Default Warranty (days)</label>
+          <input type="number" id="warrantyDaysInput" min="0" step="1" ${canEdit ? '' : 'disabled'} value="${generalSettings.warrantyDays ?? 90}">
+        </div>
       </div>
       ${canEdit ? '<button class="btn btn-primary btn-sm" id="saveSettingsBtn">Save</button>' : ''}
       <span id="settingsSaveStatus" style="margin-left:0.75rem;color:var(--gray);font-size:0.85rem;"></span>
@@ -620,12 +637,14 @@ async function renderAccountSettings() {
     saveBtn.addEventListener('click', async () => {
       const status = container.querySelector('#settingsSaveStatus');
       const rate = Number(container.querySelector('#laborRateInput').value) || 0;
+      const taxRate = Number(container.querySelector('#taxRateInput').value) || 0;
+      const warrantyDays = Number(container.querySelector('#warrantyDaysInput').value) || 0;
       saveBtn.disabled = true;
       status.textContent = 'Saving...';
       try {
         await fbSetDoc(
           fbDoc(fbDb, `tenants/${tenant.id}/settings/general`),
-          { laborRate: rate, updatedAt: fbServerTs() },
+          { laborRate: rate, taxRate, warrantyDays, updatedAt: fbServerTs() },
           { merge: true }
         );
         status.textContent = 'Saved.';

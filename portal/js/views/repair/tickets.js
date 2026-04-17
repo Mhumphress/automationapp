@@ -426,6 +426,25 @@ function renderDetail() {
     }));
   }
 
+  // ── Warranty indicator if set ──
+  if (ticket.warrantyExpiresAt) {
+    const wEl = document.createElement('div');
+    wEl.className = 'settings-section';
+    wEl.style.marginTop = '1rem';
+    const wDate = ticket.warrantyExpiresAt.toDate ? ticket.warrantyExpiresAt.toDate() : new Date(ticket.warrantyExpiresAt);
+    const daysLeft = Math.ceil((wDate.getTime() - Date.now()) / 86400000);
+    const statusColor = daysLeft < 0 ? 'var(--danger)' : daysLeft < 14 ? 'var(--warning)' : '#059669';
+    const statusText = daysLeft < 0 ? `Expired ${Math.abs(daysLeft)} days ago` : daysLeft === 0 ? 'Expires today' : `${daysLeft} days remaining`;
+    wEl.innerHTML = `
+      <h3 class="section-title">Warranty</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.9rem;">
+        <span>Expires: <strong>${wDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong></span>
+        <span style="color:${statusColor};font-weight:500;">${statusText}</span>
+      </div>
+    `;
+    container.appendChild(wEl);
+  }
+
   // ── Invoice generation (Task 9 implements the button handler) ──
   const invoiceSection = renderInvoiceSection(ticket);
   if (invoiceSection) container.appendChild(invoiceSection);
