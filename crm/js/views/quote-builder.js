@@ -222,7 +222,10 @@ function attachBuilderHandlers(verticals, packages, addons, contacts) {
           lastName: c.lastName || '',
           email: c.email || '',
           phone: c.phone || '',
-          company: c.company || '',
+          // Contacts may have either the new `company` field or the legacy
+          // `companyName` field (or both). Read whichever is populated so
+          // the quote always carries the customer's business name.
+          company: c.company || c.companyName || '',
         };
         root.querySelector('[name="firstName"]').value = formState.customerSnapshot.firstName;
         root.querySelector('[name="lastName"]').value = formState.customerSnapshot.lastName;
