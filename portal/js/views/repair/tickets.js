@@ -113,19 +113,54 @@ function renderTable() {
     const ageDays = t.createdAt && t.createdAt.toDate
       ? Math.floor((Date.now() - t.createdAt.toDate().getTime()) / 86400000)
       : '-';
+    const statusCell = canWrite()
+      ? `<select class="inline-status" data-id="${t.id}" data-prev="${escapeHtml(t.status || '')}" onclick="event.stopPropagation();">
+          ${STATUS_ORDER.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
+        </select>`
+      : `<span class="badge ${statusBadgeClass(t.status)}">${escapeHtml(STATUS_LABELS[t.status] || t.status || '-')}</span>`;
     tr.innerHTML = `
       <td style="font-family:monospace;font-weight:500;">${escapeHtml(t.ticketNumber || '-')}</td>
       <td>${escapeHtml(t.customerName || '-')}</td>
       <td>${escapeHtml(t.deviceType || '-')}</td>
-      <td><span class="badge ${statusBadgeClass(t.status)}">${escapeHtml(STATUS_LABELS[t.status] || t.status || '-')}</span></td>
+      <td>${statusCell}</td>
       <td>${ageDays === '-' ? '-' : ageDays + 'd'}</td>
       <td>${formatDate(t.createdAt)}</td>
     `;
-    tr.addEventListener('click', () => showDetail(t.id));
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('.inline-status')) return;
+      showDetail(t.id);
+    });
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
   wrapper.appendChild(table);
+
+  wrapper.querySelectorAll('.inline-status').forEach(sel => {
+    sel.addEventListener('change', gateWrite(async (e) => {
+      const ticketId = sel.dataset.id;
+      const prevStatus = sel.dataset.prev;
+      const newStatus = sel.value;
+      if (newStatus === prevStatus) return;
+      sel.disabled = true;
+      try {
+        await updateTicket(ticketId, { status: newStatus });
+        await appendTicketHistory(ticketId, {
+          type: 'status_change',
+          description: `Status changed from ${STATUS_LABELS[prevStatus] || prevStatus} to ${STATUS_LABELS[newStatus] || newStatus}`
+        });
+        sel.dataset.prev = newStatus;
+        // Update local cache
+        const idx = tickets.findIndex(t => t.id === ticketId);
+        if (idx >= 0) tickets[idx] = { ...tickets[idx], status: newStatus };
+      } catch (err) {
+        console.error('Status change failed:', err);
+        alert('Failed to update status: ' + err.message);
+        sel.value = prevStatus;
+      } finally {
+        sel.disabled = false;
+      }
+    }));
+  });
 }
 
 let detailState = null; // { ticket, parts }
