@@ -320,10 +320,17 @@ async function registerAllViews() {
     destroy: inventoryMod.destroy
   });
 
+  const ticketsMod = await import('./views/repair/tickets.js');
+  registerView('tickets', {
+    init: ticketsMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Repair Tickets'; ticketsMod.render(); },
+    destroy: ticketsMod.destroy
+  });
+
   // Placeholder views for modules not yet implemented
   const placeholderViews = [
     'scheduling', 'reporting',
-    'tickets', 'checkin',
+    'checkin',
     'jobs', 'dispatching', 'quoting',
     'bom', 'work-orders',
     'projects', 'time-tracking', 'proposals',
