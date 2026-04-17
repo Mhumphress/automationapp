@@ -173,10 +173,17 @@ export async function render() {
           <input type="color" id="crmAccent" value="${escapeHtml(initialColors.accent || '#4F7BF7')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
         </div>
       </div>
-      <div class="modal-field" style="margin-top:0.75rem;">
-        <label>Logo URL</label>
-        <input type="url" id="crmBrandLogo" value="${escapeHtml(current.logoUrl || '')}" placeholder="https://example.com/logo.png">
+      <div class="modal-form-grid" style="margin-top:0.75rem;">
+        <div class="modal-field">
+          <label>Business Name</label>
+          <input type="text" id="crmBrandBusinessName" value="${escapeHtml(current.businessName || '')}" placeholder="e.g., Automation App">
+        </div>
+        <div class="modal-field">
+          <label>Logo URL</label>
+          <input type="url" id="crmBrandLogo" value="${escapeHtml(current.logoUrl || '')}" placeholder="https://example.com/logo.png">
+        </div>
       </div>
+      <p style="color:var(--gray-dark);font-size:0.8rem;margin:0.25rem 0 0;">Business Name and Logo appear on the public quote page customers see.</p>
       <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
         <button class="btn btn-primary btn-sm" id="crmBrandSave">Save Branding</button>
         <button class="btn btn-ghost btn-sm" id="crmBrandReset">Reset to default</button>
@@ -190,12 +197,15 @@ export async function render() {
     const fgEl = brandingSection.querySelector('#crmSidebarFg');
     const accEl = brandingSection.querySelector('#crmAccent');
     const logoEl = brandingSection.querySelector('#crmBrandLogo');
+    const businessNameEl = brandingSection.querySelector('#crmBrandBusinessName');
 
     function currentBrandingObj() {
       const theme = themeSel.value;
-      if (theme !== 'custom') return { theme, logoUrl: logoEl.value.trim() };
+      const businessName = businessNameEl.value.trim();
+      if (theme !== 'custom') return { theme, businessName, logoUrl: logoEl.value.trim() };
       return {
         theme: 'custom',
+        businessName,
         sidebarBg: bgEl.value,
         sidebarFg: fgEl.value,
         accent: accEl.value,
@@ -231,12 +241,13 @@ export async function render() {
     });
     brandingSection.querySelector('#crmBrandReset').addEventListener('click', async () => {
       try {
-        await saveBranding({ theme: 'classic_dark', sidebarBg: '', sidebarFg: '', accent: '', logoUrl: '', primaryColor: '' });
+        await saveBranding({ theme: 'classic_dark', businessName: '', sidebarBg: '', sidebarFg: '', accent: '', logoUrl: '', primaryColor: '' });
         themeSel.value = 'classic_dark';
         customWrap.style.display = 'none';
         const t = THEMES.classic_dark;
         bgEl.value = t.sidebarBg; fgEl.value = t.sidebarFg; accEl.value = t.accent;
         logoEl.value = '';
+        businessNameEl.value = '';
         applyBranding({ theme: 'classic_dark' });
         showToast('Branding reset', 'success');
       } catch (err) {
