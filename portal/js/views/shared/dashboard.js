@@ -1,13 +1,32 @@
-import { queryDocuments } from '../../services/firestore.js';
-import { getTenant, getPackage, getVertical, hasFeature } from '../../tenant-context.js';
+import { db } from '../../config.js';
+import {
+  collection, query, orderBy, onSnapshot
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getTenant, getPackage, getVertical, getTenantId, hasFeature } from '../../tenant-context.js';
+import { requestTicketFilter } from '../repair/tickets.js';
+import { requestInvoice, requestInvoiceFilter } from './invoicing.js';
 
-let chartModule = null;       // dynamically loaded Chart.js
+// ── State ─────────────────────────────────
+let chartModule = null;
 let activeCharts = [];
+let unsubs = [];
+let tickets = [];
+let invoices = [];
+let contacts = [];
+let redrawTimer = null;
+let ready = { tickets: false, invoices: false, contacts: false };
 
 async function ensureChart() {
   if (chartModule) return chartModule;
   chartModule = await import('https://cdn.jsdelivr.net/npm/chart.js@4.4.6/auto/+esm');
   return chartModule;
+}
+
+function cleanup() {
+  unsubs.forEach(u => { try { u(); } catch {} });
+  unsubs = [];
+  destroyCharts();
+  if (redrawTimer) { clearTimeout(redrawTimer); redrawTimer = null; }
 }
 
 function destroyCharts() {
@@ -16,37 +35,80 @@ function destroyCharts() {
 }
 
 export function init() {}
+export function destroy() { cleanup(); ready = { tickets: false, invoices: false, contacts: false }; }
 
-export function destroy() { destroyCharts(); }
+// ── Date helpers ──────────────────────────
+const DAY = 86400000;
 
+function isoDate(d) {
+  const dt = new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function ticketTime(t) { return t.createdAt && t.createdAt.toDate ? t.createdAt.toDate().getTime() : 0; }
+function invoiceTime(i) {
+  if (i.createdAt && i.createdAt.toDate) return i.createdAt.toDate().getTime();
+  return i.issueDate ? new Date(i.issueDate).getTime() : 0;
+}
+
+// ── Public entry ──────────────────────────
 export async function render() {
-  destroyCharts();
   const container = document.getElementById('view-dashboard');
   container.innerHTML = '<div class="loading">Loading dashboard...</div>';
 
-  const [tickets, invoices, contacts] = await Promise.all([
-    queryDocuments('tickets', 'createdAt', 'desc').catch(() => []),
-    queryDocuments('invoices_crm', 'createdAt', 'desc').catch(() => []),
-    queryDocuments('contacts', 'createdAt', 'desc').catch(() => []),
-  ]);
+  cleanup();
 
-  // ── Metrics ──
+  const tid = getTenantId();
+  if (!tid) { container.innerHTML = '<p style="color:var(--danger);padding:1rem;">No tenant context.</p>'; return; }
+
+  // Ensure Chart.js is loaded before the first live snapshot fires.
+  try { await ensureChart(); } catch (err) { console.error('Chart load failed:', err); }
+
+  // Live listeners: Firestore pushes updates as data changes.
+  const onTickets = (snap) => { tickets = snap.docs.map(d => ({ id: d.id, ...d.data() })); ready.tickets = true; scheduleRedraw(); };
+  const onInvoices = (snap) => { invoices = snap.docs.map(d => ({ id: d.id, ...d.data() })); ready.invoices = true; scheduleRedraw(); };
+  const onContacts = (snap) => { contacts = snap.docs.map(d => ({ id: d.id, ...d.data() })); ready.contacts = true; scheduleRedraw(); };
+
+  try {
+    unsubs.push(onSnapshot(query(collection(db, `tenants/${tid}/tickets`), orderBy('createdAt', 'desc')), onTickets, (e) => console.error('tickets snap:', e)));
+    unsubs.push(onSnapshot(query(collection(db, `tenants/${tid}/invoices_crm`), orderBy('createdAt', 'desc')), onInvoices, (e) => console.error('invoices snap:', e)));
+    unsubs.push(onSnapshot(query(collection(db, `tenants/${tid}/contacts`), orderBy('createdAt', 'desc')), onContacts, (e) => console.error('contacts snap:', e)));
+  } catch (err) {
+    console.error('Dashboard listeners failed:', err);
+    container.innerHTML = '<p style="color:var(--danger);padding:1rem;">Failed to load live data.</p>';
+  }
+}
+
+// Debounce: snapshots often fire in bursts — wait 80ms then redraw once.
+function scheduleRedraw() {
+  if (!ready.tickets || !ready.invoices || !ready.contacts) {
+    // Render early with whatever is ready — the next update completes the picture.
+    if (redrawTimer) return;
+    redrawTimer = setTimeout(() => { redrawTimer = null; redraw(); }, 250);
+    return;
+  }
+  if (redrawTimer) clearTimeout(redrawTimer);
+  redrawTimer = setTimeout(() => { redrawTimer = null; redraw(); }, 80);
+}
+
+// ── Main render ───────────────────────────
+function redraw() {
+  const container = document.getElementById('view-dashboard');
+  if (!container) return;
+
   const now = Date.now();
-  const DAY = 86400000;
   const start30 = now - 30 * DAY;
   const start60 = now - 60 * DAY;
   const start7 = now - 7 * DAY;
-  const start14 = now - 14 * DAY;
-
-  const ticketTime = t => t.createdAt && t.createdAt.toDate ? t.createdAt.toDate().getTime() : 0;
-  const invoiceTime = i => {
-    if (i.createdAt && i.createdAt.toDate) return i.createdAt.toDate().getTime();
-    return i.issueDate ? new Date(i.issueDate).getTime() : 0;
-  };
 
   const paidInvoices = invoices.filter(i => i.status === 'paid');
-  const revenue30 = paidInvoices.filter(i => invoiceTime(i) >= start30).reduce((s, i) => s + (Number(i.total) || 0), 0);
-  const revenuePrev30 = paidInvoices.filter(i => invoiceTime(i) >= start60 && invoiceTime(i) < start30).reduce((s, i) => s + (Number(i.total) || 0), 0);
+  const paid30 = paidInvoices.filter(i => invoiceTime(i) >= start30);
+  const paidPrev30 = paidInvoices.filter(i => invoiceTime(i) >= start60 && invoiceTime(i) < start30);
+  const revenue30 = paid30.reduce((s, i) => s + (Number(i.total) || 0), 0);
+  const revenuePrev30 = paidPrev30.reduce((s, i) => s + (Number(i.total) || 0), 0);
   const revenueDelta = revenuePrev30 > 0 ? ((revenue30 - revenuePrev30) / revenuePrev30) * 100 : (revenue30 > 0 ? 100 : 0);
 
   const outstanding = invoices
@@ -68,134 +130,131 @@ export async function render() {
   const vertical = getVertical();
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  container.innerHTML = `
-    <style>
-      .dash-hero {
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong, #2563eb) 100%);
-        color: #fff;
-        border-radius: 16px;
-        padding: 2rem 2.5rem;
-        margin-bottom: 1.5rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.06);
-      }
-      .dash-hero h1 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 400; opacity: 0.85; margin: 0; }
-      .dash-hero h2 { font-family: var(--font-display); font-size: 2rem; font-weight: 600; margin: 0.15rem 0 0.35rem; letter-spacing: -0.01em; }
-      .dash-hero .meta { font-size: 0.9rem; opacity: 0.82; }
-      .dash-hero .status-chip {
-        background: rgba(255,255,255,0.16);
-        backdrop-filter: blur(10px);
-        padding: 0.35rem 0.9rem;
-        border-radius: 999px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        text-transform: capitalize;
-      }
-      .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-      }
-      .kpi {
-        background: #fff;
-        border: 1px solid var(--border, #e2e8f0);
-        border-radius: 14px;
-        padding: 1.25rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      .kpi:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
-      .kpi-label { font-size: 0.8rem; color: var(--gray-dark, #64748b); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-      .kpi-value { font-family: var(--font-display); font-size: 2rem; font-weight: 600; margin: 0.35rem 0 0.2rem; letter-spacing: -0.01em; color: var(--black, #0f172a); }
-      .kpi-delta { font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 500; }
-      .kpi-delta.up { background: rgba(5, 150, 105, 0.1); color: #059669; }
-      .kpi-delta.down { background: rgba(220, 38, 38, 0.08); color: #dc2626; }
-      .kpi-delta.flat { background: rgba(100, 116, 139, 0.1); color: #64748b; }
-      .kpi-sub { font-size: 0.8rem; color: var(--gray-dark, #64748b); margin-top: 0.25rem; }
-      .chart-row {
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-      }
-      @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
-      .chart-card {
-        background: #fff;
-        border: 1px solid var(--border, #e2e8f0);
-        border-radius: 14px;
-        padding: 1.25rem;
-      }
-      .chart-card h3 { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; margin: 0 0 0.75rem; letter-spacing: -0.005em; }
-      .chart-canvas-wrap { position: relative; height: 240px; }
-      .chart-canvas-wrap.tall { height: 280px; }
-      .activity-feed { display: flex; flex-direction: column; gap: 0.5rem; max-height: 280px; overflow-y: auto; }
-      .activity-row {
-        display: flex; gap: 0.75rem; align-items: flex-start;
-        padding: 0.5rem 0; border-bottom: 1px solid var(--border, #f1f5f9);
-      }
-      .activity-row:last-child { border-bottom: none; }
-      .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 0.45rem; flex-shrink: 0; }
-      .activity-dot.completed { background: #059669; }
-      .activity-text { font-size: 0.85rem; line-height: 1.35; flex: 1; min-width: 0; }
-      .activity-text .meta { color: var(--gray-dark, #64748b); font-size: 0.75rem; margin-top: 0.15rem; }
-    </style>
+  // 30-day bucketing for revenue chart
+  const buckets = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now - i * DAY);
+    d.setHours(0, 0, 0, 0);
+    buckets.push({ ts: d.getTime(), iso: isoDate(d), label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), total: 0, count: 0 });
+  }
+  paid30.forEach(inv => {
+    const t = invoiceTime(inv);
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    const bucket = buckets.find(b => b.ts === d.getTime());
+    if (bucket) { bucket.total += Number(inv.total) || 0; bucket.count += 1; }
+  });
 
+  // Status breakdown (open tickets)
+  const labelMap = {
+    checked_in: 'Checked In', diagnosed: 'Diagnosed',
+    awaiting_parts: 'Awaiting Parts', in_repair: 'In Repair',
+    qc: 'Quality Check', ready: 'Ready', completed: 'Completed'
+  };
+  const statusCounts = {};
+  tickets.forEach(t => {
+    const s = t.status || 'unknown';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+  const statusEntries = Object.entries(statusCounts).filter(([, v]) => v > 0);
+
+  // Top devices (30d)
+  const deviceCounts = {};
+  tickets30.forEach(t => {
+    const d = (t.deviceType || 'Unknown').trim();
+    if (!d) return;
+    deviceCounts[d] = (deviceCounts[d] || 0) + 1;
+  });
+  const topDevices = Object.entries(deviceCounts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+
+  // Build HTML
+  container.innerHTML = `
+    <style>${DASH_CSS}</style>
     <div class="dash-hero">
       <div>
         <h1>Welcome back</h1>
         <h2>${escapeHtml(tenant.companyName || 'Your business')}</h2>
         <div class="meta">${escapeHtml(today)} · ${escapeHtml(pkg ? pkg.name : '—')}${vertical ? ' · ' + escapeHtml(vertical.name) : ''} · ${openTicketCount} open ticket${openTicketCount === 1 ? '' : 's'}</div>
       </div>
-      <div class="status-chip">${escapeHtml(tenant.status || 'active')}</div>
+      <div class="hero-right">
+        <div class="live-dot" title="Live — updates as data changes"></div>
+        <div class="status-chip">${escapeHtml(tenant.status || 'active')}</div>
+      </div>
     </div>
 
     <div class="kpi-grid">
-      ${kpiCard('Revenue (30d)', formatCurrency(revenue30), revenueDelta, `${formatCurrency(revenue30 / 30)}/day avg`)}
-      ${kpiCard('Tickets (30d)', tickets30.length.toString(), ticketDelta, `${openTicketCount} still open`)}
-      ${kpiCard('Active Customers', activeCustomers.toString(), customerDelta, `${contacts.length} total`)}
-      ${kpiCard('Outstanding', formatCurrency(outstanding), null, `${outstandingCount} open invoice${outstandingCount === 1 ? '' : 's'}`, outstanding > 0 ? 'warn' : 'ok')}
+      ${kpiCard('revenue', 'Revenue (30d)', formatCurrency(revenue30), revenueDelta, `${paid30.length} paid invoice${paid30.length === 1 ? '' : 's'}`)}
+      ${kpiCard('tickets', 'Tickets (30d)', tickets30.length.toString(), ticketDelta, `${openTicketCount} still open`)}
+      ${kpiCard('customers', 'Active Customers', activeCustomers.toString(), customerDelta, `${contacts.length} total`)}
+      ${kpiCard('outstanding', 'Outstanding', formatCurrency(outstanding), null, `${outstandingCount} open invoice${outstandingCount === 1 ? '' : 's'}`, outstanding > 0 ? 'warn' : 'ok')}
     </div>
 
     <div class="chart-row">
       <div class="chart-card">
-        <h3>Revenue (last 30 days)</h3>
+        <div class="chart-head">
+          <h3>Revenue (last 30 days)</h3>
+          <span class="chart-hint">Click a point to view invoices from that day</span>
+        </div>
         <div class="chart-canvas-wrap"><canvas id="revenueChart"></canvas></div>
       </div>
       <div class="chart-card">
-        <h3>Tickets by Status</h3>
+        <div class="chart-head">
+          <h3>Tickets by Status</h3>
+          <span class="chart-hint">Click a slice to filter tickets</span>
+        </div>
         <div class="chart-canvas-wrap"><canvas id="statusChart"></canvas></div>
       </div>
     </div>
 
     <div class="chart-row">
       <div class="chart-card">
-        <h3>Top Devices (30d)</h3>
+        <div class="chart-head">
+          <h3>Top Devices (30d)</h3>
+          <span class="chart-hint">Click a bar to see those tickets</span>
+        </div>
         <div class="chart-canvas-wrap tall"><canvas id="devicesChart"></canvas></div>
       </div>
       <div class="chart-card">
-        <h3>Recent Activity</h3>
+        <div class="chart-head">
+          <h3>Recent Activity</h3>
+          <span class="chart-hint">Click any row to open</span>
+        </div>
         <div class="activity-feed" id="activityFeed"></div>
       </div>
     </div>
+
+    <div id="dashTooltip" class="dash-tooltip" style="display:none;"></div>
   `;
 
-  // Populate activity feed
+  // KPI click handlers — drill down to filtered view
+  container.querySelector('[data-kpi="revenue"]')?.addEventListener('click', () => {
+    requestInvoiceFilter({ status: 'paid', from: isoDate(start30), to: isoDate(now) });
+    window.location.hash = 'invoicing';
+  });
+  container.querySelector('[data-kpi="tickets"]')?.addEventListener('click', () => {
+    requestTicketFilter({ from: isoDate(start30), to: isoDate(now) });
+    window.location.hash = 'tickets';
+  });
+  container.querySelector('[data-kpi="customers"]')?.addEventListener('click', () => {
+    window.location.hash = 'contacts';
+  });
+  container.querySelector('[data-kpi="outstanding"]')?.addEventListener('click', () => {
+    requestInvoiceFilter({ status: 'outstanding' });
+    window.location.hash = 'invoicing';
+  });
+
   renderActivityFeed(tickets, invoices);
 
-  // Draw charts
-  try {
-    await ensureChart();
-    drawRevenueChart(paidInvoices, invoiceTime, start30);
-    drawStatusChart(tickets);
-    drawDevicesChart(tickets30);
-  } catch (err) {
-    console.error('Chart render failed:', err);
+  destroyCharts();
+  if (chartModule) {
+    drawRevenueChart(buckets);
+    drawStatusChart(statusEntries, labelMap);
+    drawDevicesChart(topDevices);
   }
 }
 
-function kpiCard(label, value, delta, sub, tone) {
+// ── KPI card ──────────────────────────────
+function kpiCard(key, label, value, delta, sub, tone) {
   let deltaHtml = '';
   if (delta != null) {
     const cls = delta > 1 ? 'up' : delta < -1 ? 'down' : 'flat';
@@ -205,7 +264,7 @@ function kpiCard(label, value, delta, sub, tone) {
   }
   const valueColor = tone === 'warn' ? 'style="color:#d97706;"' : '';
   return `
-    <div class="kpi">
+    <div class="kpi" data-kpi="${escapeHtml(key)}" role="button" tabindex="0">
       <div class="kpi-label">${escapeHtml(label)}</div>
       <div class="kpi-value" ${valueColor}>${escapeHtml(value)}</div>
       ${deltaHtml}
@@ -214,30 +273,12 @@ function kpiCard(label, value, delta, sub, tone) {
   `;
 }
 
-function drawRevenueChart(paidInvoices, invoiceTime, start30) {
+// ── Charts ────────────────────────────────
+function drawRevenueChart(buckets) {
   const canvas = document.getElementById('revenueChart');
   if (!canvas) return;
 
-  // Bucket by day
-  const DAY = 86400000;
-  const buckets = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(Date.now() - i * DAY);
-    d.setHours(0, 0, 0, 0);
-    buckets.push({ ts: d.getTime(), label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), total: 0 });
-  }
-  paidInvoices.forEach(inv => {
-    const t = invoiceTime(inv);
-    if (t < start30) return;
-    const d = new Date(t);
-    d.setHours(0, 0, 0, 0);
-    const bucket = buckets.find(b => b.ts === d.getTime());
-    if (bucket) bucket.total += Number(inv.total) || 0;
-  });
-
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#4F7BF7';
-  const accentDim = hexToRgba(accent, 0.15);
-
+  const accent = currentAccent();
   const ctx = canvas.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, 240);
   gradient.addColorStop(0, hexToRgba(accent, 0.3));
@@ -265,52 +306,57 @@ function drawRevenueChart(paidInvoices, invoiceTime, start30) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#0f172a',
-          padding: 10,
-          cornerRadius: 8,
-          callbacks: {
-            label: (ctx) => ' ' + formatCurrency(ctx.parsed.y),
-          }
+          enabled: false,
+          external: (ctx) => externalTooltip(ctx, (dataIndex) => {
+            const b = buckets[dataIndex];
+            if (!b) return null;
+            return {
+              title: b.label,
+              rows: [
+                { label: 'Revenue', value: formatCurrency(b.total), bold: true },
+                { label: 'Invoices', value: b.count.toString() },
+              ],
+              hint: b.count > 0 ? 'Click to open invoices from this day' : '',
+            };
+          }),
         },
       },
       scales: {
         x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 10 }, color: '#94a3b8' } },
         y: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { font: { size: 10 }, color: '#94a3b8', callback: (v) => '$' + v } }
       },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const b = buckets[idx];
+        if (!b || b.count === 0) return;
+        requestInvoiceFilter({ status: 'paid', from: b.iso, to: b.iso });
+        window.location.hash = 'invoicing';
+      },
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
     }
   });
   activeCharts.push(chart);
 }
 
-function drawStatusChart(tickets) {
+function drawStatusChart(entries, labelMap) {
   const canvas = document.getElementById('statusChart');
   if (!canvas) return;
-
-  const labelMap = {
-    checked_in: 'Checked In', diagnosed: 'Diagnosed',
-    awaiting_parts: 'Awaiting Parts', in_repair: 'In Repair',
-    qc: 'Quality Check', ready: 'Ready', completed: 'Completed'
-  };
-  const counts = {};
-  tickets.forEach(t => {
-    const s = t.status || 'unknown';
-    counts[s] = (counts[s] || 0) + 1;
-  });
-  const entries = Object.entries(counts).filter(([, v]) => v > 0);
 
   if (entries.length === 0) {
     canvas.parentElement.innerHTML = '<p style="color:var(--gray);font-size:0.9rem;text-align:center;padding:3rem 0;">No tickets yet.</p>';
     return;
   }
 
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#4F7BF7';
-  const palette = [
-    accent, lighten(accent, 0.2), lighten(accent, 0.4),
-    '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2'
-  ];
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  const accent = currentAccent();
+  const palette = [accent, lighten(accent, 0.2), lighten(accent, 0.4), '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2'];
 
   const chart = new chartModule.default(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -328,40 +374,57 @@ function drawStatusChart(tickets) {
       cutout: '65%',
       plugins: {
         legend: { position: 'right', labels: { boxWidth: 10, padding: 10, font: { size: 11 } } },
-        tooltip: { backgroundColor: '#0f172a', padding: 10, cornerRadius: 8 },
+        tooltip: {
+          enabled: false,
+          external: (ctx) => externalTooltip(ctx, (dataIndex) => {
+            const [status, count] = entries[dataIndex];
+            const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+            return {
+              title: labelMap[status] || status,
+              rows: [
+                { label: 'Tickets', value: count.toString(), bold: true },
+                { label: 'Share', value: `${pct}%` },
+              ],
+              hint: 'Click to view tickets',
+            };
+          }),
+        },
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const [status] = entries[elements[0].index];
+        requestTicketFilter({ status });
+        window.location.hash = 'tickets';
+      },
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
       },
     }
   });
   activeCharts.push(chart);
 }
 
-function drawDevicesChart(tickets30) {
+function drawDevicesChart(topDevices) {
   const canvas = document.getElementById('devicesChart');
   if (!canvas) return;
 
-  const counts = {};
-  tickets30.forEach(t => {
-    const d = (t.deviceType || 'Unknown').trim();
-    if (!d) return;
-    counts[d] = (counts[d] || 0) + 1;
-  });
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 7);
-  if (sorted.length === 0) {
+  if (topDevices.length === 0) {
     canvas.parentElement.innerHTML = '<p style="color:var(--gray);font-size:0.9rem;text-align:center;padding:3rem 0;">No tickets in the last 30 days.</p>';
     return;
   }
 
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#4F7BF7';
+  const accent = currentAccent();
 
   const chart = new chartModule.default(canvas.getContext('2d'), {
     type: 'bar',
     data: {
-      labels: sorted.map(([d]) => d),
+      labels: topDevices.map(([d]) => d),
       datasets: [{
-        data: sorted.map(([, v]) => v),
+        data: topDevices.map(([, v]) => v),
         backgroundColor: accent,
         borderRadius: 6,
         barThickness: 20,
+        hoverBackgroundColor: lighten(accent, 0.15),
       }]
     },
     options: {
@@ -370,44 +433,96 @@ function drawDevicesChart(tickets30) {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { backgroundColor: '#0f172a', padding: 10, cornerRadius: 8 },
+        tooltip: {
+          enabled: false,
+          external: (ctx) => externalTooltip(ctx, (dataIndex) => {
+            const [device, count] = topDevices[dataIndex];
+            return {
+              title: device,
+              rows: [
+                { label: 'Tickets (30d)', value: count.toString(), bold: true },
+              ],
+              hint: 'Click to filter tickets by this device',
+            };
+          }),
+        },
       },
       scales: {
         x: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { font: { size: 10 }, color: '#94a3b8', stepSize: 1 } },
         y: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#475569' } }
-      }
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const [device] = topDevices[elements[0].index];
+        requestTicketFilter({ deviceType: device });
+        window.location.hash = 'tickets';
+      },
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
     }
   });
   activeCharts.push(chart);
 }
 
+// ── External rich tooltip ─────────────────
+function externalTooltip(context, getContent) {
+  const tipEl = document.getElementById('dashTooltip');
+  if (!tipEl) return;
+  const tip = context.tooltip;
+  if (tip.opacity === 0) { tipEl.style.display = 'none'; return; }
+
+  const dataIndex = tip.dataPoints && tip.dataPoints[0] ? tip.dataPoints[0].dataIndex : 0;
+  const content = getContent(dataIndex);
+  if (!content) { tipEl.style.display = 'none'; return; }
+
+  const rows = content.rows.map(r =>
+    `<div class="dash-tip-row"><span>${escapeHtml(r.label)}</span><strong style="${r.bold ? 'font-size:1.05rem;' : ''}">${escapeHtml(r.value)}</strong></div>`
+  ).join('');
+  const hint = content.hint ? `<div class="dash-tip-hint">${escapeHtml(content.hint)}</div>` : '';
+  tipEl.innerHTML = `<div class="dash-tip-title">${escapeHtml(content.title)}</div>${rows}${hint}`;
+
+  const canvas = context.chart.canvas;
+  const rect = canvas.getBoundingClientRect();
+  tipEl.style.display = 'block';
+
+  // Position: centered above the point, clamped to viewport edges.
+  const tipRect = tipEl.getBoundingClientRect();
+  let left = rect.left + window.scrollX + tip.caretX - (tipRect.width / 2);
+  let top = rect.top + window.scrollY + tip.caretY - tipRect.height - 12;
+  if (top < window.scrollY + 8) top = rect.top + window.scrollY + tip.caretY + 14;
+  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+  tipEl.style.left = left + 'px';
+  tipEl.style.top = top + 'px';
+}
+
+// ── Activity feed ─────────────────────────
 function renderActivityFeed(tickets, invoices) {
   const feed = document.getElementById('activityFeed');
   if (!feed) return;
 
-  // Combine ticket + invoice events, sort by time desc
   const events = [];
   tickets.forEach(t => {
     if (t.createdAt) events.push({
-      type: 'ticket_created',
+      kind: 'ticket', id: t.id,
       text: `<strong>${escapeHtml(t.ticketNumber || '')}</strong> checked in — ${escapeHtml(t.deviceType || 'device')} for ${escapeHtml(t.customerName || 'customer')}`,
       time: t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt),
-      status: 'new'
+      tone: 'new'
     });
     if (t.completedAt) events.push({
-      type: 'ticket_completed',
+      kind: 'ticket', id: t.id,
       text: `<strong>${escapeHtml(t.ticketNumber || '')}</strong> completed — ${escapeHtml(t.deviceType || 'device')}`,
       time: t.completedAt.toDate ? t.completedAt.toDate() : new Date(t.completedAt),
-      status: 'completed'
+      tone: 'completed'
     });
   });
   invoices.forEach(i => {
     if (i.createdAt && i.createdAt.toDate) {
       events.push({
-        type: 'invoice',
-        text: `Invoice <strong>${escapeHtml(i.invoiceNumber || '')}</strong> created — ${formatCurrency(i.total)}`,
+        kind: 'invoice', id: i.id,
+        text: `Invoice <strong>${escapeHtml(i.invoiceNumber || '')}</strong> ${i.status === 'paid' ? 'paid' : 'created'} — ${formatCurrency(i.total)}`,
         time: i.createdAt.toDate(),
-        status: i.status === 'paid' ? 'completed' : 'new'
+        tone: i.status === 'paid' ? 'completed' : 'new'
       });
     }
   });
@@ -420,15 +535,36 @@ function renderActivityFeed(tickets, invoices) {
     return;
   }
 
-  feed.innerHTML = top.map(e => `
-    <div class="activity-row">
-      <div class="activity-dot ${e.status === 'completed' ? 'completed' : ''}"></div>
+  feed.innerHTML = top.map((e, i) => `
+    <div class="activity-row" data-idx="${i}">
+      <div class="activity-dot ${e.tone === 'completed' ? 'completed' : ''}"></div>
       <div class="activity-text">
         <div>${e.text}</div>
         <div class="meta">${relativeTime(e.time)}</div>
       </div>
     </div>
   `).join('');
+
+  feed.querySelectorAll('.activity-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const idx = Number(row.dataset.idx);
+      const ev = top[idx];
+      if (!ev) return;
+      if (ev.kind === 'ticket') {
+        // Navigate to tickets and let the user find it via normal list (or wire requestTicket)
+        import('../repair/tickets.js').then(m => m.requestTicket(ev.id));
+        window.location.hash = 'tickets';
+      } else if (ev.kind === 'invoice') {
+        requestInvoice(ev.id);
+        window.location.hash = 'invoicing';
+      }
+    });
+  });
+}
+
+// ── Utility ───────────────────────────────
+function currentAccent() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#4F7BF7';
 }
 
 function relativeTime(d) {
@@ -477,3 +613,122 @@ function lighten(hex, amount) {
   const nb = Math.round(b + (255 - b) * amount);
   return '#' + [nr, ng, nb].map(v => v.toString(16).padStart(2, '0')).join('');
 }
+
+// ── Styles ────────────────────────────────
+const DASH_CSS = `
+  .dash-hero {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong, #2563eb) 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.06);
+  }
+  .dash-hero h1 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 400; opacity: 0.85; margin: 0; }
+  .dash-hero h2 { font-family: var(--font-display); font-size: 2rem; font-weight: 600; margin: 0.15rem 0 0.35rem; letter-spacing: -0.01em; }
+  .dash-hero .meta { font-size: 0.9rem; opacity: 0.82; }
+  .dash-hero .hero-right { display: flex; align-items: center; gap: 0.75rem; }
+  .dash-hero .status-chip {
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(10px);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+  .live-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+    animation: livePulse 2s infinite;
+  }
+  @keyframes livePulse {
+    0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .kpi {
+    background: #fff;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 14px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    position: relative;
+  }
+  .kpi:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); border-color: var(--accent); }
+  .kpi::after {
+    content: "→"; position: absolute; top: 1rem; right: 1rem;
+    color: var(--accent); opacity: 0; transition: opacity 0.15s ease;
+    font-size: 1.1rem;
+  }
+  .kpi:hover::after { opacity: 0.8; }
+  .kpi:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .kpi-label { font-size: 0.8rem; color: var(--gray-dark, #64748b); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .kpi-value { font-family: var(--font-display); font-size: 2rem; font-weight: 600; margin: 0.35rem 0 0.2rem; letter-spacing: -0.01em; color: var(--black, #0f172a); }
+  .kpi-delta { font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 500; }
+  .kpi-delta.up { background: rgba(5, 150, 105, 0.1); color: #059669; }
+  .kpi-delta.down { background: rgba(220, 38, 38, 0.08); color: #dc2626; }
+  .kpi-delta.flat { background: rgba(100, 116, 139, 0.1); color: #64748b; }
+  .kpi-sub { font-size: 0.8rem; color: var(--gray-dark, #64748b); margin-top: 0.25rem; }
+  .chart-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: #fff;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 14px;
+    padding: 1.25rem;
+  }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
+  .chart-card h3 { font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; margin: 0; letter-spacing: -0.005em; }
+  .chart-hint { font-size: 0.7rem; color: var(--gray-dark, #94a3b8); text-transform: uppercase; letter-spacing: 0.05em; }
+  .chart-canvas-wrap { position: relative; height: 240px; }
+  .chart-canvas-wrap.tall { height: 280px; }
+  .activity-feed { display: flex; flex-direction: column; max-height: 280px; overflow-y: auto; }
+  .activity-row {
+    display: flex; gap: 0.75rem; align-items: flex-start;
+    padding: 0.5rem 0.35rem; border-bottom: 1px solid var(--border, #f1f5f9);
+    cursor: pointer; border-radius: 6px; transition: background 0.1s ease;
+  }
+  .activity-row:hover { background: var(--accent-dim, rgba(79,123,247,0.05)); }
+  .activity-row:last-child { border-bottom: none; }
+  .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 0.45rem; flex-shrink: 0; }
+  .activity-dot.completed { background: #059669; }
+  .activity-text { font-size: 0.85rem; line-height: 1.35; flex: 1; min-width: 0; }
+  .activity-text .meta { color: var(--gray-dark, #64748b); font-size: 0.75rem; margin-top: 0.15rem; }
+  .dash-tooltip {
+    position: absolute;
+    background: #0f172a;
+    color: #fff;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    min-width: 180px;
+    max-width: 260px;
+    box-shadow: 0 16px 40px rgba(15,23,42,0.25);
+    pointer-events: none;
+    z-index: 1000;
+    transition: opacity 0.1s ease;
+  }
+  .dash-tip-title { font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem; color: #fff; }
+  .dash-tip-row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0; border-top: 1px solid rgba(255,255,255,0.08); }
+  .dash-tip-row:first-of-type { border-top: none; padding-top: 0; }
+  .dash-tip-row span { color: rgba(255,255,255,0.7); }
+  .dash-tip-row strong { color: #fff; }
+  .dash-tip-hint { margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: rgba(255,255,255,0.7); font-style: italic; }
+`;

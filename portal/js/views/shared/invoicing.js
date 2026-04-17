@@ -4,11 +4,21 @@ import { canWrite, gateWrite } from '../../tenant-context.js';
 let invoices = [];
 let currentPage = 'list';
 let pendingDeepLinkId = null;
+let pendingFilter = null;
+let activeStatusFilter = 'all'; // all | draft | sent | paid | outstanding | void | cancelled | refunded
+let activeDateFrom = '';
+let activeDateTo = '';
 
 // Called by other views (e.g., customer profile) to request that we open a
 // specific invoice after navigating to #invoicing.
 export function requestInvoice(invoiceId) {
   pendingDeepLinkId = invoiceId;
+}
+
+// Called by the dashboard to navigate in with a specific set of filters.
+// opts: { status, from, to }
+export function requestInvoiceFilter(opts) {
+  pendingFilter = opts || null;
 }
 
 export function init() {}
@@ -21,6 +31,12 @@ export async function render() {
     const inv = invoices.find(i => i.id === id);
     if (inv) return showDetail(inv);
   }
+  if (pendingFilter) {
+    const f = pendingFilter; pendingFilter = null;
+    activeStatusFilter = f.status || 'all';
+    activeDateFrom = f.from || '';
+    activeDateTo = f.to || '';
+  }
   if (currentPage === 'list') renderList();
 }
 
@@ -30,9 +46,20 @@ function renderList() {
   const container = document.getElementById('view-invoicing');
   container.innerHTML = '';
 
+  const statusOptions = ['all', 'outstanding', 'draft', 'sent', 'paid', 'overdue', 'void', 'cancelled', 'refunded'];
+  const hasActiveFilter = activeStatusFilter !== 'all' || activeDateFrom || activeDateTo;
+
   const topbar = document.createElement('div');
   topbar.className = 'view-topbar';
+  topbar.style.cssText = 'flex-wrap:wrap;gap:0.5rem;';
   topbar.innerHTML = `
+    <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:var(--gray);">
+      From <input type="date" id="invDateFrom" value="${escapeHtml(activeDateFrom)}" style="padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:6px;">
+    </label>
+    <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:var(--gray);">
+      To <input type="date" id="invDateTo" value="${escapeHtml(activeDateTo)}" style="padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:6px;">
+    </label>
+    ${hasActiveFilter ? '<button class="btn btn-ghost btn-sm" id="clearInvFilters">Clear</button>' : ''}
     ${canWrite() ? `<button class="btn btn-primary" id="addInvoiceBtn">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       New Invoice
@@ -40,21 +67,69 @@ function renderList() {
   `;
   container.appendChild(topbar);
 
+  const tabs = document.createElement('div');
+  tabs.style.cssText = 'display:flex;gap:0.25rem;margin-bottom:1rem;flex-wrap:wrap;';
+  statusOptions.forEach(status => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm' + (activeStatusFilter === status ? ' active' : '');
+    if (activeStatusFilter === status) btn.style.cssText = 'background:var(--accent);color:white;';
+    btn.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    btn.addEventListener('click', () => { activeStatusFilter = status; renderList(); });
+    tabs.appendChild(btn);
+  });
+  container.appendChild(tabs);
+
   const addBtn = topbar.querySelector('#addInvoiceBtn');
   if (addBtn) addBtn.addEventListener('click', gateWrite(() => openCreateForm()));
+
+  topbar.querySelector('#invDateFrom').addEventListener('change', e => { activeDateFrom = e.target.value; renderList(); });
+  topbar.querySelector('#invDateTo').addEventListener('change', e => { activeDateTo = e.target.value; renderList(); });
+  const clearBtn = topbar.querySelector('#clearInvFilters');
+  if (clearBtn) clearBtn.addEventListener('click', () => { activeStatusFilter = 'all'; activeDateFrom = ''; activeDateTo = ''; renderList(); });
+
+  // Apply filters
+  const fromMs = activeDateFrom ? new Date(activeDateFrom + 'T00:00:00').getTime() : null;
+  const toMs = activeDateTo ? new Date(activeDateTo + 'T23:59:59').getTime() : null;
+  const invTime = (i) => {
+    if (i.createdAt && i.createdAt.toDate) return i.createdAt.toDate().getTime();
+    return i.issueDate ? new Date(i.issueDate).getTime() : 0;
+  };
+  let filtered = invoices;
+  if (activeStatusFilter === 'outstanding') {
+    filtered = filtered.filter(i => ['draft', 'sent', 'overdue'].includes(i.status));
+  } else if (activeStatusFilter !== 'all') {
+    filtered = filtered.filter(i => (i.status || 'draft') === activeStatusFilter);
+  }
+  if (fromMs || toMs) {
+    filtered = filtered.filter(i => {
+      const t = invTime(i);
+      if (!t) return false;
+      if (fromMs && t < fromMs) return false;
+      if (toMs && t > toMs) return false;
+      return true;
+    });
+  }
 
   const wrapper = document.createElement('div');
   wrapper.className = 'view-content';
 
-  if (invoices.length === 0) {
-    wrapper.innerHTML = '<div class="empty-state"><div class="empty-title">No invoices yet</div><p class="empty-description">Create your first invoice to start billing clients.</p></div>';
+  if (filtered.length === 0) {
+    wrapper.innerHTML = invoices.length === 0
+      ? '<div class="empty-state"><div class="empty-title">No invoices yet</div><p class="empty-description">Create your first invoice to start billing clients.</p></div>'
+      : '<div class="empty-state"><p class="empty-description">No invoices match your filters.</p></div>';
   } else {
+    const total = filtered.reduce((s, i) => s + (Number(i.total) || 0), 0);
+    const summary = document.createElement('div');
+    summary.style.cssText = 'font-size:0.85rem;color:var(--gray);margin-bottom:0.5rem;';
+    summary.innerHTML = `<strong>${filtered.length}</strong> invoice${filtered.length === 1 ? '' : 's'} · <strong>${formatCurrency(total)}</strong> total`;
+    wrapper.appendChild(summary);
+
     const table = document.createElement('table');
     table.className = 'data-table';
     table.innerHTML = '<thead><tr><th>Invoice #</th><th>Client</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>';
     const tbody = document.createElement('tbody');
 
-    invoices.forEach(inv => {
+    filtered.forEach(inv => {
       const statusClass = inv.status === 'paid' ? 'badge-success' : inv.status === 'sent' ? 'badge-info' : inv.status === 'overdue' ? 'badge-danger' : 'badge-default';
       const tr = document.createElement('tr');
       tr.className = 'clickable';

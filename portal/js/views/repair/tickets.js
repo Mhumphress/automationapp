@@ -20,16 +20,26 @@ const STATUS_ORDER = ['checked_in', 'diagnosed', 'awaiting_parts', 'in_repair', 
 let tickets = [];
 let activeStatusFilter = 'all';
 let activeSearch = '';
+let activeDateFrom = '';
+let activeDateTo = '';
+let activeDeviceFilter = '';
 let currentPage = 'list';
 
 export function init() {}
 
 let pendingDeepLinkId = null;
+let pendingFilter = null;
 
 // Called by other views (e.g., customer profile) to request that we open a
 // specific ticket's detail view after navigating to #tickets.
 export function requestTicket(ticketId) {
   pendingDeepLinkId = ticketId;
+}
+
+// Called by the dashboard to navigate in with a specific set of filters.
+// opts: { status, from, to, deviceType }
+export function requestTicketFilter(opts) {
+  pendingFilter = opts || null;
 }
 
 export async function render() {
@@ -38,6 +48,14 @@ export async function render() {
     const id = pendingDeepLinkId;
     pendingDeepLinkId = null;
     return showDetail(id);
+  }
+  if (pendingFilter) {
+    const f = pendingFilter; pendingFilter = null;
+    activeStatusFilter = f.status || 'all';
+    activeDateFrom = f.from || '';
+    activeDateTo = f.to || '';
+    activeDeviceFilter = f.deviceType || '';
+    activeSearch = '';
   }
   if (currentPage === 'list') renderList();
 }
@@ -55,13 +73,31 @@ function renderList() {
   const container = document.getElementById('view-tickets');
   container.innerHTML = '';
 
+  const hasActiveFilter = activeDateFrom || activeDateTo || activeDeviceFilter;
+
   const topbar = document.createElement('div');
   topbar.className = 'view-topbar';
+  topbar.style.cssText = 'flex-wrap:wrap;gap:0.5rem;';
   topbar.innerHTML = `
-    <input type="search" id="ticketsSearch" placeholder="Search by ticket #, customer, device..." style="flex:1;max-width:360px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;">
+    <input type="search" id="ticketsSearch" placeholder="Search by ticket #, customer, device..." style="flex:1;min-width:240px;max-width:360px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;">
+    <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:var(--gray);">
+      From <input type="date" id="ticketsDateFrom" value="${escapeHtml(activeDateFrom)}" style="padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:6px;">
+    </label>
+    <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:var(--gray);">
+      To <input type="date" id="ticketsDateTo" value="${escapeHtml(activeDateTo)}" style="padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:6px;">
+    </label>
+    ${hasActiveFilter ? '<button class="btn btn-ghost btn-sm" id="clearTicketFilters">Clear Filters</button>' : ''}
     ${canWrite() && hasFeature('checkin') ? `<a class="btn btn-primary" href="#checkin">+ Check In</a>` : ''}
   `;
   container.appendChild(topbar);
+
+  if (activeDeviceFilter) {
+    const pill = document.createElement('div');
+    pill.style.cssText = 'display:inline-flex;align-items:center;gap:0.5rem;padding:0.3rem 0.75rem;background:var(--accent-dim);color:var(--accent);border-radius:999px;font-size:0.8rem;margin-bottom:0.5rem;';
+    pill.innerHTML = `Device: <strong>${escapeHtml(activeDeviceFilter)}</strong> <button style="background:none;border:none;color:inherit;cursor:pointer;font-size:1rem;line-height:1;" aria-label="Clear">&times;</button>`;
+    pill.querySelector('button').addEventListener('click', () => { activeDeviceFilter = ''; renderList(); });
+    container.appendChild(pill);
+  }
 
   const tabs = document.createElement('div');
   tabs.className = 'status-tabs';
@@ -85,6 +121,15 @@ function renderList() {
   searchInput.value = activeSearch;
   searchInput.addEventListener('input', () => { activeSearch = searchInput.value.trim().toLowerCase(); renderTable(); });
 
+  topbar.querySelector('#ticketsDateFrom').addEventListener('change', (e) => { activeDateFrom = e.target.value; renderTable(); });
+  topbar.querySelector('#ticketsDateTo').addEventListener('change', (e) => { activeDateTo = e.target.value; renderTable(); });
+
+  const clearBtn = topbar.querySelector('#clearTicketFilters');
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    activeDateFrom = ''; activeDateTo = ''; activeDeviceFilter = ''; activeSearch = '';
+    renderList();
+  });
+
   renderTable();
 }
 
@@ -92,8 +137,22 @@ function renderTable() {
   const wrapper = document.getElementById('ticketsContent');
   if (!wrapper) return;
 
+  const fromMs = activeDateFrom ? new Date(activeDateFrom + 'T00:00:00').getTime() : null;
+  const toMs = activeDateTo ? new Date(activeDateTo + 'T23:59:59').getTime() : null;
+  const deviceLower = activeDeviceFilter.toLowerCase();
+
   let visible = tickets;
   if (activeStatusFilter !== 'all') visible = visible.filter(t => t.status === activeStatusFilter);
+  if (deviceLower) visible = visible.filter(t => (t.deviceType || '').toLowerCase().includes(deviceLower));
+  if (fromMs || toMs) {
+    visible = visible.filter(t => {
+      const ts = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate().getTime() : 0;
+      if (!ts) return false;
+      if (fromMs && ts < fromMs) return false;
+      if (toMs && ts > toMs) return false;
+      return true;
+    });
+  }
   if (activeSearch) {
     visible = visible.filter(t =>
       (t.ticketNumber || '').toLowerCase().includes(activeSearch) ||
