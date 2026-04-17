@@ -771,22 +771,51 @@ async function handleQuoteAccepted(responseId, responseData) {
     }
 
     // Build first invoice line items: labor + line items + first recurring period + discount
+    // Respects seat overage ($3/mo × extraUsers) and the 15% annual discount.
+    const SEAT_PRICE = 3;
+    const ANNUAL_DISCOUNT = 0.15;
+    const isAnnual = quote.billingCycle === 'annual';
+    const periodLabel = isAnnual ? 'year' : 'month';
+    const cycleMultiplier = isAnnual ? 12 * (1 - ANNUAL_DISCOUNT) : 1;
+
     const lineItems = [];
+
+    // One-time: labor + custom line items (NOT discounted by annual)
     const laborAmount = (quote.laborHours || 0) * (quote.laborRate || 0);
-    if (laborAmount > 0) lineItems.push({ description: quote.laborDescription || 'Setup / implementation', quantity: quote.laborHours, rate: quote.laborRate, amount: laborAmount });
-    (quote.lineItems || []).forEach(li => lineItems.push(li));
-    const planPrice = quote.priceOverride ?? quote.basePrice ?? 0;
-    if (planPrice > 0) lineItems.push({
-      description: `${pkg?.name || 'Subscription'} — first ${quote.billingCycle === 'annual' ? 'year' : 'month'}`,
-      quantity: 1, rate: planPrice, amount: planPrice,
+    if (laborAmount > 0) lineItems.push({
+      description: quote.laborDescription || 'Setup / implementation',
+      quantity: quote.laborHours, rate: quote.laborRate, amount: laborAmount,
     });
+    (quote.lineItems || []).forEach(li => lineItems.push(li));
+
+    // Recurring for first period (with annual discount if applicable)
+    const planMonthly = quote.priceOverride ?? quote.basePrice ?? 0;
+    const planPeriod = Math.round(planMonthly * cycleMultiplier * 100) / 100;
+    if (planPeriod > 0) lineItems.push({
+      description: `${pkg?.name || 'Subscription'} — first ${periodLabel}${isAnnual ? ' (15% annual discount)' : ''}`,
+      quantity: 1, rate: planPeriod, amount: planPeriod,
+    });
+
     (quote.addOns || []).forEach(a => {
       const mo = (a.priceMonthly || 0) * (a.qty || 1);
-      if (mo > 0) lineItems.push({
-        description: `Add-on: ${a.name}${a.qty > 1 ? ` × ${a.qty}` : ''} — first ${quote.billingCycle === 'annual' ? 'year' : 'month'}`,
-        quantity: 1, rate: mo, amount: mo,
+      const period = Math.round(mo * cycleMultiplier * 100) / 100;
+      if (period > 0) lineItems.push({
+        description: `Add-on: ${a.name}${a.qty > 1 ? ` × ${a.qty}` : ''} — first ${periodLabel}`,
+        quantity: 1, rate: period, amount: period,
       });
     });
+
+    // Extra-user seats
+    const extraUsers = Number(quote.extraUsers) || 0;
+    if (extraUsers > 0) {
+      const seatsMonthly = extraUsers * SEAT_PRICE;
+      const seatsPeriod = Math.round(seatsMonthly * cycleMultiplier * 100) / 100;
+      lineItems.push({
+        description: `${extraUsers} extra user seat${extraUsers === 1 ? '' : 's'} × $${SEAT_PRICE}/mo — first ${periodLabel}`,
+        quantity: 1, rate: seatsPeriod, amount: seatsPeriod,
+      });
+    }
+
     if (quote.discount && quote.discount.amount > 0) {
       lineItems.push({
         description: `Discount — ${quote.discount.reason || ''}`,

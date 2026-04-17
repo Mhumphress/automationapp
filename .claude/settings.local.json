@@ -43,7 +43,8 @@
       "Bash(node --check crm/js/services/subscription.js)",
       "Bash(node --check crm/js/views/tenants.js)",
       "Bash(node --check crm/js/services/search.js)",
-      "Bash(node --check crm/js/components/universal-search.js)"
+      "Bash(node --check crm/js/components/universal-search.js)",
+      "Bash(node --check portal/js/main.js)"
     ]
   }
 }

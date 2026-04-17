@@ -447,18 +447,21 @@ async function showDetailPage(contact) {
   layout.appendChild(rightCol);
   container.appendChild(layout);
 
-  // Sibling contacts at same company
-  if (contact.companyName) {
-    const sameCompany = contacts.filter(c =>
-      c.id !== contact.id &&
-      (c.companyName || '').toLowerCase() === contact.companyName.toLowerCase()
-    );
+  // Sibling contacts at same company — match on company OR companyName
+  const contactCompany = (contact.company || contact.companyName || '').trim();
+  if (contactCompany) {
+    const target = contactCompany.toLowerCase();
+    const sameCompany = contacts.filter(c => {
+      if (c.id === contact.id) return false;
+      const cc = (c.company || c.companyName || '').toLowerCase();
+      return cc && cc === target;
+    });
     if (sameCompany.length > 0) {
       const section = document.createElement('div');
       section.className = 'settings-section';
       section.style.marginTop = '1rem';
       section.innerHTML = `
-        <h3 class="section-title">Other contacts at ${escapeHtml(contact.companyName)}</h3>
+        <h3 class="section-title">Other contacts at ${escapeHtml(contactCompany)}</h3>
         <table class="data-table"><tbody>${sameCompany.map(c => `
           <tr class="clickable" data-id="${c.id}">
             <td>${escapeHtml((c.firstName || '') + ' ' + (c.lastName || ''))}</td>

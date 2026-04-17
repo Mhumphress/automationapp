@@ -34,7 +34,7 @@ export async function universalSearch(q) {
   const contacts = data.contacts.filter(c =>
     ((c.firstName || '') + ' ' + (c.lastName || '')).toLowerCase().includes(needle) ||
     (c.email || '').toLowerCase().includes(needle) ||
-    (c.company || '').toLowerCase().includes(needle) ||
+    (c.company || c.companyName || '').toLowerCase().includes(needle) ||
     (digits && (c.phone || '').replace(/\D/g, '').includes(digits))
   ).slice(0, 8);
 
