@@ -488,7 +488,10 @@ async function renderTeam() {
   container.innerHTML = '<div class="loading">Loading team...</div>';
 
   try {
-    const { collection: fbCollection, getDocs: fbGetDocs, query: fbQuery, orderBy: fbOrderBy } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const { collection: fbCollection, getDocs: fbGetDocs, addDoc: fbAddDoc,
+            query: fbQuery, orderBy: fbOrderBy, doc: fbDoc, setDoc: fbSetDoc,
+            serverTimestamp: fbServerTs, Timestamp: fbTimestamp }
+      = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const { db: fbDb } = await import('./config.js');
 
     const snap = await fbGetDocs(fbQuery(
@@ -497,19 +500,199 @@ async function renderTeam() {
     ));
     const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    let html = '<div class="settings-section"><h2 class="section-title">Team Members</h2>';
-    html += '<table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>';
+    const includedUsers = tenant.userLimit || 0;  // 0 means unlimited
+    const billedUsers = users.length;
+    const seatsUsed = includedUsers === 0 ? 0 : Math.max(0, billedUsers - includedUsers);
+
+    // Proration for showing cost preview on the invite form
+    const SEAT_PRICE = 3;
+    const ANNUAL_DISCOUNT = 0.15;
+    const isAnnual = tenant.billingCycle === 'annual';
+    const periodStart = tenant.currentPeriodStart?.toDate ? tenant.currentPeriodStart.toDate() : null;
+    const periodEnd = tenant.currentPeriodEnd?.toDate ? tenant.currentPeriodEnd.toDate() : null;
+    let prorationRatio = 1;
+    if (periodStart && periodEnd && periodEnd > periodStart) {
+      const daysInPeriod = Math.max(1, (periodEnd.getTime() - periodStart.getTime()) / 86400000);
+      const daysRemaining = Math.max(0, (periodEnd.getTime() - Date.now()) / 86400000);
+      prorationRatio = Math.min(1, Math.max(0, daysRemaining / daysInPeriod));
+    }
+    // Seat cost shown per-cycle (monthly or annual)
+    const seatCostThisPeriodMonthly = SEAT_PRICE * prorationRatio;
+    const seatCostThisPeriodAnnual = SEAT_PRICE * 12 * (1 - ANNUAL_DISCOUNT) * prorationRatio;
+    const seatProrated = isAnnual ? seatCostThisPeriodAnnual : seatCostThisPeriodMonthly;
+    const seatRecurring = isAnnual ? SEAT_PRICE * 12 * (1 - ANNUAL_DISCOUNT) : SEAT_PRICE;
+
+    const role = getUserRole();
+    const canInvite = (role === 'owner' || role === 'admin') && !isReadOnly() && !isSuspended();
+
+    let html = `
+      <div class="settings-section">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <h2 class="section-title" style="margin-bottom:0.25rem;">Team Members</h2>
+            <p style="color:var(--gray-dark);font-size:0.85rem;margin:0;">
+              ${billedUsers} of ${includedUsers === 0 ? '∞ (unlimited)' : includedUsers + ' included'}${seatsUsed > 0 ? ` · <strong>${seatsUsed} paid seat${seatsUsed === 1 ? '' : 's'}</strong>` : ''}
+            </p>
+          </div>
+          ${canInvite ? `<button class="btn btn-primary" id="inviteUserBtn">+ Invite User</button>` : ''}
+        </div>
+      </div>
+
+      <div class="settings-section" style="margin-top:1rem;">
+        <table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>
+    `;
     users.forEach(u => {
       html += `<tr>
         <td style="font-weight:500;">${escapeHtml(u.displayName || '-')}</td>
         <td>${escapeHtml(u.email || '-')}</td>
         <td><span class="badge badge-info">${escapeHtml(u.role || 'user')}</span></td>
-        <td><span class="badge badge-success">${escapeHtml(u.status || 'active')}</span></td>
+        <td><span class="badge ${u.status === 'pending' ? 'badge-warning' : 'badge-success'}">${escapeHtml(u.status || 'active')}</span></td>
       </tr>`;
     });
     html += '</tbody></table></div>';
 
+    if (canInvite) {
+      html += `
+        <div class="settings-section" style="margin-top:1rem;display:none;" id="inviteForm">
+          <h2 class="section-title">Invite a User</h2>
+          <p style="color:var(--gray-dark);font-size:0.85rem;margin-bottom:0.75rem;">
+            The invited person creates their own Firebase account with the email below and will automatically land in your tenant on first login.
+          </p>
+          <div class="modal-form-grid">
+            <div class="modal-field"><label>First Name *</label><input type="text" name="inviteFirst" required></div>
+            <div class="modal-field"><label>Last Name</label><input type="text" name="inviteLast"></div>
+          </div>
+          <div class="modal-form-grid">
+            <div class="modal-field"><label>Email *</label><input type="email" name="inviteEmail" required placeholder="person@company.com"></div>
+            <div class="modal-field">
+              <label>Role</label>
+              <select name="inviteRole">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+          </div>
+          <div id="inviteCostNote" style="margin-top:0.5rem;"></div>
+          <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+            <button class="btn btn-primary" id="inviteSubmitBtn">Send Invitation</button>
+            <button class="btn btn-ghost" id="inviteCancelBtn">Cancel</button>
+            <span id="inviteStatus" style="color:var(--gray);font-size:0.85rem;margin-left:0.5rem;align-self:center;"></span>
+          </div>
+        </div>
+      `;
+    }
+
     container.innerHTML = html;
+
+    if (canInvite) {
+      const inviteBtn = container.querySelector('#inviteUserBtn');
+      const form = container.querySelector('#inviteForm');
+      const costNote = container.querySelector('#inviteCostNote');
+      const cycleLabel = isAnnual ? 'year' : 'month';
+
+      function updateCostNote() {
+        const willExceed = includedUsers > 0 && (billedUsers + 1) > includedUsers;
+        if (willExceed) {
+          costNote.innerHTML = `
+            <div style="background:var(--accent-dim);padding:0.75rem;border-radius:8px;font-size:0.85rem;">
+              <strong>Cost:</strong> This invite exceeds your plan's included ${includedUsers} users, so a seat at <strong>$${SEAT_PRICE}/mo</strong> will be added.
+              An invoice for <strong>${formatCurrency(seatProrated)}</strong> (prorated for the rest of this billing period) will be created now.
+              Going forward, your ${cycleLabel === 'year' ? 'annual' : 'monthly'} bill increases by <strong>${formatCurrency(seatRecurring)}/${cycleLabel}</strong>.
+            </div>`;
+        } else {
+          costNote.innerHTML = `<div style="color:var(--gray-dark);font-size:0.85rem;">Free — included in your current plan (${billedUsers + 1} of ${includedUsers === 0 ? 'unlimited' : includedUsers}).</div>`;
+        }
+      }
+
+      inviteBtn.addEventListener('click', () => {
+        form.style.display = 'block';
+        inviteBtn.style.display = 'none';
+        updateCostNote();
+        form.querySelector('[name="inviteFirst"]').focus();
+      });
+
+      form.querySelector('#inviteCancelBtn').addEventListener('click', () => {
+        form.style.display = 'none';
+        inviteBtn.style.display = '';
+        form.querySelector('[name="inviteFirst"]').value = '';
+        form.querySelector('[name="inviteLast"]').value = '';
+        form.querySelector('[name="inviteEmail"]').value = '';
+      });
+
+      form.querySelector('#inviteSubmitBtn').addEventListener('click', async () => {
+        const status = container.querySelector('#inviteStatus');
+        const first = form.querySelector('[name="inviteFirst"]').value.trim();
+        const last = form.querySelector('[name="inviteLast"]').value.trim();
+        const email = form.querySelector('[name="inviteEmail"]').value.trim();
+        const role = form.querySelector('[name="inviteRole"]').value;
+        if (!first || !email) { status.textContent = 'First name and email are required.'; return; }
+        const emailKey = email.toLowerCase();
+
+        const submitBtn = form.querySelector('#inviteSubmitBtn');
+        submitBtn.disabled = true;
+        status.textContent = 'Inviting...';
+
+        try {
+          // 1. Create placeholder user doc in tenant/users (so they show in the team list)
+          const displayName = `${first} ${last}`.trim();
+          const pendingId = `pending_${Date.now()}`;
+          await fbSetDoc(fbDoc(fbDb, `tenants/${tenant.id}/users/${pendingId}`), {
+            email: emailKey, displayName, role, status: 'pending',
+            invitedBy: 'portal', createdAt: fbServerTs(),
+          });
+
+          // 2. Create user_tenants mapping so portal finds them on first login
+          await fbSetDoc(fbDoc(fbDb, `user_tenants/${emailKey}`), {
+            tenantId: tenant.id, email: emailKey, role,
+            companyName: tenant.companyName || '',
+            createdAt: fbServerTs(),
+          });
+
+          // 3. If this user exceeds the plan's included limit, charge a prorated seat
+          const willExceed = includedUsers > 0 && (billedUsers + 1) > includedUsers;
+          if (willExceed) {
+            const lineItems = [{
+              description: `Additional user seat for ${displayName} (prorated for current period)`,
+              quantity: 1, rate: seatProrated, amount: seatProrated,
+            }];
+            const invoiceRef = await fbAddDoc(fbCollection(fbDb, `tenants/${tenant.id}/invoices`), {
+              invoiceNumber: `INV-T-${Date.now().toString().slice(-6)}`,
+              type: 'charge',
+              amount: seatProrated, total: seatProrated,
+              status: 'sent',
+              issuedDate: fbServerTs(),
+              dueDate: fbTimestamp.fromDate(new Date(Date.now() + 14 * 86400000)),
+              lineItems,
+              reason: `User added: ${email}`,
+              createdAt: fbServerTs(),
+              createdBy: null,
+            });
+            // 4. Log tenant activity
+            await fbAddDoc(fbCollection(fbDb, `tenants/${tenant.id}/activity`), {
+              type: 'user_invited',
+              description: `Invited ${email} — ${formatCurrency(seatProrated)} prorated seat invoice created`,
+              metadata: { email, invoiceId: invoiceRef.id },
+              createdAt: fbServerTs(),
+            });
+          } else {
+            await fbAddDoc(fbCollection(fbDb, `tenants/${tenant.id}/activity`), {
+              type: 'user_invited',
+              description: `Invited ${email} (included in plan — no charge)`,
+              metadata: { email },
+              createdAt: fbServerTs(),
+            });
+          }
+
+          status.textContent = 'Invitation sent.';
+          setTimeout(() => renderTeam(), 1000);
+        } catch (err) {
+          console.error('Invite failed:', err);
+          status.textContent = 'Failed: ' + err.message;
+          submitBtn.disabled = false;
+        }
+      });
+    }
   } catch (err) {
     console.error('Team load error:', err);
     container.innerHTML = '<p style="color:var(--danger);padding:1rem;">Failed to load team data.</p>';

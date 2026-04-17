@@ -210,10 +210,17 @@ service cloud.firestore {
 
     // ── User-Tenant Mapping ───────────────────
     // Portal users can only read their OWN mapping (by email).
+    // Tenant admins can invite users to their own tenant (create/update/delete
+    // mapping where tenantId points at their tenant).
     match /user_tenants/{emailKey} {
       allow read: if isAuth() && request.auth.token.email != null
                   && emailKey == request.auth.token.email;
-      allow write: if isAdmin();
+      allow create: if isAdmin()
+                    || (isAuth() && request.resource.data.tenantId is string
+                        && isTenantAdmin(request.resource.data.tenantId));
+      allow update, delete: if isAdmin()
+                            || (isAuth() && resource.data.tenantId is string
+                                && isTenantAdmin(resource.data.tenantId));
     }
 
     // ── Product Catalog (readable by any authenticated user) ──
@@ -269,10 +276,10 @@ service cloud.firestore {
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
-      // Tenant billing — admin only
+      // Tenant billing — admin + tenant admins (for self-service seat invoices).
       match /invoices/{invoiceId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
-        allow create: if isAdmin();
+        allow create: if isAdmin() || isTenantAdmin(tenantId);
         allow update: if isAdmin();
         allow delete: if isAdmin();
       }
