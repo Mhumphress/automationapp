@@ -1,4 +1,5 @@
 import { queryDocuments, addDocument, updateDocument, deleteDocument, queryDocumentsWhere } from '../services/firestore.js';
+import { updateInvoiceWithSync, deleteInvoiceWithSync } from '../services/invoice-sync.js';
 import { addActivity, logFieldEdit, getActivity } from '../services/activity.js';
 import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
@@ -554,7 +555,7 @@ async function showDetailPage(invoice) {
   if (deleteBtn) deleteBtn.addEventListener('click', async () => {
     if (!confirm(`Delete invoice ${invoice.invoiceNumber}? This cannot be undone.`)) return;
     try {
-      await deleteDocument('invoices', invoice.id);
+      await deleteInvoiceWithSync(invoice);
       showToast('Invoice deleted', 'success');
       await loadData();
       goBackToList();
@@ -618,7 +619,7 @@ function renderStatusPills(pillsContainer, invoice, pageContainer) {
       if (invoice.status === status.id) return;
       const oldStatus = STATUSES.find(s => s.id === invoice.status);
       try {
-        await updateDocument('invoices', invoice.id, { status: status.id });
+        await updateInvoiceWithSync(invoice, { status: status.id });
         await logFieldEdit('invoices', invoice.id, 'Status', oldStatus?.label || invoice.status, status.label);
 
         // Cross-reference on contact
@@ -731,7 +732,7 @@ function renderDetailFields(container, invoice) {
       type: f.type,
       value: invoice[f.key] || '',
       onSave: async (newValue, oldValue) => {
-        await updateDocument('invoices', invoice.id, { [f.key]: newValue });
+        await updateInvoiceWithSync(invoice, { [f.key]: newValue });
         await logFieldEdit('invoices', invoice.id, f.label, oldValue, newValue);
         invoice[f.key] = newValue;
         const idx = invoices.findIndex(i => i.id === invoice.id);

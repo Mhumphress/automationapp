@@ -4,6 +4,37 @@ import {
   runTransaction
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getPackage } from './catalog.js';
+import { createRootInvoiceMirror } from './invoice-sync.js';
+
+async function mirrorToCrmInvoices(tenantId, tenantInvoiceId, tenantInvoiceData) {
+  try {
+    const tSnap = await getDoc(doc(db, 'tenants', tenantId));
+    const tenant = tSnap.exists() ? tSnap.data() : {};
+    const crmId = await createRootInvoiceMirror({
+      tenantId,
+      tenantInvoiceId,
+      tenantName: tenant.companyName || '',
+      contactId: tenant.contactId || '',
+      invoiceNumber: tenantInvoiceData.invoiceNumber,
+      total: tenantInvoiceData.total,
+      status: tenantInvoiceData.status || 'sent',
+      lineItems: tenantInvoiceData.lineItems || [],
+      notes: tenantInvoiceData.reason || '',
+      type: tenantInvoiceData.type || 'charge',
+      reason: tenantInvoiceData.reason || '',
+    });
+    // Link back from tenant invoice
+    if (crmId) {
+      try {
+        await updateDoc(doc(db, `tenants/${tenantId}/invoices/${tenantInvoiceId}`), { crmInvoiceId: crmId });
+      } catch {}
+    }
+    return crmId;
+  } catch (err) {
+    console.warn('CRM invoice mirror failed:', err);
+    return null;
+  }
+}
 
 // ── Proration ────────────────────────────────────────────
 
@@ -81,7 +112,7 @@ export async function addAddOn(tenantId, addon) {
     updatedBy: user ? user.uid : null,
   });
 
-  const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), {
+  const addAddOnInvoiceData = {
     invoiceNumber: `INV-T-${Date.now().toString().slice(-6)}`,
     type: 'charge',
     amount: total, total,
@@ -92,7 +123,9 @@ export async function addAddOn(tenantId, addon) {
     reason: `Added add-on: ${addon.name}`,
     createdAt: serverTimestamp(),
     createdBy: user ? user.uid : null,
-  });
+  };
+  const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), addAddOnInvoiceData);
+  await mirrorToCrmInvoices(tenantId, invoiceRef.id, addAddOnInvoiceData);
 
   await addDoc(collection(db, 'tenants', tenantId, 'activity'), {
     type: 'addon_added',
@@ -131,7 +164,7 @@ export async function removeAddOn(tenantId, slug) {
   });
 
   if (preview.refund > 0) {
-    const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), {
+    const removeData = {
       invoiceNumber: `CR-${Date.now().toString().slice(-6)}`,
       type: 'refund',
       amount: -preview.refund, total: -preview.refund,
@@ -144,7 +177,9 @@ export async function removeAddOn(tenantId, slug) {
       reason: `Removed add-on: ${preview.addon.name}`,
       createdAt: serverTimestamp(),
       createdBy: user ? user.uid : null,
-    });
+    };
+    const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), removeData);
+    await mirrorToCrmInvoices(tenantId, invoiceRef.id, removeData);
     await addDoc(collection(db, 'tenants', tenantId, 'activity'), {
       type: 'addon_removed',
       description: `Removed ${preview.addon.name} — credit ${formatCurrency(preview.refund)}`,
@@ -205,7 +240,7 @@ export async function changePlan(tenantId, newPackageId) {
     updatedBy: user ? user.uid : null,
   });
 
-  const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), {
+  const changePlanData = {
     invoiceNumber: `INV-T-${Date.now().toString().slice(-6)}`,
     type: total >= 0 ? 'charge' : 'refund',
     amount: total, total,
@@ -216,7 +251,9 @@ export async function changePlan(tenantId, newPackageId) {
     reason: `Plan change: ${preview.oldPkg?.name || '-'} → ${preview.newPkg.name}`,
     createdAt: serverTimestamp(),
     createdBy: user ? user.uid : null,
-  });
+  };
+  const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), changePlanData);
+  await mirrorToCrmInvoices(tenantId, invoiceRef.id, changePlanData);
   await addDoc(collection(db, 'tenants', tenantId, 'activity'), {
     type: 'plan_changed',
     description: `Plan changed to ${preview.newPkg.name} — net ${total >= 0 ? 'charge' : 'credit'} ${formatCurrency(Math.abs(total))}`,
@@ -251,7 +288,7 @@ export async function cancelNow(tenantId) {
 
   let invoiceId = null;
   if (refund > 0) {
-    const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), {
+    const cancelData = {
       invoiceNumber: `CR-${Date.now().toString().slice(-6)}`,
       type: 'refund',
       amount: -refund, total: -refund,
@@ -264,7 +301,9 @@ export async function cancelNow(tenantId) {
       reason: 'Subscription cancelled',
       createdAt: serverTimestamp(),
       createdBy: user ? user.uid : null,
-    });
+    };
+    const invoiceRef = await addDoc(collection(db, 'tenants', tenantId, 'invoices'), cancelData);
+    await mirrorToCrmInvoices(tenantId, invoiceRef.id, cancelData);
     invoiceId = invoiceRef.id;
   }
 

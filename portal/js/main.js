@@ -443,6 +443,11 @@ async function renderBilling() {
       html += '<table class="data-table"><thead><tr><th>Invoice #</th><th>Amount</th><th>Status</th><th>Issued</th><th>Due</th></tr></thead><tbody>';
       invoices.forEach(inv => {
         const s = inv.status || 'draft';
+        // Tenant-facing label: show "Due" for sent invoices (admin's "sent" = tenant's "due to pay")
+        const label =
+          s === 'sent' ? 'due' :
+          s === 'issued' ? 'issued' :
+          s;
         const statusClass =
           s === 'paid' ? 'badge-success' :
           s === 'overdue' ? 'badge-danger' :
@@ -454,7 +459,7 @@ async function renderBilling() {
         html += `<tr>
           <td style="font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
           <td>${formatCurrency(amount)}</td>
-          <td><span class="badge ${statusClass}">${escapeHtml(s)}</span></td>
+          <td><span class="badge ${statusClass}">${escapeHtml(label)}</span></td>
           <td>${formatDate(inv.issuedDate)}</td>
           <td>${formatDate(inv.dueDate)}</td>
         </tr>`;
