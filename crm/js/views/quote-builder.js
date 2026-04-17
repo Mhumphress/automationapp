@@ -314,42 +314,58 @@ function renderAddons(addons) {
     list.innerHTML = '<p style="color:var(--gray);font-size:0.9rem;">Select a vertical to see applicable add-ons.</p>';
     return;
   }
+  // Firestore addon docs were seeded with slug as the doc ID but not as a field
+  // inside the doc. Use a.id when a.slug is missing so the rest of the flow
+  // (state, handlers, dataset lookups) has a consistent identifier.
+  const slugOf = (a) => a.slug || a.id;
+
   list.innerHTML = applicable.map(a => {
-    const selected = formState.addOns.find(x => x.slug === a.slug);
+    const slug = slugOf(a);
+    const selected = formState.addOns.find(x => x.slug === slug);
     const qty = selected?.qty || 1;
     return `
-      <div style="display:flex;gap:0.75rem;align-items:center;padding:0.4rem 0;">
-        <input type="checkbox" class="addon-check" data-slug="${escapeHtml(a.slug)}" ${selected ? 'checked' : ''}>
-        <div style="flex:1;">${escapeHtml(a.name)} <span style="color:var(--gray-dark);font-size:0.85rem;">${formatCurrency(a.priceMonthly)}/mo</span></div>
-        ${a.pricingModel === 'per_unit' ? `<input type="number" class="addon-qty" data-slug="${escapeHtml(a.slug)}" min="1" value="${qty}" style="width:70px;" ${selected ? '' : 'disabled'}>` : ''}
-      </div>
+      <label style="display:flex;gap:0.75rem;align-items:center;padding:0.4rem 0;cursor:pointer;">
+        <input type="checkbox" class="addon-check" data-slug="${escapeHtml(slug)}" ${selected ? 'checked' : ''}>
+        <div style="flex:1;">${escapeHtml(a.name || slug)} <span style="color:var(--gray-dark);font-size:0.85rem;">${formatCurrency(a.priceMonthly || 0)}/mo</span></div>
+        ${a.pricingModel === 'per_unit' ? `<input type="number" class="addon-qty" data-slug="${escapeHtml(slug)}" min="1" value="${qty}" style="width:70px;" ${selected ? '' : 'disabled'} onclick="event.stopPropagation();">` : ''}
+      </label>
     `;
   }).join('');
 
-  list.querySelectorAll('.addon-check').forEach(cb => {
-    cb.addEventListener('change', () => {
-      const slug = cb.dataset.slug;
-      const a = addons.find(x => x.slug === slug);
-      if (cb.checked) {
-        formState.addOns.push({ slug: a.slug, name: a.name, qty: 1, priceMonthly: a.priceMonthly || 0 });
-        const qtyInput = list.querySelector(`.addon-qty[data-slug="${slug}"]`);
+  // Event delegation on the list element so handlers survive any re-render.
+  list.onchange = (e) => {
+    const target = e.target;
+    if (target.classList.contains('addon-check')) {
+      const slug = target.dataset.slug;
+      const a = addons.find(x => slugOf(x) === slug);
+      if (!a) { console.warn('addon not found for slug', slug); return; }
+      if (target.checked) {
+        formState.addOns.push({
+          slug,
+          name: a.name || slug,
+          qty: 1,
+          priceMonthly: Number(a.priceMonthly) || 0,
+        });
+        const qtyInput = list.querySelector(`.addon-qty[data-slug="${CSS.escape(slug)}"]`);
         if (qtyInput) qtyInput.disabled = false;
       } else {
         formState.addOns = formState.addOns.filter(x => x.slug !== slug);
-        const qtyInput = list.querySelector(`.addon-qty[data-slug="${slug}"]`);
+        const qtyInput = list.querySelector(`.addon-qty[data-slug="${CSS.escape(slug)}"]`);
         if (qtyInput) qtyInput.disabled = true;
       }
       recalc();
-    });
-  });
-  list.querySelectorAll('.addon-qty').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const slug = inp.dataset.slug;
+    }
+  };
+
+  list.oninput = (e) => {
+    const target = e.target;
+    if (target.classList.contains('addon-qty')) {
+      const slug = target.dataset.slug;
       const item = formState.addOns.find(x => x.slug === slug);
-      if (item) item.qty = Number(inp.value) || 1;
+      if (item) item.qty = Math.max(1, Number(target.value) || 1);
       recalc();
-    });
-  });
+    }
+  };
 }
 
 function renderLineItems() {
