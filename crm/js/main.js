@@ -338,31 +338,29 @@ registerView('dashboard', {
 
     if (!hasData) return;
 
-    // --- Populate drill-down data ---
-    // Rich drill-downs: show what the number means, what contributes to it, and
-    // where to dive deeper. Each drilldown panel is a mini-dashboard for that stat.
-    renderCustomersDrill(contactsList, quotesList, invoicesList);
-    renderQuotesDrill(quotesList);
-    renderTasksDrill(openTasks);
-    renderRevenueDrill(paidInvoices);
-
-    // --- Wire stat card click toggling ---
+    // --- Wire stat card click toggling FIRST so subsequent listeners on drill
+    // content aren't destroyed by a later cloneNode. Cards are cloned to drop
+    // any handlers from a previous render; everything downstream attaches to
+    // the stable DOM. Any click inside the drilldown content (.drill-*) does
+    // NOT collapse the card.
     document.querySelectorAll('#statsGrid .stat-card').forEach(card => {
-      // Remove old listeners by cloning
       const newCard = card.cloneNode(true);
       card.parentNode.replaceChild(newCard, card);
 
       newCard.addEventListener('click', (e) => {
-        // Don't toggle if clicking a drill-down item
-        if (e.target.closest('.drilldown-item')) return;
-
+        if (e.target.closest('.drill-rich') || e.target.closest('.drilldown-item')) return;
         const wasExpanded = newCard.classList.contains('expanded');
-        // Collapse all
         document.querySelectorAll('#statsGrid .stat-card').forEach(c => c.classList.remove('expanded'));
-        // Toggle this one
         if (!wasExpanded) newCard.classList.add('expanded');
       });
     });
+
+    // --- Populate rich drill-down data AFTER cloning. Listeners attached to
+    // drill rows and CTAs now survive because the cloneNode has already run. ---
+    renderCustomersDrill(contactsList, quotesList, invoicesList);
+    renderQuotesDrill(quotesList);
+    renderTasksDrill(openTasks);
+    renderRevenueDrill(paidInvoices);
 
     // --- Revenue Bar Chart --- (now driven by paid invoices)
     buildRevenueChart(paidInvoices);
