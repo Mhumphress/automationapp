@@ -1,5 +1,7 @@
 import { addDocument, updateDocument, deleteDocument, queryDocuments, queryDocumentsWhere } from '../../services/firestore.js';
 import { canWrite, isReadOnly, gateWrite, term } from '../../tenant-context.js';
+import { requestTicket } from '../repair/tickets.js';
+import { requestInvoice } from './invoicing.js';
 
 let contacts = [];
 let ticketsByContact = {};  // contactId → [tickets]
@@ -382,11 +384,14 @@ async function loadContactHistory(contactId, host) {
     const ticketsSection = document.createElement('div');
     ticketsSection.className = 'settings-section';
     ticketsSection.style.marginBottom = '1rem';
-    let ticketsHtml = `<h3 class="section-title">Repair History (${tickets.length})</h3>`;
+    ticketsSection.innerHTML = `<h3 class="section-title">Repair History (${tickets.length})</h3>`;
     if (tickets.length === 0) {
-      ticketsHtml += '<p style="color:var(--gray);font-size:0.9rem;">No tickets yet.</p>';
+      ticketsSection.insertAdjacentHTML('beforeend', '<p style="color:var(--gray);font-size:0.9rem;">No tickets yet.</p>');
     } else {
-      ticketsHtml += '<table class="data-table"><thead><tr><th>Ticket #</th><th>Device</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+      const table = document.createElement('table');
+      table.className = 'data-table';
+      table.innerHTML = '<thead><tr><th>Ticket #</th><th>Device</th><th>Status</th><th>Created</th></tr></thead>';
+      const tbody = document.createElement('tbody');
       tickets.forEach(t => {
         const statusClass = t.status === 'completed' ? 'badge-success'
           : t.status === 'ready' ? 'badge-info'
@@ -397,16 +402,23 @@ async function loadContactHistory(contactId, host) {
           awaiting_parts: 'Awaiting Parts', in_repair: 'In Repair',
           qc: 'Quality Check', ready: 'Ready', completed: 'Completed'
         };
-        ticketsHtml += `<tr>
+        const tr = document.createElement('tr');
+        tr.className = 'clickable';
+        tr.innerHTML = `
           <td style="font-family:monospace;font-weight:500;">${escapeHtml(t.ticketNumber || '-')}</td>
           <td>${escapeHtml(t.deviceType || '-')}</td>
           <td><span class="badge ${statusClass}">${escapeHtml(labelMap[t.status] || t.status || '-')}</span></td>
           <td>${formatDate(t.createdAt)}</td>
-        </tr>`;
+        `;
+        tr.addEventListener('click', () => {
+          requestTicket(t.id);
+          window.location.hash = 'tickets';
+        });
+        tbody.appendChild(tr);
       });
-      ticketsHtml += '</tbody></table>';
+      table.appendChild(tbody);
+      ticketsSection.appendChild(table);
     }
-    ticketsSection.innerHTML = ticketsHtml;
     host.appendChild(ticketsSection);
 
     // Invoices section
@@ -414,13 +426,20 @@ async function loadContactHistory(contactId, host) {
     invoicesSection.className = 'settings-section';
     const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (Number(i.total) || 0), 0);
     const totalOutstanding = invoices.filter(i => ['draft','sent','overdue'].includes(i.status)).reduce((s, i) => s + (Number(i.total) || 0), 0);
-    let invoicesHtml = `<h3 class="section-title">Invoices (${invoices.length})</h3>`;
+    invoicesSection.innerHTML = `<h3 class="section-title">Invoices (${invoices.length})</h3>`;
     if (invoices.length > 0) {
-      invoicesHtml += `<div style="display:flex;gap:1.5rem;font-size:0.9rem;margin-bottom:0.75rem;">
+      const totalsDiv = document.createElement('div');
+      totalsDiv.style.cssText = 'display:flex;gap:1.5rem;font-size:0.9rem;margin-bottom:0.75rem;';
+      totalsDiv.innerHTML = `
         <div><span style="color:var(--gray);">Paid:</span> <strong>${formatCurrency(totalPaid)}</strong></div>
         <div><span style="color:var(--gray);">Outstanding:</span> <strong>${formatCurrency(totalOutstanding)}</strong></div>
-      </div>`;
-      invoicesHtml += '<table class="data-table"><thead><tr><th>Invoice #</th><th>Ticket</th><th>Total</th><th>Status</th><th>Issued</th></tr></thead><tbody>';
+      `;
+      invoicesSection.appendChild(totalsDiv);
+
+      const table = document.createElement('table');
+      table.className = 'data-table';
+      table.innerHTML = '<thead><tr><th>Invoice #</th><th>Ticket</th><th>Total</th><th>Status</th><th>Issued</th></tr></thead>';
+      const tbody = document.createElement('tbody');
       invoices.forEach(inv => {
         const statusClass = inv.status === 'paid' ? 'badge-success'
           : inv.status === 'sent' ? 'badge-info'
@@ -428,19 +447,26 @@ async function loadContactHistory(contactId, host) {
           : inv.status === 'void' || inv.status === 'cancelled' ? 'badge-default'
           : inv.status === 'refunded' ? 'badge-warning'
           : 'badge-default';
-        invoicesHtml += `<tr>
+        const tr = document.createElement('tr');
+        tr.className = 'clickable';
+        tr.innerHTML = `
           <td style="font-family:monospace;font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
           <td style="font-family:monospace;font-size:0.85rem;color:var(--gray);">${escapeHtml(inv.ticketNumber || '-')}</td>
           <td>${formatCurrency(inv.total)}</td>
           <td><span class="badge ${statusClass}">${escapeHtml(inv.status || 'draft')}</span></td>
           <td>${escapeHtml(inv.issueDate || '-')}</td>
-        </tr>`;
+        `;
+        tr.addEventListener('click', () => {
+          requestInvoice(inv.id);
+          window.location.hash = 'invoicing';
+        });
+        tbody.appendChild(tr);
       });
-      invoicesHtml += '</tbody></table>';
+      table.appendChild(tbody);
+      invoicesSection.appendChild(table);
     } else {
-      invoicesHtml += '<p style="color:var(--gray);font-size:0.9rem;">No invoices yet.</p>';
+      invoicesSection.insertAdjacentHTML('beforeend', '<p style="color:var(--gray);font-size:0.9rem;">No invoices yet.</p>');
     }
-    invoicesSection.innerHTML = invoicesHtml;
     host.appendChild(invoicesSection);
   } catch (err) {
     console.error('Load contact history failed:', err);

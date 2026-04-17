@@ -3,11 +3,24 @@ import { canWrite, gateWrite } from '../../tenant-context.js';
 
 let invoices = [];
 let currentPage = 'list';
+let pendingDeepLinkId = null;
+
+// Called by other views (e.g., customer profile) to request that we open a
+// specific invoice after navigating to #invoicing.
+export function requestInvoice(invoiceId) {
+  pendingDeepLinkId = invoiceId;
+}
 
 export function init() {}
 
 export async function render() {
   try { invoices = await queryDocuments('invoices_crm', 'createdAt', 'desc'); } catch (err) { console.error(err); invoices = []; }
+  if (pendingDeepLinkId) {
+    const id = pendingDeepLinkId;
+    pendingDeepLinkId = null;
+    const inv = invoices.find(i => i.id === id);
+    if (inv) return showDetail(inv);
+  }
   if (currentPage === 'list') renderList();
 }
 

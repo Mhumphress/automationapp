@@ -24,8 +24,21 @@ let currentPage = 'list';
 
 export function init() {}
 
+let pendingDeepLinkId = null;
+
+// Called by other views (e.g., customer profile) to request that we open a
+// specific ticket's detail view after navigating to #tickets.
+export function requestTicket(ticketId) {
+  pendingDeepLinkId = ticketId;
+}
+
 export async function render() {
   try { tickets = await listTickets(); } catch (err) { console.error(err); tickets = []; }
+  if (pendingDeepLinkId) {
+    const id = pendingDeepLinkId;
+    pendingDeepLinkId = null;
+    return showDetail(id);
+  }
   if (currentPage === 'list') renderList();
 }
 
