@@ -80,6 +80,10 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     await signOut(auth);
   } catch (err) {
     showToast('Sign out failed. Please try again.', 'error');
+  } finally {
+    // Always redirect — onAuthStateChanged is guarded by authHandled and
+    // won't re-fire, so we must navigate explicitly.
+    window.location.replace('login.html');
   }
 });
 
@@ -95,6 +99,8 @@ function resetInactivityTimer() {
       await signOut(auth);
     } catch (e) {
       console.error('Auto-logout failed:', e);
+    } finally {
+      window.location.replace('login.html');
     }
   }, TIMEOUT_MS);
 }

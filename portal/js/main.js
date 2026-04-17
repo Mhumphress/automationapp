@@ -125,6 +125,10 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     await signOut(auth);
   } catch (err) {
     console.error('Sign out failed:', err);
+  } finally {
+    // Always redirect — the onAuthStateChanged guard (authHandled=true) prevents
+    // the listener from re-firing, so we must navigate explicitly.
+    window.location.replace('index.html');
   }
 });
 
