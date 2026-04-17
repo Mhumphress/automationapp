@@ -159,7 +159,7 @@ Every old step (Add Contact, Add Company, Create Deal, Set Pipeline Stage, Pick 
 
 ### Page structure
 
-A standalone HTML page (not part of the CRM app). Anonymous access. Layout:
+A standalone HTML page (not part of the CRM app). Anonymous access. Because there's no tenant yet at quote time, the page reads **your CRM's branding** (root `settings/branding` doc — same one that themes the CRM sidebar) to show your business name + logo + accent color on the quote. Layout:
 
 - Your business header (name, logo)
 - Quote metadata: number, issue date, valid-through date
@@ -177,13 +177,17 @@ A standalone HTML page (not part of the CRM app). Anonymous access. Layout:
 1. Customer clicks **Accept** → prompt asks "Please type your name to accept."
 2. Page writes `quote_responses/{token}`: `{response: 'accepted', respondedAt, signatureName, userAgent}`.
 3. Page flips to "Thank you — your account is being set up. You'll receive an email shortly with your login details."
-4. CRM side: a listener on `quote_responses` (set up on admin login) detects the new doc, reads the linked quote, and:
-   - Creates the tenant via existing provisioning logic (`companyName` ← `customerSnapshot.company`, `packageId`, `addOns`, `priceOverride`, etc.)
-   - Sets `currentPeriodStart` and `currentPeriodEnd` (now and now + 1 month/year)
-   - Creates the first invoice in `tenants/{t}/invoices/`: one-time labor + one-time line items + first period's recurring charges − discount
-   - Sets quote status to `provisioned`, stores `tenantId` and `invoiceId` back on the quote
-   - Logs to `tenants/{t}/activity/`
+4. CRM side: a listener on `quote_responses` (running whenever a CRM admin is authenticated) detects the new doc, reads the linked quote, and runs the provisioning path as a **Firestore transaction** so two tabs don't double-process:
+   - Atomically claim the response by setting `processedAt` (if already set, skip — another tab got it)
+   - Create the tenant via existing provisioning logic (`companyName` ← `customerSnapshot.company`, `packageId`, `addOns`, `priceOverride`, etc.)
+   - Set `currentPeriodStart` = now and `currentPeriodEnd` = now + 1 month/year via `Date.setMonth/setFullYear` so month-boundary dates land correctly (Jan 31 + 1 month → Feb 28/29)
+   - Create the first invoice in `tenants/{t}/invoices/`: one-time labor + one-time line items + first period's recurring charges − discount
+   - Set quote status to `provisioned`, store `tenantId` and `invoiceId` back on the quote
+   - Log to `tenants/{t}/activity/`
+   - Delete `quote_views/{token}` so the public URL no longer exposes pricing after provisioning
 5. On next CRM refresh, the quote appears as Provisioned with links to the tenant and invoice.
+
+**If no admin is logged in when the customer accepts**: the `quote_responses` doc sits and waits. On the next admin login, the listener catches up and processes any unprocessed responses. This is acceptable because there's no server-side processor in this architecture.
 
 ### Decline flow
 
@@ -266,8 +270,13 @@ Every action writes an entry to `tenants/{t}/activity/`.
 ### Refund invoices
 
 - New field on invoice docs: `type: 'charge' | 'refund'` (default 'charge' for back-compat).
-- Refund invoices have negative `total`. Invoicing list shows them with a green "Credit" badge. Customer profile totals subtract refunds from outstanding.
-- On the portal invoicing view, refunds appear in the list alongside charges.
+- Refund invoices have negative `total`. The CRM Invoices list and the portal **Billing** tab (not Invoicing — Billing is where tenants see what they owe me) show them with a green "Credit" badge.
+- Refunds here are **accounting records only** — no actual money transfer happens, since we don't have payment processing yet. When Stripe is integrated later, a refund invoice will trigger a real Stripe refund.
+
+### Edge cases
+
+- **Same-day add + cancel**: if a tenant adds an add-on and cancels on the same day, `daysRemaining ≈ 0` so the add-on charge is ~$0, but the `addOnImplementationFee` still applies as a fixed amount. The UI warns the admin in the confirm modal ("Note: this tenant cancels today; charging implementation fee may be inappropriate"). Admin can choose to waive.
+- **Cancel-at-period-end enforcement**: no server cron. The CRM checks `cancelAt` against `now` on every admin load and flips eligible tenants to `cancelled` client-side (only if `cancelAt < now` and `status === 'active'`). If no admin logs in past the date, the tenant stays active in Firebase until someone does. Acceptable until Functions-based automation arrives.
 
 ### Renewal automation
 
@@ -279,16 +288,16 @@ Beyond the scope of this spec. Currently, `currentPeriodEnd` advances manually v
 
 ### Placement
 
-CRM header replaces `#headerActions` area with a search input. `Cmd/Ctrl+K` focuses it from anywhere.
+CRM header replaces `#headerActions` area with a search input. `/` (slash) focuses it from anywhere. Also responds to `Cmd/Ctrl+K`, but `/` is the primary binding because Cmd+K is already used by most browsers to focus the address bar and we don't want to fight the browser.
 
 ### Scope
 
 Searches in parallel across:
-- **Customers** — `firstName`, `lastName`, `email`, `phone`, `company`
+- **Customers** — `firstName`, `lastName`, `email`, `phone` (digits-only normalized on both sides of the match), `company`
 - **Quotes** — `quoteNumber`, `customerSnapshot.{firstName, lastName, company, email}`
 - **Invoices** — `invoiceNumber`, `clientName`, `tenantId`
 - **Tenants** — `companyName`, owner email (resolved via users subcollection — cached)
-- **Any Firestore document ID** — if the query is a ≥15-char alphanumeric string, also lookup across collections by exact doc ID
+- **Any Firestore document ID** — Firestore auto-IDs are 20 chars. If the query is 18+ chars and matches `[A-Za-z0-9]+`, also issue exact-match `getDoc` lookups across `contacts`, `quotes`, `tenants`, plus `invoices_crm` for each tenant
 
 ### Results UI
 
@@ -345,6 +354,16 @@ Each list view (Customers, Quotes, Invoices, Tenants) gets a local search box at
 
 - `crm/js/views/companies.js` — dropped
 - `crm/js/views/pipeline.js` — superseded by `quotes.js` (if any legacy `deals/` docs exist they remain in Firestore but are no longer rendered)
+
+### One-time migration
+
+Runs once on CRM load when a flag (`settings/migrations.companiesToContactStrings`) is missing:
+
+1. **Companies → contact.company strings**: for each `contact` doc with a `companyId` that points to a real company, copy `company.name` into `contact.company` string. Leaves the `companies` collection untouched (safe rollback).
+2. **Deals → quotes**: for each `deal` with `status: 'won'` that already has a tenantId, create a minimal `quote` record with `status: 'provisioned'`, copying `contactId`, `packageId`, `addOns`, `priceOverride`, `tenantId`, `createdAt`. Existing deals in earlier stages stay in `deals/` (not visible anywhere). If you want them shown you can run the migration manually later.
+3. Writes the migration flag to avoid re-running.
+
+The migration is client-side, idempotent (flag-gated), and only an admin can trigger it. Runs silently on first post-deploy admin login.
 
 ### Deferred (separate specs)
 
