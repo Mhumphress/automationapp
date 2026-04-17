@@ -74,6 +74,30 @@ service cloud.firestore {
       }
     }
 
+    // ── Quotes ───────────────────────────────
+    match /quotes/{quoteId} {
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update: if isApprovedUser();
+      allow delete: if isAdmin();
+    }
+
+    // ── Public quote views (public read, admin write) ──
+    match /quote_views/{token} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Public quote responses (anonymous create, admin read) ──
+    match /quote_responses/{token} {
+      // Customers can create their response if the document ID matches the token field.
+      // Prevents reuse of the same response doc and blocks reads by non-admins.
+      allow create: if request.resource.data.token == token
+                    && request.resource.data.response in ['accepted', 'declined']
+                    && request.resource.data.response.size() <= 16;
+      allow read, update, delete: if isAdmin();
+    }
+
     match /companies/{companyId} {
       allow read: if isApprovedUser();
       allow create: if isApprovedUser();
@@ -171,6 +195,11 @@ service cloud.firestore {
     // ── Activity (collection group for CRM audit log — admin only) ──
     match /{path=**}/activity/{activityId} {
       allow read: if isAdmin();
+    }
+
+    // ── Root-level counters (admin-only) ─────
+    match /counters/{counterId} {
+      allow read, write: if isAdmin();
     }
 
     // ── Settings ─────────────────────────────
