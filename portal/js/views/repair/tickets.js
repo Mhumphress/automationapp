@@ -388,7 +388,70 @@ function renderBasicPartsSection(section, ticket) {
     }));
   }
 }
-function renderInvoiceSection(ticket) { return null; }
+function renderInvoiceSection(ticket) {
+  if (!canWrite()) return null;
+  const section = document.createElement('div');
+  section.className = 'settings-section';
+  section.style.marginTop = '1rem';
+
+  if (ticket.invoiceId) {
+    section.innerHTML = `
+      <h3 class="section-title">Invoice</h3>
+      <p style="font-size:0.9rem;color:var(--gray);">Invoice already generated.</p>
+      <a class="btn btn-ghost btn-sm" href="#invoicing">View in Invoicing</a>
+    `;
+    return section;
+  }
+
+  if (ticket.status !== 'completed') {
+    section.innerHTML = `
+      <h3 class="section-title">Invoice</h3>
+      <p style="font-size:0.9rem;color:var(--gray);">Set status to Completed to generate an invoice.</p>
+    `;
+    return section;
+  }
+
+  section.innerHTML = `
+    <h3 class="section-title">Generate Invoice</h3>
+    <p style="font-size:0.9rem;color:var(--gray);margin-bottom:0.75rem;">Creates an invoice from this ticket's parts and labor. Labor rate comes from your tenant settings.</p>
+    <button class="btn btn-primary" id="genInvoiceBtn">Generate Invoice</button>
+  `;
+
+  const btn = section.querySelector('#genInvoiceBtn');
+  btn.addEventListener('click', gateWrite(async () => {
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    try {
+      const opts = {};
+      if (!hasFeature('inventory') && (ticket.partsNotes || '').trim()) {
+        const totalStr = prompt(
+          'Enter the total parts charge for this ticket (the free-text notes will be used as the line description):',
+          '0'
+        );
+        const total = Number(totalStr);
+        if (!Number.isFinite(total) || total < 0) {
+          alert('Cancelled — invalid amount.');
+          btn.disabled = false;
+          btn.textContent = 'Generate Invoice';
+          return;
+        }
+        opts.basicPartsTotal = total;
+        opts.basicPartsLabel = 'Parts: ' + ticket.partsNotes.trim();
+      }
+
+      const { invoiceNumber } = await generateInvoiceFromTicket(ticket.id, opts);
+      alert(`Invoice ${invoiceNumber} created.`);
+      await showDetail(ticket.id);
+    } catch (err) {
+      alert('Invoice generation failed: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = 'Generate Invoice';
+    }
+  }));
+
+  return section;
+}
 
 function formatDateInput(ts) {
   if (!ts) return '';
