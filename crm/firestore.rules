@@ -203,8 +203,11 @@ service cloud.firestore {
     }
 
     // ── Settings ─────────────────────────────
+    // The branding doc is public-readable so the anonymous /quote.html page
+    // can fetch your business name + logo. Everything else in /settings stays
+    // behind auth.
     match /settings/{settingId} {
-      allow read: if isApprovedUser();
+      allow read: if settingId == 'branding' || isApprovedUser();
       allow write: if isAdmin();
     }
 
