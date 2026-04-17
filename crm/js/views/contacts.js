@@ -446,6 +446,34 @@ async function showDetailPage(contact) {
   layout.appendChild(leftCol);
   layout.appendChild(rightCol);
   container.appendChild(layout);
+
+  // Sibling contacts at same company
+  if (contact.companyName) {
+    const sameCompany = contacts.filter(c =>
+      c.id !== contact.id &&
+      (c.companyName || '').toLowerCase() === contact.companyName.toLowerCase()
+    );
+    if (sameCompany.length > 0) {
+      const section = document.createElement('div');
+      section.className = 'settings-section';
+      section.style.marginTop = '1rem';
+      section.innerHTML = `
+        <h3 class="section-title">Other contacts at ${escapeHtml(contact.companyName)}</h3>
+        <table class="data-table"><tbody>${sameCompany.map(c => `
+          <tr class="clickable" data-id="${c.id}">
+            <td>${escapeHtml((c.firstName || '') + ' ' + (c.lastName || ''))}</td>
+            <td>${escapeHtml(c.email || c.phone || '-')}</td>
+          </tr>`).join('')}</tbody></table>
+      `;
+      container.appendChild(section);
+      section.querySelectorAll('tr[data-id]').forEach(tr => {
+        tr.addEventListener('click', () => {
+          const sibling = contacts.find(x => x.id === tr.dataset.id);
+          if (sibling) showDetailPage(sibling);
+        });
+      });
+    }
+  }
 }
 
 function goBackToList() {
