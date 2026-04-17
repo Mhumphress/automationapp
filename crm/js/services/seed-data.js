@@ -140,8 +140,12 @@ export async function seedContacts(count = 5) {
   const created = [];
   for (let i = 0; i < count; i++) {
     const c = generateContact();
+    // Write both `company` (new field used by Quote Builder + seeded path)
+    // AND `companyName` (legacy field the old Contacts list renderer reads)
+    // so either code path can display the company.
     const ref = await addDoc(collection(db, 'contacts'), {
       ...c,
+      companyName: c.company,
       createdAt: serverTimestamp(),
       createdBy: user ? user.uid : null,
       updatedAt: serverTimestamp(),
