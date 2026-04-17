@@ -4,6 +4,8 @@ import { registerView, navigate, initRouter } from './router.js';
 import { showToast, escapeHtml, formatDate, timeAgo, formatCurrency as fmtCurrency } from './ui.js';
 import * as contactsView from './views/contacts.js';
 import * as companiesView from './views/companies.js';
+import * as quotesView from './views/quotes.js';
+import { mountUniversalSearch } from './components/universal-search.js';
 import * as pipelineView from './views/pipeline.js';
 import * as tasksView from './views/tasks.js';
 import * as invoicesView from './views/invoices.js';
@@ -75,6 +77,7 @@ onAuthStateChanged(auth, (user) => {
         // Start listening for quote responses + enforce scheduled cancellations
         subscribeToResponses(handleQuoteAccepted, handleQuoteDeclined);
         enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
+        mountUniversalSearch();
       }
     })
     .catch(err => console.error('Role setup error:', err));
@@ -122,6 +125,7 @@ const viewTitles = {
   dashboard:     'Dashboard',
   contacts:      'Contacts',
   companies:     'Companies',
+  quotes:        'Quotes',
   pipeline:      'Pipeline',
   tasks:         'Tasks',
   invoices:      'Invoices',
@@ -160,6 +164,16 @@ registerView('companies', {
     companiesView.render();
   },
   destroy: companiesView.destroy
+});
+
+// Override quotes with full view logic
+registerView('quotes', {
+  init: quotesView.init,
+  render() {
+    document.getElementById('headerTitle').textContent = 'Quotes';
+    quotesView.render();
+  },
+  destroy: quotesView.destroy,
 });
 
 // Override pipeline with full view logic
