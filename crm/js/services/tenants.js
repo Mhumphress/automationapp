@@ -33,6 +33,9 @@ export async function createTenant(data) {
   const user = auth.currentUser;
   return addDoc(collection(db, 'tenants'), {
     ...data,
+    currentPeriodStart: data.currentPeriodStart || serverTimestamp(),
+    currentPeriodEnd: data.currentPeriodEnd || null,
+    cancelAt: null,
     createdAt: serverTimestamp(),
     createdBy: user ? user.uid : null,
     updatedAt: serverTimestamp(),
