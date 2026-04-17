@@ -76,6 +76,7 @@ onAuthStateChanged(auth, (user) => {
         document.getElementById('renewalsNavItem').style.display = '';
         // Start listening for quote responses + enforce scheduled cancellations
         subscribeToResponses(handleQuoteAccepted, handleQuoteDeclined);
+        runCompaniesMigration().catch(err => console.error('Migration failed:', err));
         enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
         mountUniversalSearch();
       }
@@ -832,6 +833,34 @@ async function handleQuoteAccepted(responseId, responseData) {
     });
     showToast('Provisioning failed — see Quotes list', 'error');
   }
+}
+
+async function runCompaniesMigration() {
+  const { getDoc: gd, setDoc: sd, doc: dc, updateDoc: ud, collection: col, getDocs: gds, serverTimestamp: ts } =
+    await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const flagRef = dc(db, 'settings', 'migrations');
+  const flagSnap = await gd(flagRef);
+  const flags = flagSnap.exists() ? flagSnap.data() : {};
+  if (flags.companiesToContactStrings) return;
+
+  console.log('[migration] Starting companies→contact.company …');
+  const contactsSnap = await gds(col(db, 'contacts'));
+  const companiesSnap = await gds(col(db, 'companies')).catch(() => ({ docs: [] }));
+  const companyMap = {};
+  companiesSnap.docs.forEach(d => { companyMap[d.id] = d.data().name || ''; });
+
+  let migrated = 0;
+  for (const c of contactsSnap.docs) {
+    const data = c.data();
+    if (data.company) continue; // already has string
+    if (!data.companyId) continue;
+    const name = companyMap[data.companyId];
+    if (!name) continue;
+    await ud(dc(db, 'contacts', c.id), { company: name });
+    migrated += 1;
+  }
+  await sd(flagRef, { companiesToContactStrings: { ranAt: ts(), migrated } }, { merge: true });
+  console.log(`[migration] Done (${migrated} contacts updated).`);
 }
 
 async function handleQuoteDeclined(responseId, responseData) {
