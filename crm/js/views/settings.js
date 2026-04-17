@@ -3,6 +3,7 @@ import { collection, getDocs, doc, updateDoc, query, limit as fbLimit } from 'ht
 import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
 import { loadBranding, saveBranding, applyBranding, resolveColors, THEMES } from '../services/branding.js';
+import { seedContacts } from '../services/seed-data.js';
 
 const containerId = 'view-settings';
 let isAdminUser = false;
@@ -239,6 +240,46 @@ export async function render() {
         showToast('Branding reset', 'success');
       } catch (err) {
         showToast('Reset failed: ' + err.message, 'error');
+      }
+    });
+
+    // ── Test Data Section ──
+    const testDataSection = document.createElement('div');
+    testDataSection.className = 'settings-section';
+    testDataSection.style.marginTop = '2rem';
+    testDataSection.innerHTML = `
+      <h2 class="section-title">Test Data</h2>
+      <p style="color:var(--gray-dark);font-size:0.85rem;margin-bottom:0.75rem;">
+        Generate realistic fake contacts to exercise the CRM without hand-entering data.
+        Seeded contacts are tagged with <code>_seeded: true</code> in Firestore so you can find and purge them later.
+      </p>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.9rem;">
+          How many?
+          <input type="number" id="seedCount" min="1" max="50" value="5" style="width:70px;padding:0.3rem 0.5rem;border:1px solid var(--off-white);border-radius:6px;">
+        </label>
+        <button class="btn btn-primary btn-sm" id="seedContactsBtn">Generate Contacts</button>
+        <span id="seedStatus" style="color:var(--gray-dark);font-size:0.85rem;"></span>
+      </div>
+    `;
+    container.appendChild(testDataSection);
+
+    testDataSection.querySelector('#seedContactsBtn').addEventListener('click', async () => {
+      const btn = testDataSection.querySelector('#seedContactsBtn');
+      const status = testDataSection.querySelector('#seedStatus');
+      const count = Math.min(50, Math.max(1, Number(testDataSection.querySelector('#seedCount').value) || 5));
+      btn.disabled = true;
+      status.textContent = `Generating ${count}…`;
+      try {
+        const created = await seedContacts(count);
+        status.textContent = `Created ${created.length} contacts.`;
+        showToast(`Generated ${created.length} test contacts`, 'success');
+        setTimeout(() => { status.textContent = ''; }, 4000);
+      } catch (err) {
+        status.textContent = 'Failed: ' + err.message;
+        showToast('Seed failed: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
       }
     });
 
