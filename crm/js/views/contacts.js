@@ -143,7 +143,7 @@ function getFilteredContacts() {
     list = list.filter(c =>
       (`${c.firstName} ${c.lastName}`).toLowerCase().includes(lower) ||
       (c.email || '').toLowerCase().includes(lower) ||
-      (c.companyName || '').toLowerCase().includes(lower) ||
+      (c.company || c.companyName || '').toLowerCase().includes(lower) ||
       (c.phone || '').toLowerCase().includes(lower)
     );
   }
@@ -210,7 +210,7 @@ function renderTable(list) {
         <div class="contact-card-avatar">${escapeHtml(initials.toUpperCase())}</div>
         <div>
           <div style="font-weight:500;">${escapeHtml(contact.firstName)} ${escapeHtml(contact.lastName)}</div>
-          <div style="font-size:0.75rem;color:var(--gray);">${escapeHtml(contact.companyName || '')}</div>
+          <div style="font-size:0.75rem;color:var(--gray);">${escapeHtml(contact.company || contact.companyName || '')}</div>
         </div>
       </div>
     `;
@@ -218,7 +218,7 @@ function renderTable(list) {
 
     // Company cell
     const companyTd = document.createElement('td');
-    companyTd.textContent = contact.companyName || '\u2014';
+    companyTd.textContent = contact.company || contact.companyName || '\u2014';
     if (contact.companyId) {
       companyTd.style.cssText = 'color:var(--accent);cursor:pointer;';
       companyTd.addEventListener('click', (e) => {
@@ -272,7 +272,7 @@ function renderCards(list) {
           ${contact.jobTitle ? `<div class="contact-card-title">${escapeHtml(contact.jobTitle)}</div>` : ''}
         </div>
       </div>
-      ${contact.companyName ? `<div class="contact-card-detail">${escapeHtml(contact.companyName)}</div>` : ''}
+      ${(contact.company || contact.companyName) ? `<div class="contact-card-detail">${escapeHtml(contact.company || contact.companyName)}</div>` : ''}
       ${contact.email ? `<div class="contact-card-detail">${escapeHtml(contact.email)}</div>` : ''}
       ${contact.phone ? `<div class="contact-card-detail">${escapeHtml(contact.phone)}</div>` : ''}
     `;
@@ -395,7 +395,7 @@ async function showDetailPage(contact) {
   // Header
   const allowDelete = await canDelete(contact);
   const initials = ((contact.firstName || '')[0] || '') + ((contact.lastName || '')[0] || '');
-  const companyLabel = contact.companyName ? ` at ${escapeHtml(contact.companyName)}` : '';
+  const companyLabel = (contact.company || contact.companyName) ? ` at ${escapeHtml(contact.company || contact.companyName)}` : '';
   const header = document.createElement('div');
   header.className = 'detail-header';
   header.innerHTML = `
@@ -517,81 +517,70 @@ function renderDetailFields(container, contact) {
     container.appendChild(field);
   });
 
-  // Company field (special — clickable link or dropdown)
+  // Company field — plain string (reads from company, falls back to legacy companyName).
+  // Click to edit as a text input. Writes to both fields for back-compat.
   const companyField = document.createElement('div');
   companyField.className = 'detail-field';
   companyField.innerHTML = `<div class="detail-field-label">Company</div>`;
 
   const companyValue = document.createElement('div');
-  companyValue.className = 'detail-field-value' + (contact.companyName ? '' : ' empty');
-
-  if (contact.companyName && contact.companyId) {
-    // Render as clickable link
-    const link = document.createElement('span');
-    link.style.cssText = 'color:var(--accent);cursor:pointer;';
-    link.textContent = contact.companyName;
-    link.addEventListener('click', () => {
-      const company = companies.find(c => c.id === contact.companyId);
-      if (company) showCompanyPage(company);
-    });
-    companyValue.appendChild(link);
-  } else {
-    companyValue.textContent = contact.companyName || 'Click to add...';
-  }
-
+  const currentCompany = contact.company || contact.companyName || '';
+  companyValue.className = 'detail-field-value' + (currentCompany ? '' : ' empty');
+  companyValue.textContent = currentCompany || 'Click to add...';
   companyValue.style.cursor = 'pointer';
-  companyValue.addEventListener('click', (e) => {
-    // Don't replace if they clicked the link (which will navigate)
-    if (e.target.tagName === 'SPAN' && e.target.style.color) return;
-    companyValue.innerHTML = '';
+
+  companyValue.addEventListener('click', () => {
+    if (companyValue.classList.contains('editing')) return;
+    const oldVal = contact.company || contact.companyName || '';
     companyValue.classList.add('editing');
-    const dropdown = createDropdown({
-      fetchItems: async () => companies.map(c => ({ id: c.id, label: c.name, sublabel: c.industry || '' })),
-      onSelect: async (item) => {
-        const oldName = contact.companyName || '';
-        await updateDocument('contacts', contact.id, { companyId: item.id, companyName: item.label });
-        await logFieldEdit('contacts', contact.id, 'Company', oldName, item.label);
-        contact.companyId = item.id;
-        contact.companyName = item.label;
-        companyValue.classList.remove('editing', 'empty');
-        companyValue.innerHTML = '';
-        const newLink = document.createElement('span');
-        newLink.style.cssText = 'color:var(--accent);cursor:pointer;';
-        newLink.textContent = item.label;
-        newLink.addEventListener('click', () => {
-          const company = companies.find(c => c.id === item.id);
-          if (company) showCompanyPage(company);
-        });
-        companyValue.appendChild(newLink);
+    companyValue.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = oldVal;
+    input.placeholder = 'Type company name…';
+    input.style.cssText = 'width:100%;padding:0.35rem 0.5rem;border:1px solid var(--accent);border-radius:6px;font-size:inherit;';
+    companyValue.appendChild(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    const commit = async () => {
+      if (committed) return; committed = true;
+      const newVal = input.value.trim();
+      companyValue.classList.remove('editing');
+      if (newVal === oldVal) {
+        companyValue.textContent = oldVal || 'Click to add...';
+        companyValue.classList.toggle('empty', !oldVal);
+        return;
+      }
+      try {
+        // Write both fields so legacy companyName-readers and new company-readers both see it.
+        // Clear companyId since we're moving away from the linked Companies entity.
+        await updateDocument('contacts', contact.id, { company: newVal, companyName: newVal, companyId: '' });
+        await logFieldEdit('contacts', contact.id, 'Company', oldVal, newVal);
+        contact.company = newVal;
+        contact.companyName = newVal;
+        contact.companyId = '';
+        companyValue.textContent = newVal || 'Click to add...';
+        companyValue.classList.toggle('empty', !newVal);
         companyValue.classList.add('flash-success');
         setTimeout(() => companyValue.classList.remove('flash-success'), 600);
-      },
-      onCreate: async (name) => {
-        const result = await createCompanyFromDropdown(name);
-        if (result) {
-          await loadData();
-          const oldName = contact.companyName || '';
-          await updateDocument('contacts', contact.id, { companyId: result.id, companyName: result.label });
-          await logFieldEdit('contacts', contact.id, 'Company', oldName, result.label);
-          contact.companyId = result.id;
-          contact.companyName = result.label;
-          companyValue.classList.remove('editing', 'empty');
-          companyValue.innerHTML = '';
-          const newLink = document.createElement('span');
-          newLink.style.cssText = 'color:var(--accent);cursor:pointer;';
-          newLink.textContent = result.label;
-          newLink.addEventListener('click', () => {
-            const company = companies.find(c => c.id === result.id);
-            if (company) showCompanyPage(company);
-          });
-          companyValue.appendChild(newLink);
-        }
-      },
-      placeholder: 'Search or create company...'
+      } catch (err) {
+        console.error('Save company failed:', err);
+        companyValue.textContent = oldVal || 'Click to add...';
+        companyValue.classList.toggle('empty', !oldVal);
+      }
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      else if (e.key === 'Escape') {
+        committed = true;
+        companyValue.classList.remove('editing');
+        companyValue.textContent = oldVal || 'Click to add...';
+        companyValue.classList.toggle('empty', !oldVal);
+      }
     });
-    companyValue.appendChild(dropdown);
-    const input = companyValue.querySelector('input');
-    if (input) input.focus();
   });
 
   companyField.appendChild(companyValue);
