@@ -313,10 +313,17 @@ async function registerAllViews() {
     destroy: invoicingMod.destroy
   });
 
+  const inventoryMod = await import('./views/repair/inventory.js');
+  registerView('inventory', {
+    init: inventoryMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Parts Inventory'; inventoryMod.render(); },
+    destroy: inventoryMod.destroy
+  });
+
   // Placeholder views for modules not yet implemented
   const placeholderViews = [
     'scheduling', 'reporting',
-    'tickets', 'inventory', 'checkin',
+    'tickets', 'checkin',
     'jobs', 'dispatching', 'quoting',
     'bom', 'work-orders',
     'projects', 'time-tracking', 'proposals',
