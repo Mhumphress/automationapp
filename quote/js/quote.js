@@ -17,10 +17,13 @@ if (!token) {
 
 async function loadQuote() {
   try {
+    const brandPromise = getDoc(doc(db, 'settings', 'branding'))
+      .catch(err => { console.warn('[quote] settings/branding read failed:', err.code || err.message); return null; });
     const [viewSnap, brandSnap] = await Promise.all([
       getDoc(doc(db, 'quote_views', token)),
-      getDoc(doc(db, 'settings', 'branding')).catch(() => null),
+      brandPromise,
     ]);
+    console.log('[quote] branding doc:', brandSnap && brandSnap.exists() ? brandSnap.data() : '(missing or inaccessible)');
     if (!viewSnap.exists()) {
       renderError('Quote not found.', 'This link may be invalid or the quote may have been cancelled.');
       return;
