@@ -1191,6 +1191,19 @@ async function provisionTenant(deal) {
 
     const tenantId = tenantRef.id;
 
+    // Seed default tenant settings (labor rate, currency, timezone)
+    {
+      const { doc: fbDoc2, setDoc: fbSetDoc2, serverTimestamp: fbServerTs2 } =
+        await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      const { db: fbDb2 } = await import('../config.js');
+      await fbSetDoc2(fbDoc2(fbDb2, `tenants/${tenantId}/settings/general`), {
+        laborRate: 0,
+        currency: 'USD',
+        timezone: 'America/Chicago',
+        createdAt: fbServerTs2()
+      });
+    }
+
     // 1b. Create tenant owner user placeholder + lookup mapping
     const contact = contacts.find(c => c.id === deal.contactId);
     const ownerEmail = contact ? (contact.email || '') : '';

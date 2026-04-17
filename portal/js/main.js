@@ -537,9 +537,23 @@ async function renderTeam() {
 
 // ── Account Settings ──
 
-function renderAccountSettings() {
+async function renderAccountSettings() {
   const container = document.getElementById('view-account-settings');
   const tenant = getTenant();
+
+  container.innerHTML = '<div class="loading">Loading settings...</div>';
+
+  const { getDoc: fbGetDoc, setDoc: fbSetDoc, doc: fbDoc, serverTimestamp: fbServerTs } =
+    await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const { db: fbDb } = await import('./config.js');
+
+  let generalSettings = {};
+  try {
+    const snap = await fbGetDoc(fbDoc(fbDb, `tenants/${tenant.id}/settings/general`));
+    generalSettings = snap.exists() ? snap.data() : {};
+  } catch (err) { console.error('Load settings failed:', err); }
+
+  const canEdit = !isReadOnly() && !isSuspended();
 
   container.innerHTML = `
     <div class="settings-section">
@@ -549,7 +563,39 @@ function renderAccountSettings() {
       <div class="detail-field"><div class="detail-field-label">Status</div><div class="detail-field-value">${escapeHtml(tenant.status || '-')}</div></div>
       <div class="detail-field"><div class="detail-field-label">Account ID</div><div class="detail-field-value" style="font-family:monospace;font-size:0.8rem;">${escapeHtml(tenant.id || '-')}</div></div>
     </div>
+    <div class="settings-section" style="margin-top:1.5rem;">
+      <h2 class="section-title">Billing Defaults</h2>
+      <div class="modal-field">
+        <label>Labor Rate (per hour)</label>
+        <input type="number" id="laborRateInput" min="0" step="0.01" ${canEdit ? '' : 'disabled'} value="${generalSettings.laborRate ?? 0}">
+      </div>
+      ${canEdit ? '<button class="btn btn-primary btn-sm" id="saveSettingsBtn">Save</button>' : ''}
+      <span id="settingsSaveStatus" style="margin-left:0.75rem;color:var(--gray);font-size:0.85rem;"></span>
+    </div>
   `;
+
+  const saveBtn = container.querySelector('#saveSettingsBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      const status = container.querySelector('#settingsSaveStatus');
+      const rate = Number(container.querySelector('#laborRateInput').value) || 0;
+      saveBtn.disabled = true;
+      status.textContent = 'Saving...';
+      try {
+        await fbSetDoc(
+          fbDoc(fbDb, `tenants/${tenant.id}/settings/general`),
+          { laborRate: rate, updatedAt: fbServerTs() },
+          { merge: true }
+        );
+        status.textContent = 'Saved.';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch (err) {
+        status.textContent = 'Save failed: ' + err.message;
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
 }
 
 // ── Utility (inline to avoid import issues) ──
