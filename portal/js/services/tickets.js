@@ -1,7 +1,7 @@
 import { db, auth } from '../config.js';
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, setDoc,
-  query, orderBy, where, serverTimestamp, runTransaction, arrayUnion, Timestamp
+  collection, doc, getDoc, getDocs, addDoc, updateDoc,
+  query, orderBy, serverTimestamp, runTransaction, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getTenantId } from '../tenant-context.js';
 
@@ -204,7 +204,14 @@ export async function removePartFromTicket(ticketId, partIndex) {
     const removed = partsUsed.splice(partIndex, 1)[0];
     const partRef = removed.partId ? doc(db, `tenants/${tid}/inventory/${removed.partId}`) : null;
 
-    let historyEntry = {
+    // All reads before any writes (Firestore transaction requirement)
+    let partData = null;
+    if (partRef) {
+      const partSnap = await tx.get(partRef);
+      if (partSnap.exists()) partData = partSnap.data();
+    }
+
+    const historyEntry = {
       type: 'part_removed',
       description: `Removed ${removed.qty}× ${removed.name || removed.sku}`,
       at: Timestamp.now(),
@@ -220,16 +227,12 @@ export async function removePartFromTicket(ticketId, partIndex) {
       updatedBy: user ? user.uid : null
     });
 
-    // Return stock if the part still exists in inventory
-    if (partRef) {
-      const partSnap = await tx.get(partRef);
-      if (partSnap.exists()) {
-        tx.update(partRef, {
-          quantity: (partSnap.data().quantity || 0) + removed.qty,
-          updatedAt: serverTimestamp(),
-          updatedBy: user ? user.uid : null
-        });
-      }
+    if (partRef && partData) {
+      tx.update(partRef, {
+        quantity: (partData.quantity || 0) + removed.qty,
+        updatedAt: serverTimestamp(),
+        updatedBy: user ? user.uid : null
+      });
     }
   });
 }
@@ -242,106 +245,116 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
   const tid = getTenantId();
   if (!tid) throw new Error('No tenant context');
   const user = auth.currentUser;
+  const ticketRef = doc(db, `tenants/${tid}/tickets/${ticketId}`);
+  const settingsRef = doc(db, `tenants/${tid}/settings/general`);
+  const invoicesCol = collection(db, `tenants/${tid}/invoices_crm`);
+  const activityCol = collection(db, `tenants/${tid}/activity`);
 
-  const ticket = await getTicket(ticketId);
-  if (!ticket) throw new Error('Ticket not found');
-  if (ticket.invoiceId) throw new Error('Ticket already has an invoice');
-  if (ticket.status !== 'completed') throw new Error('Ticket must be completed to generate an invoice');
+  return runTransaction(db, async (tx) => {
+    // All reads first
+    const [ticketSnap, settingsSnap] = await Promise.all([
+      tx.get(ticketRef),
+      tx.get(settingsRef)
+    ]);
+    if (!ticketSnap.exists()) throw new Error('Ticket not found');
+    const ticket = { id: ticketSnap.id, ...ticketSnap.data() };
+    if (ticket.invoiceId) throw new Error('Ticket already has an invoice');
+    if (ticket.status !== 'completed') throw new Error('Ticket must be completed to generate an invoice');
 
-  // Fetch tenant labor rate
-  const settingsSnap = await getDoc(doc(db, `tenants/${tid}/settings/general`));
-  const laborRate = settingsSnap.exists() ? (settingsSnap.data().laborRate || 0) : 0;
+    const laborRate = settingsSnap.exists() ? (settingsSnap.data().laborRate || 0) : 0;
 
-  const lineItems = [];
-  let subtotal = 0;
+    // Compute line items
+    const lineItems = [];
+    let subtotal = 0;
 
-  const hasInventoryParts = Array.isArray(ticket.partsUsed) && ticket.partsUsed.length > 0;
-  if (hasInventoryParts) {
-    ticket.partsUsed.forEach(p => {
-      const amount = (p.qty || 0) * (p.unitPrice || 0);
+    const hasInventoryParts = Array.isArray(ticket.partsUsed) && ticket.partsUsed.length > 0;
+    if (hasInventoryParts) {
+      ticket.partsUsed.forEach(p => {
+        const amount = (p.qty || 0) * (p.unitPrice || 0);
+        lineItems.push({
+          description: p.name || p.sku || 'Part',
+          quantity: p.qty || 0,
+          rate: p.unitPrice || 0,
+          amount
+        });
+        subtotal += amount;
+      });
+    } else if (opts.basicPartsTotal && opts.basicPartsTotal > 0) {
+      const amount = opts.basicPartsTotal;
       lineItems.push({
-        description: p.name || p.sku || 'Part',
-        quantity: p.qty || 0,
-        rate: p.unitPrice || 0,
+        description: opts.basicPartsLabel || 'Parts',
+        quantity: 1,
+        rate: amount,
         amount
       });
       subtotal += amount;
+    }
+
+    if ((ticket.laborMinutes || 0) > 0) {
+      const hours = Math.round(((ticket.laborMinutes || 0) / 60) * 4) / 4;
+      const labor = hours * laborRate;
+      lineItems.push({
+        description: 'Labor',
+        quantity: hours,
+        rate: laborRate,
+        amount: labor
+      });
+      subtotal += labor;
+    }
+
+    const invoiceNumber = `INV-${ticket.ticketNumber}`;
+    const invoiceRef = doc(invoicesCol);
+    const activityRef = doc(activityCol);
+
+    const invoiceData = {
+      invoiceNumber,
+      clientName: ticket.customerName || '',
+      contactId: ticket.contactId || null,
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticketNumber,
+      issueDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+      lineItems,
+      subtotal,
+      taxRate: 0,
+      taxAmount: 0,
+      total: subtotal,
+      status: 'draft',
+      notes: `Auto-generated from ticket ${ticket.ticketNumber}`,
+      createdAt: serverTimestamp(),
+      createdBy: user ? user.uid : null,
+      updatedAt: serverTimestamp(),
+      updatedBy: user ? user.uid : null
+    };
+
+    // All writes
+    tx.set(invoiceRef, invoiceData);
+
+    const historyEntry = {
+      type: 'invoice_generated',
+      description: `Invoice ${invoiceNumber} generated (${lineItems.length} line items)`,
+      at: Timestamp.now(),
+      byUid: user ? user.uid : null,
+      byEmail: user ? user.email : null
+    };
+    tx.update(ticketRef, {
+      invoiceId: invoiceRef.id,
+      history: [historyEntry, ...(ticket.history || [])].slice(0, HISTORY_CAP),
+      updatedAt: serverTimestamp(),
+      updatedBy: user ? user.uid : null
     });
-  } else if (opts.basicPartsTotal && opts.basicPartsTotal > 0) {
-    const amount = opts.basicPartsTotal;
-    lineItems.push({
-      description: opts.basicPartsLabel || 'Parts',
-      quantity: 1,
-      rate: amount,
-      amount
+
+    tx.set(activityRef, {
+      type: 'ticket_completed',
+      description: `Ticket ${ticket.ticketNumber} completed and invoice ${invoiceNumber} generated`,
+      metadata: { ticketId: ticket.id, invoiceId: invoiceRef.id },
+      createdAt: serverTimestamp(),
+      createdBy: user ? user.uid : null,
+      createdByEmail: user ? user.email : null
     });
-    subtotal += amount;
-  }
 
-  // Labor line (if any labor logged)
-  if ((ticket.laborMinutes || 0) > 0) {
-    const hours = Math.round(((ticket.laborMinutes || 0) / 60) * 4) / 4; // round to 0.25
-    const labor = hours * laborRate;
-    lineItems.push({
-      description: 'Labor',
-      quantity: hours,
-      rate: laborRate,
-      amount: labor
-    });
-    subtotal += labor;
-  }
-
-  const invoiceNumber = `INV-${ticket.ticketNumber}`;
-  const invoiceData = {
-    invoiceNumber,
-    clientName: ticket.customerName || '',
-    contactId: ticket.contactId || null,
-    ticketId: ticket.id,
-    ticketNumber: ticket.ticketNumber,
-    issueDate: new Date().toISOString().split('T')[0],
-    dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-    lineItems,
-    subtotal,
-    taxRate: 0,
-    taxAmount: 0,
-    total: subtotal,
-    status: 'draft',
-    notes: `Auto-generated from ticket ${ticket.ticketNumber}`,
-    createdAt: serverTimestamp(),
-    createdBy: user ? user.uid : null,
-    updatedAt: serverTimestamp(),
-    updatedBy: user ? user.uid : null
-  };
-
-  const invoiceRef = await addDoc(collection(db, `tenants/${tid}/invoices_crm`), invoiceData);
-
-  // Link ticket → invoice + history + tenant activity
-  await updateDoc(tenantDoc(`tickets/${ticketId}`), {
-    invoiceId: invoiceRef.id,
-    history: [
-      {
-        type: 'invoice_generated',
-        description: `Invoice ${invoiceNumber} generated (${lineItems.length} line items)`,
-        at: Timestamp.now(),
-        byUid: user ? user.uid : null,
-        byEmail: user ? user.email : null
-      },
-      ...(ticket.history || [])
-    ].slice(0, HISTORY_CAP),
-    updatedAt: serverTimestamp(),
-    updatedBy: user ? user.uid : null
+    return { invoiceId: invoiceRef.id, invoiceNumber };
   });
-
-  await addDoc(collection(db, `tenants/${tid}/activity`), {
-    type: 'ticket_completed',
-    description: `Ticket ${ticket.ticketNumber} completed and invoice ${invoiceNumber} generated`,
-    metadata: { ticketId: ticket.id, invoiceId: invoiceRef.id },
-    createdAt: serverTimestamp(),
-    createdBy: user ? user.uid : null,
-    createdByEmail: user ? user.email : null
-  });
-
-  return { invoiceId: invoiceRef.id, invoiceNumber };
 }
 
 export { Timestamp };
