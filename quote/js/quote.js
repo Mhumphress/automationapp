@@ -50,11 +50,26 @@ function renderQuote(q, brand) {
   const accent = brand.accent || brand.primaryColor || '#4F7BF7';
   document.documentElement.style.setProperty('--q-accent', accent);
 
-  const plan = q.priceOverride ?? q.basePrice ?? 0;
-  const addonsTotal = (q.addOns || []).reduce((s, a) => s + (a.priceMonthly || 0) * (a.qty || 1), 0);
+  const planMonthly = q.priceOverride ?? q.basePrice ?? 0;
+  const addonsMonthly = (q.addOns || []).reduce((s, a) => s + (a.priceMonthly || 0) * (a.qty || 1), 0);
+  const seatsMonthly = q.seatMonthlyTotal || ((q.extraUsers || 0) * 3);
+  const isAnnual = q.billingCycle === 'annual';
+  const cycle = isAnnual ? 'yr' : 'mo';
+  const ANNUAL_DISCOUNT = 0.15;
+
+  // Show each line in the chosen cycle
+  const plan = isAnnual ? planMonthly * 12 * (1 - ANNUAL_DISCOUNT) : planMonthly;
+  const addonsTotal = isAnnual ? addonsMonthly * 12 * (1 - ANNUAL_DISCOUNT) : addonsMonthly;
+  const seatsTotal = isAnnual ? seatsMonthly * 12 * (1 - ANNUAL_DISCOUNT) : seatsMonthly;
+  const recurring = q.recurring || (isAnnual
+    ? (planMonthly + addonsMonthly + seatsMonthly) * 12 * (1 - ANNUAL_DISCOUNT)
+    : planMonthly + addonsMonthly + seatsMonthly);
+  const annualSavings = q.annualSavings || (isAnnual
+    ? (planMonthly + addonsMonthly + seatsMonthly) * 12 * ANNUAL_DISCOUNT
+    : 0);
+
   const laborTotal = (q.laborHours || 0) * (q.laborRate || 0);
   const lineTotal = (q.lineItems || []).reduce((s, l) => s + (l.amount || 0), 0);
-  const cycle = q.billingCycle === 'annual' ? 'yr' : 'mo';
   const fullDate = q.validUntil ? (q.validUntil.toDate ? q.validUntil.toDate() : new Date(q.validUntil)) : null;
 
   wrap.innerHTML = `
@@ -79,10 +94,15 @@ function renderQuote(q, brand) {
 
     ${plan > 0 ? `
     <section class="q-section">
-      <h2>Plan</h2>
+      <h2>Plan${isAnnual ? ' <span style="font-size:0.75rem;color:var(--q-ok);font-weight:500;">(annual — 15% off)</span>' : ''}</h2>
       <table class="q-table">
-        <tr><td>${escapeHtml(q.tier || 'Subscription')}</td><td class="num">${money(plan)}/${cycle}</td></tr>
-        ${(q.addOns || []).map(a => `<tr><td style="color:var(--q-muted);padding-left:1rem;">+ ${escapeHtml(a.name)}${a.qty > 1 ? ` × ${a.qty}` : ''}</td><td class="num">${money((a.priceMonthly || 0) * (a.qty || 1))}/${cycle}</td></tr>`).join('')}
+        <tr><td>${escapeHtml(q.tier || 'Subscription')}${q.userLimit ? ` · ${q.userLimit === 0 ? 'Unlimited' : q.userLimit} users included` : ''}</td><td class="num">${money(plan)}/${cycle}</td></tr>
+        ${(q.addOns || []).map(a => {
+          const mo = (a.priceMonthly || 0) * (a.qty || 1);
+          const display = isAnnual ? mo * 12 * (1 - ANNUAL_DISCOUNT) : mo;
+          return `<tr><td style="color:var(--q-muted);padding-left:1rem;">+ ${escapeHtml(a.name)}${a.qty > 1 ? ` × ${a.qty}` : ''}</td><td class="num">${money(display)}/${cycle}</td></tr>`;
+        }).join('')}
+        ${seatsMonthly > 0 ? `<tr><td style="color:var(--q-muted);padding-left:1rem;">+ Extra users (${q.extraUsers || 0} × $3/mo)</td><td class="num">${money(seatsTotal)}/${cycle}</td></tr>` : ''}
       </table>
     </section>` : ''}
 
@@ -100,9 +120,10 @@ function renderQuote(q, brand) {
 
     <div class="q-totals">
       <div class="row"><span>Subtotal</span><span class="num">${money(q.subtotal || 0)}</span></div>
+      ${annualSavings > 0 ? `<div class="row discount"><span>Annual savings (15% off)</span><span class="num">-${money(annualSavings)}</span></div>` : ''}
       ${q.discount && q.discount.amount > 0 ? `<div class="row discount"><span>Discount — ${escapeHtml(q.discount.reason || '')}</span><span class="num">-${money(q.discount.amount)}</span></div>` : ''}
       <div class="row grand"><span>Total today</span><span class="num">${money(q.total || 0)}</span></div>
-      ${(plan + addonsTotal) > 0 ? `<div class="row recurring"><span>Recurring</span><span class="num">${money(plan + addonsTotal)}/${cycle}</span></div>` : ''}
+      ${recurring > 0 ? `<div class="row recurring"><span>Renews at</span><span class="num">${money(recurring)}/${cycle}</span></div>` : ''}
     </div>
 
     ${q.notes ? `<div class="q-notes">${escapeHtml(q.notes)}</div>` : ''}

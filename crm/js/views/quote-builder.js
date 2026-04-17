@@ -33,6 +33,8 @@ export async function openBuilder(existingQuoteId) {
     billingCycle: existing?.billingCycle || 'monthly',
     basePrice: existing?.basePrice || 0,
     priceOverride: existing?.priceOverride || null,
+    userLimit: existing?.userLimit || 0,
+    extraUsers: existing?.extraUsers || 0,
     addOns: existing?.addOns || [],
     laborHours: existing?.laborHours || 0,
     laborRate: existing?.laborRate || 125,
@@ -105,12 +107,22 @@ function renderShell(existing, verticals, packages, addons, contacts) {
             <label>Billing Cycle</label>
             <select name="billingCycle">
               <option value="monthly" ${formState.billingCycle === 'monthly' ? 'selected' : ''}>Monthly</option>
-              <option value="annual" ${formState.billingCycle === 'annual' ? 'selected' : ''}>Annual</option>
+              <option value="annual" ${formState.billingCycle === 'annual' ? 'selected' : ''}>Annual — 15% off</option>
             </select>
           </div>
           <div class="modal-field">
             <label>Price Override (optional)</label>
             <input type="number" name="priceOverride" min="0" step="0.01" value="${formState.priceOverride ?? ''}" placeholder="Leave blank to use package default">
+          </div>
+        </div>
+        <div class="modal-form-grid">
+          <div class="modal-field">
+            <label>Included Users <span id="includedUsersLabel" style="color:var(--gray-dark);font-weight:400;">—</span></label>
+            <input type="text" value="${formState.userLimit === 0 ? 'Unlimited' : formState.userLimit}" readonly style="background:var(--off-white);">
+          </div>
+          <div class="modal-field">
+            <label>Extra Users <span style="color:var(--gray-dark);font-weight:400;">($3/mo each)</span></label>
+            <input type="number" name="extraUsers" min="0" step="1" value="${formState.extraUsers || 0}">
           </div>
         </div>
       </div>
@@ -252,15 +264,20 @@ function attachBuilderHandlers(verticals, packages, addons, contacts) {
       if (pkg) {
         formState.basePrice = Number(pkg.basePrice) || 0;
         formState.tier = pkg.tier || '';
+        formState.userLimit = Number(pkg.userLimit) || 0;
+        // Reflect in the read-only included-users input
+        const readOnlyInput = root.querySelector('.modal-field input[readonly]');
+        if (readOnlyInput) readOnlyInput.value = formState.userLimit === 0 ? 'Unlimited' : formState.userLimit;
       }
     } else {
-      formState.basePrice = 0; formState.tier = '';
+      formState.basePrice = 0; formState.tier = ''; formState.userLimit = 0;
     }
     renderAddons(addons);
     recalc();
   });
   root.querySelector('[name="billingCycle"]').addEventListener('change', (e) => { formState.billingCycle = e.target.value; recalc(); });
   root.querySelector('[name="priceOverride"]').addEventListener('input', (e) => { formState.priceOverride = e.target.value ? Number(e.target.value) : null; recalc(); });
+  root.querySelector('[name="extraUsers"]').addEventListener('input', (e) => { formState.extraUsers = Math.max(0, Number(e.target.value) || 0); recalc(); });
 
   // Labor
   root.querySelector('[name="laborHours"]').addEventListener('input', (e) => { formState.laborHours = Number(e.target.value) || 0; recalc(); });
@@ -366,40 +383,77 @@ function recalc() {
   renderLivePanel();
 }
 
+const SEAT_PRICE_MONTHLY = 3;          // per extra user, per month
+const ANNUAL_DISCOUNT = 0.15;          // 15% off when billed annually
+
 function renderLivePanel() {
   const panel = document.getElementById('livePanel');
   if (!panel) return;
 
-  const plan = formState.priceOverride ?? formState.basePrice ?? 0;
-  const addonsTotal = (formState.addOns || []).reduce((s, a) => s + (a.priceMonthly || 0) * (a.qty || 1), 0);
+  const isAnnual = formState.billingCycle === 'annual';
+  const cycleLabel = isAnnual ? 'yr' : 'mo';
+
+  // All per-month values
+  const planMonthly = formState.priceOverride ?? formState.basePrice ?? 0;
+  const addonsMonthly = (formState.addOns || []).reduce((s, a) => s + (a.priceMonthly || 0) * (a.qty || 1), 0);
+  const seatsMonthly = (formState.extraUsers || 0) * SEAT_PRICE_MONTHLY;
+  const recurringMonthly = planMonthly + addonsMonthly + seatsMonthly;
+
+  // Recurring in the chosen cycle (annual = 12× monthly × 0.85)
+  const recurringFullYear = recurringMonthly * 12;
+  const recurring = isAnnual
+    ? Math.round(recurringFullYear * (1 - ANNUAL_DISCOUNT) * 100) / 100
+    : recurringMonthly;
+  const annualSavings = isAnnual ? Math.round((recurringFullYear - recurring) * 100) / 100 : 0;
+
+  // Display values (each category in the chosen cycle)
+  const planCycle = isAnnual ? planMonthly * 12 * (1 - ANNUAL_DISCOUNT) : planMonthly;
+  const addonsCycle = isAnnual ? addonsMonthly * 12 * (1 - ANNUAL_DISCOUNT) : addonsMonthly;
+  const seatsCycle = isAnnual ? seatsMonthly * 12 * (1 - ANNUAL_DISCOUNT) : seatsMonthly;
+
+  // One-time items (labor + custom line items) are not discounted by annual billing
   const laborTotal = (formState.laborHours || 0) * (formState.laborRate || 0);
   const lineItemsTotal = (formState.lineItems || []).reduce((s, l) => s + (l.amount || 0), 0);
   const oneTime = laborTotal + lineItemsTotal;
-  const recurring = plan + addonsTotal;
-  const subtotal = oneTime + recurring;
+
+  // Gross subtotal = one-time + full-recurring (pre annual-discount). This makes
+  // the math readable in the totals block: subtotal − savings − discount = total.
+  const grossRecurring = isAnnual ? recurringFullYear : recurringMonthly;
+  const grossSubtotal = oneTime + grossRecurring;
+  const subtotalAfterAnnual = grossSubtotal - annualSavings;
+
+  // Customer discount (% or $) applies after annual savings
   let discount = 0;
   if (formState.discount.value > 0) {
     discount = formState.discount.type === 'percent'
-      ? Math.round(subtotal * (Math.min(formState.discount.value, 100) / 100) * 100) / 100
-      : Math.min(formState.discount.value, subtotal);
+      ? Math.round(subtotalAfterAnnual * (Math.min(formState.discount.value, 100) / 100) * 100) / 100
+      : Math.min(formState.discount.value, subtotalAfterAnnual);
   }
-  const totalToday = Math.max(0, subtotal - discount);
+  const totalToday = Math.max(0, subtotalAfterAnnual - discount);
+  // Store the gross subtotal so the public page displays the same breakdown
+  const subtotal = grossSubtotal;
 
   formState.subtotal = subtotal;
   formState.total = totalToday;
   formState.discountAmount = discount;
+  formState.recurring = recurring;
+  formState.recurringMonthly = recurringMonthly;
+  formState.annualSavings = annualSavings;
+  formState.seatMonthlyTotal = seatsMonthly;
 
   panel.innerHTML = `
     <h3 style="font-family:var(--font-display);font-size:1.1rem;margin:0 0 0.75rem;">Live Quote</h3>
-    ${plan > 0 ? `<div class="tip-row"><span>${escapeHtml(formState.tier || 'Plan')}</span><strong>${formatCurrency(plan)}/${formState.billingCycle === 'annual' ? 'yr' : 'mo'}</strong></div>` : ''}
-    ${addonsTotal > 0 ? `<div class="tip-row"><span>Add-ons</span><strong>${formatCurrency(addonsTotal)}/mo</strong></div>` : ''}
+    ${planCycle > 0 ? `<div class="tip-row"><span>${escapeHtml(formState.tier || 'Plan')}</span><strong>${formatCurrency(planCycle)}/${cycleLabel}</strong></div>` : ''}
+    ${addonsCycle > 0 ? `<div class="tip-row"><span>Add-ons</span><strong>${formatCurrency(addonsCycle)}/${cycleLabel}</strong></div>` : ''}
+    ${seatsCycle > 0 ? `<div class="tip-row"><span>Extra users (${formState.extraUsers || 0} × $3/mo)</span><strong>${formatCurrency(seatsCycle)}/${cycleLabel}</strong></div>` : ''}
     ${laborTotal > 0 ? `<div class="tip-row"><span>Labor (${formState.laborHours}h)</span><strong>${formatCurrency(laborTotal)}</strong></div>` : ''}
     ${lineItemsTotal > 0 ? `<div class="tip-row"><span>Custom work</span><strong>${formatCurrency(lineItemsTotal)}</strong></div>` : ''}
     <hr style="margin:0.5rem 0;border:none;border-top:1px solid var(--off-white);">
     <div class="tip-row"><span>Subtotal</span><strong>${formatCurrency(subtotal)}</strong></div>
+    ${annualSavings > 0 ? `<div class="tip-row" style="color:#059669;font-size:0.85rem;"><span>Annual savings (15%)</span><strong>-${formatCurrency(annualSavings)}</strong></div>` : ''}
     ${discount > 0 ? `<div class="tip-row" style="color:#059669;"><span>Discount</span><strong>-${formatCurrency(discount)}</strong></div>` : ''}
     <div class="tip-row" style="font-size:1.15rem;padding-top:0.5rem;"><span>Total today</span><strong>${formatCurrency(totalToday)}</strong></div>
-    <div class="tip-row" style="color:var(--gray-dark);font-size:0.85rem;"><span>Recurring</span><strong>${formatCurrency(recurring)}/${formState.billingCycle === 'annual' ? 'yr' : 'mo'}</strong></div>
+    <div class="tip-row" style="color:var(--gray-dark);font-size:0.85rem;"><span>Recurring</span><strong>${formatCurrency(recurring)}/${cycleLabel}</strong></div>
     <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1rem;">
       <button type="button" class="btn btn-ghost" id="saveDraftBtn">Save Draft</button>
       <button type="button" class="btn btn-primary" id="sendBtn">Send to Customer &rarr;</button>
@@ -426,12 +480,14 @@ async function saveQuote(send) {
         throw new Error('Please enter a customer name or pick an existing customer.');
       }
       const { addDocument } = await import('../services/firestore.js');
+      // Write both company and companyName so legacy list views also see it
       const ref = await addDocument('contacts', {
         firstName: formState.customerSnapshot.firstName || '',
         lastName: formState.customerSnapshot.lastName || '',
         email: formState.customerSnapshot.email || '',
         phone: formState.customerSnapshot.phone || '',
         company: formState.customerSnapshot.company || '',
+        companyName: formState.customerSnapshot.company || '',
       });
       contactId = ref.id;
     }
@@ -445,6 +501,12 @@ async function saveQuote(send) {
       billingCycle: formState.billingCycle,
       basePrice: formState.basePrice,
       priceOverride: formState.priceOverride,
+      userLimit: formState.userLimit || 0,
+      extraUsers: formState.extraUsers || 0,
+      seatMonthlyTotal: formState.seatMonthlyTotal || 0,
+      recurringMonthly: formState.recurringMonthly || 0,
+      recurring: formState.recurring || 0,
+      annualSavings: formState.annualSavings || 0,
       addOns: formState.addOns,
       laborHours: formState.laborHours,
       laborRate: formState.laborRate,
