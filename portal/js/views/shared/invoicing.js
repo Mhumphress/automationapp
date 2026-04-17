@@ -250,11 +250,12 @@ function showDetail(inv) {
     const tbody = document.createElement('tbody');
     inv.lineItems.forEach(li => {
       const tr = document.createElement('tr');
+      const color = li.isDiscount ? 'color:#059669;' : '';
       tr.innerHTML = `
-        <td>${escapeHtml(li.description)}</td>
-        <td style="text-align:right;">${li.quantity}</td>
-        <td style="text-align:right;">${formatCurrency(li.rate)}</td>
-        <td style="text-align:right;">${formatCurrency(li.amount)}</td>
+        <td style="${color}">${escapeHtml(li.description)}</td>
+        <td style="text-align:right;${color}">${li.quantity}</td>
+        <td style="text-align:right;${color}">${formatCurrency(li.rate)}</td>
+        <td style="text-align:right;${color}">${formatCurrency(li.amount)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -262,8 +263,18 @@ function showDetail(inv) {
     container.appendChild(table);
 
     const totals = document.createElement('div');
-    totals.style.cssText = 'text-align:right;margin-top:1rem;font-size:1.1rem;font-weight:600;';
-    totals.textContent = `Total: ${formatCurrency(inv.total || 0)}`;
+    totals.style.cssText = 'text-align:right;margin-top:1rem;font-size:0.95rem;';
+    const hasDiscount = (inv.discountAmount || 0) > 0;
+    const rows = [];
+    if (hasDiscount) {
+      rows.push(`<div>Subtotal: ${formatCurrency(inv.subtotal || 0)}</div>`);
+      const discountLabel = inv.discountType === 'percent'
+        ? `Discount (${inv.discountValue}% ${escapeHtml(inv.discountReason || '')})`
+        : `Discount (${escapeHtml(inv.discountReason || '')})`;
+      rows.push(`<div style="color:#059669;">${discountLabel}: -${formatCurrency(inv.discountAmount || 0)}</div>`);
+    }
+    rows.push(`<div style="font-size:1.1rem;font-weight:600;margin-top:0.35rem;">Total: ${formatCurrency(inv.total || 0)}</div>`);
+    totals.innerHTML = rows.join('');
     container.appendChild(totals);
   }
 

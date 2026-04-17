@@ -302,6 +302,33 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
       subtotal += labor;
     }
 
+    // Discount (after parts + labor). Clamp to not exceed subtotal.
+    let discountAmount = 0;
+    let discountLine = null;
+    if (opts.discount && opts.discount.value > 0 && opts.discount.reason) {
+      const { reason, type, value } = opts.discount;
+      if (type === 'percent') {
+        discountAmount = Math.round(subtotal * (Math.min(value, 100) / 100) * 100) / 100;
+      } else {
+        discountAmount = Math.min(value, subtotal);
+      }
+      if (discountAmount > 0) {
+        const label = type === 'percent'
+          ? `Discount — ${reason} (${value}% off)`
+          : `Discount — ${reason}`;
+        discountLine = {
+          description: label,
+          quantity: 1,
+          rate: -discountAmount,
+          amount: -discountAmount,
+          isDiscount: true
+        };
+        lineItems.push(discountLine);
+      }
+    }
+
+    const total = Math.max(0, subtotal - discountAmount);
+
     const invoiceNumber = `INV-${ticket.ticketNumber}`;
     const invoiceRef = doc(invoicesCol);
     const activityRef = doc(activityCol);
@@ -316,9 +343,13 @@ export async function generateInvoiceFromTicket(ticketId, opts = {}) {
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       lineItems,
       subtotal,
+      discountReason: opts.discount?.reason || '',
+      discountType: opts.discount?.type || '',
+      discountValue: opts.discount?.value || 0,
+      discountAmount,
       taxRate: 0,
       taxAmount: 0,
-      total: subtotal,
+      total,
       status: 'draft',
       notes: `Auto-generated from ticket ${ticket.ticketNumber}`,
       createdAt: serverTimestamp(),

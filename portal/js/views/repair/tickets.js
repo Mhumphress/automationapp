@@ -447,11 +447,54 @@ function renderInvoiceSection(ticket) {
     return section;
   }
 
+  const DISCOUNT_REASONS = [
+    'Promotional', 'Customer Satisfaction', 'Military', 'Veteran',
+    'First Responder', 'Senior', 'Student', 'Loyalty / Returning',
+    'Bulk / Multiple Devices', 'Employee', 'Referral'
+  ];
+
   section.innerHTML = `
     <h3 class="section-title">Generate Invoice</h3>
     <p style="font-size:0.9rem;color:var(--gray);margin-bottom:0.75rem;">Creates an invoice from this ticket's parts and labor. Labor rate comes from your tenant settings.</p>
+
+    <details style="margin-bottom:0.75rem;">
+      <summary style="cursor:pointer;font-weight:500;padding:0.25rem 0;">Apply discount (optional)</summary>
+      <div style="padding-top:0.5rem;">
+        <div class="modal-form-grid">
+          <div class="modal-field">
+            <label>Reason</label>
+            <select id="discountReason">
+              <option value="">— None —</option>
+              ${DISCOUNT_REASONS.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}
+              <option value="__OTHER__">Other…</option>
+            </select>
+            <input type="text" id="discountReasonOther" placeholder="Custom reason" style="margin-top:0.5rem;display:none;">
+          </div>
+          <div class="modal-field">
+            <label>Type</label>
+            <select id="discountType">
+              <option value="percent">% off</option>
+              <option value="amount">$ off</option>
+            </select>
+          </div>
+          <div class="modal-field">
+            <label>Amount</label>
+            <input type="number" id="discountValue" min="0" step="0.01" value="0">
+          </div>
+        </div>
+      </div>
+    </details>
+
     <button class="btn btn-primary" id="genInvoiceBtn">Generate Invoice</button>
   `;
+
+  const reasonSel = section.querySelector('#discountReason');
+  const reasonOther = section.querySelector('#discountReasonOther');
+  reasonSel.addEventListener('change', () => {
+    const isOther = reasonSel.value === '__OTHER__';
+    reasonOther.style.display = isOther ? 'block' : 'none';
+    if (!isOther) reasonOther.value = '';
+  });
 
   const btn = section.querySelector('#genInvoiceBtn');
   btn.addEventListener('click', gateWrite(async () => {
@@ -474,6 +517,36 @@ function renderInvoiceSection(ticket) {
         }
         opts.basicPartsTotal = total;
         opts.basicPartsLabel = 'Parts: ' + ticket.partsNotes.trim();
+      }
+
+      // Discount
+      const rawReason = reasonSel.value;
+      const discountType = section.querySelector('#discountType').value;
+      const discountValue = Number(section.querySelector('#discountValue').value) || 0;
+      if (discountValue > 0) {
+        let reason = rawReason;
+        if (rawReason === '__OTHER__') {
+          reason = (reasonOther.value || '').trim();
+          if (!reason) {
+            alert('Please enter a reason for the custom discount.');
+            btn.disabled = false;
+            btn.textContent = 'Generate Invoice';
+            return;
+          }
+        }
+        if (!reason) {
+          alert('Please select a discount reason, or clear the amount.');
+          btn.disabled = false;
+          btn.textContent = 'Generate Invoice';
+          return;
+        }
+        if (discountType === 'percent' && discountValue > 100) {
+          alert('Percentage discount cannot exceed 100%.');
+          btn.disabled = false;
+          btn.textContent = 'Generate Invoice';
+          return;
+        }
+        opts.discount = { reason, type: discountType, value: discountValue };
       }
 
       const { invoiceNumber } = await generateInvoiceFromTicket(ticket.id, opts);
