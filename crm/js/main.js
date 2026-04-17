@@ -1,4 +1,4 @@
-import { auth } from './config.js';
+import { auth, db } from './config.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { registerView, navigate, initRouter } from './router.js';
 import { showToast, escapeHtml, formatDate, timeAgo, formatCurrency as fmtCurrency } from './ui.js';
@@ -15,6 +15,10 @@ import * as renewalsView from './views/renewals.js';
 import { queryDocuments } from './services/firestore.js';
 import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './services/roles.js';
 import { loadBranding, applyBranding } from './services/branding.js';
+import { subscribeToResponses, getQuote } from './services/quotes.js';
+import { enforceCancellations } from './services/subscription.js';
+import { createTenant, addTenantActivity, addTenantInvoice, addTenantUser } from './services/tenants.js';
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, runTransaction, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // ── Auth guard ──────────────────────────
 // Wait for Firebase Auth to restore session before deciding.
@@ -68,6 +72,9 @@ onAuthStateChanged(auth, (user) => {
         document.getElementById('tenantsNavItem').style.display = '';
         document.getElementById('packagesNavItem').style.display = '';
         document.getElementById('renewalsNavItem').style.display = '';
+        // Start listening for quote responses + enforce scheduled cancellations
+        subscribeToResponses(handleQuoteAccepted, handleQuoteDeclined);
+        enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
       }
     })
     .catch(err => console.error('Role setup error:', err));
@@ -657,3 +664,177 @@ initRouter('dashboard');
 // ── Dashboard empty-state button ────────
 const dashboardAddBtn = document.getElementById('dashboardAddBtn');
 if (dashboardAddBtn) dashboardAddBtn.addEventListener('click', () => { window.location.hash = 'contacts'; });
+
+// ── Quote response handlers ─────────────
+async function handleQuoteAccepted(responseId, responseData) {
+  const responseRef = doc(db, 'quote_responses', responseId);
+  // Claim the response atomically — prevents double-processing across tabs
+  const claimed = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(responseRef);
+    if (!snap.exists()) return false;
+    const data = snap.data();
+    if (data.processedAt) return false;
+    tx.update(responseRef, { processedAt: serverTimestamp() });
+    return true;
+  });
+  if (!claimed) return;
+
+  // Find the matching quote
+  const { collection: col, query: q, where: w, getDocs: gd } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const quoteSnap = await gd(q(col(db, 'quotes'), w('publicToken', '==', responseData.token)));
+  if (quoteSnap.empty) { console.warn('No quote found for token', responseData.token); return; }
+  const quoteDoc = quoteSnap.docs[0];
+  const quote = quoteDoc.data();
+  if (quote.status === 'provisioned') return; // already done
+
+  try {
+    // Flip quote status so the CRM shows "Accepted — provisioning..."
+    await updateDoc(quoteDoc.ref, {
+      status: 'accepted', acceptedAt: serverTimestamp(), signatureName: responseData.signatureName || '',
+    });
+
+    // Compute current period
+    const now = new Date();
+    const end = new Date(now);
+    if (quote.billingCycle === 'annual') end.setFullYear(end.getFullYear() + 1);
+    else end.setMonth(end.getMonth() + 1);
+
+    const { getPackage } = await import('./services/catalog.js');
+    const pkg = quote.packageId ? await getPackage(quote.packageId) : null;
+
+    // Create the tenant
+    const tenantRef = await createTenant({
+      companyName: quote.customerSnapshot?.company || `${quote.customerSnapshot?.firstName || ''} ${quote.customerSnapshot?.lastName || ''}`.trim() || 'New Tenant',
+      vertical: quote.vertical,
+      packageId: quote.packageId,
+      tier: quote.tier,
+      addOns: quote.addOns || [],
+      priceOverride: quote.priceOverride,
+      billingCycle: quote.billingCycle,
+      status: 'active',
+      gracePeriodEnd: null,
+      features: pkg?.features || [],
+      featureOverrides: {},
+      userLimit: pkg?.userLimit || 0,
+      ownerUserId: '',
+      contactId: quote.contactId || '',
+      companyId: '',
+      dealId: null,
+      quoteId: quoteDoc.id,
+      currentPeriodStart: Timestamp.fromDate(now),
+      currentPeriodEnd: Timestamp.fromDate(end),
+      cancelAt: null,
+      scheduledChange: null,
+      trialEndsAt: null,
+      onboardingStep: 'pending',
+      dataExportRequested: false,
+      dataExportGeneratedAt: null,
+    });
+    const tenantId = tenantRef.id;
+
+    // Seed settings (laborRate, taxRate, warrantyDays, currency, timezone)
+    const { setDoc: sd, doc: dc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    await sd(dc(db, `tenants/${tenantId}/settings/general`), {
+      laborRate: quote.laborRate || 0, taxRate: 0, warrantyDays: 90, currency: 'USD', timezone: 'America/Chicago',
+      createdAt: serverTimestamp(),
+    });
+
+    // Create owner user placeholder + user_tenants mapping (so portal finds them)
+    const ownerEmail = quote.customerSnapshot?.email || '';
+    if (ownerEmail) {
+      await addTenantUser(tenantId, `pending_${Date.now()}`, {
+        email: ownerEmail,
+        displayName: `${quote.customerSnapshot?.firstName || ''} ${quote.customerSnapshot?.lastName || ''}`.trim(),
+        role: 'owner', status: 'pending', invitedBy: 'system',
+      });
+      const emailKey = ownerEmail.toLowerCase().trim();
+      await sd(dc(db, 'user_tenants', emailKey), {
+        tenantId, email: ownerEmail, role: 'owner',
+        companyName: quote.customerSnapshot?.company || '',
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    // Build first invoice line items: labor + line items + first recurring period + discount
+    const lineItems = [];
+    const laborAmount = (quote.laborHours || 0) * (quote.laborRate || 0);
+    if (laborAmount > 0) lineItems.push({ description: quote.laborDescription || 'Setup / implementation', quantity: quote.laborHours, rate: quote.laborRate, amount: laborAmount });
+    (quote.lineItems || []).forEach(li => lineItems.push(li));
+    const planPrice = quote.priceOverride ?? quote.basePrice ?? 0;
+    if (planPrice > 0) lineItems.push({
+      description: `${pkg?.name || 'Subscription'} — first ${quote.billingCycle === 'annual' ? 'year' : 'month'}`,
+      quantity: 1, rate: planPrice, amount: planPrice,
+    });
+    (quote.addOns || []).forEach(a => {
+      const mo = (a.priceMonthly || 0) * (a.qty || 1);
+      if (mo > 0) lineItems.push({
+        description: `Add-on: ${a.name}${a.qty > 1 ? ` × ${a.qty}` : ''} — first ${quote.billingCycle === 'annual' ? 'year' : 'month'}`,
+        quantity: 1, rate: mo, amount: mo,
+      });
+    });
+    if (quote.discount && quote.discount.amount > 0) {
+      lineItems.push({
+        description: `Discount — ${quote.discount.reason || ''}`,
+        quantity: 1, rate: -quote.discount.amount, amount: -quote.discount.amount, isDiscount: true,
+      });
+    }
+    const total = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
+
+    const invoiceRef = await addTenantInvoice(tenantId, {
+      invoiceNumber: `INV-T-${Date.now().toString().slice(-6)}`,
+      type: 'charge',
+      amount: total, total,
+      status: 'sent',
+      issuedDate: serverTimestamp(),
+      dueDate: Timestamp.fromDate(new Date(Date.now() + 14 * 86400000)),
+      lineItems,
+      reason: `First invoice from quote ${quote.quoteNumber}`,
+    });
+
+    await addTenantActivity(tenantId, {
+      type: 'quote_accepted',
+      description: `Provisioned from quote ${quote.quoteNumber}`,
+      metadata: { quoteId: quoteDoc.id, invoiceId: invoiceRef.id, signatureName: responseData.signatureName || '' },
+    });
+
+    // Update quote as provisioned
+    await updateDoc(quoteDoc.ref, {
+      status: 'provisioned',
+      provisionedAt: serverTimestamp(),
+      tenantId,
+      invoiceId: invoiceRef.id,
+    });
+
+    // Delete the public view so the URL stops exposing pricing
+    try { await deleteDoc(doc(db, 'quote_views', responseData.token)); } catch {}
+
+    showToast(`Tenant provisioned from quote ${quote.quoteNumber}`, 'success');
+  } catch (err) {
+    console.error('Provisioning failed:', err);
+    // Flip quote so admin can retry
+    await updateDoc(quoteDoc.ref, {
+      status: 'accepted', // stays accepted but not provisioned
+      provisioningError: err.message || String(err),
+    });
+    showToast('Provisioning failed — see Quotes list', 'error');
+  }
+}
+
+async function handleQuoteDeclined(responseId, responseData) {
+  const responseRef = doc(db, 'quote_responses', responseId);
+  const claimed = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(responseRef);
+    if (!snap.exists()) return false;
+    if (snap.data().processedAt) return false;
+    tx.update(responseRef, { processedAt: serverTimestamp() });
+    return true;
+  });
+  if (!claimed) return;
+
+  const { collection: col, query: q, where: w, getDocs: gd } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const quoteSnap = await gd(q(col(db, 'quotes'), w('publicToken', '==', responseData.token)));
+  if (quoteSnap.empty) return;
+  await updateDoc(quoteSnap.docs[0].ref, { status: 'declined', declinedAt: serverTimestamp() });
+  try { await deleteDoc(doc(db, 'quote_views', responseData.token)); } catch {}
+  showToast(`Quote declined`, 'info');
+}
