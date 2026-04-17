@@ -54,13 +54,19 @@ export async function queryDocuments(collectionName, orderField = 'createdAt', o
 
 export async function queryDocumentsWhere(collectionName, field, operator, value, orderField = 'createdAt', orderDir = 'desc') {
   const path = tenantPath(collectionName);
-  const q = query(
-    collection(db, path),
-    where(field, operator, value),
-    orderBy(orderField, orderDir)
-  );
+  // Filter-only query (no orderBy) — avoids needing a composite Firestore index
+  // for every (field, orderField) pair. We sort client-side.
+  const q = query(collection(db, path), where(field, operator, value));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  rows.sort((a, b) => {
+    const av = a[orderField];
+    const bv = b[orderField];
+    const aTime = av && av.toDate ? av.toDate().getTime() : (av instanceof Date ? av.getTime() : (typeof av === 'number' ? av : 0));
+    const bTime = bv && bv.toDate ? bv.toDate().getTime() : (bv instanceof Date ? bv.getTime() : (typeof bv === 'number' ? bv : 0));
+    return orderDir === 'asc' ? aTime - bTime : bTime - aTime;
+  });
+  return rows;
 }
 
 export { Timestamp, serverTimestamp };

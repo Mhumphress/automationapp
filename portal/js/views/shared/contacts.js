@@ -2,7 +2,11 @@ import { addDocument, updateDocument, deleteDocument, queryDocuments, queryDocum
 import { canWrite, isReadOnly, gateWrite, term } from '../../tenant-context.js';
 
 let contacts = [];
+let ticketsByContact = {};  // contactId → [tickets]
+let allTickets = [];  // for cross-search
 let searchTerm = '';
+let filterFrom = '';
+let filterTo = '';
 let currentPage = 'list';
 
 export function init() {}
@@ -19,6 +23,21 @@ export async function render() {
       return aName.localeCompare(bName);
     });
   } catch (err) { console.error(err); contacts = []; }
+
+  // Also preload tickets so we can search customers by ticket number / date
+  try {
+    allTickets = await queryDocuments('tickets', 'createdAt', 'desc');
+    ticketsByContact = {};
+    allTickets.forEach(t => {
+      if (!t.contactId) return;
+      (ticketsByContact[t.contactId] ||= []).push(t);
+    });
+  } catch (err) {
+    console.error('Preload tickets for search failed:', err);
+    allTickets = [];
+    ticketsByContact = {};
+  }
+
   if (currentPage === 'list') renderList();
 }
 
@@ -30,8 +49,16 @@ function renderList() {
 
   const topbar = document.createElement('div');
   topbar.className = 'view-topbar';
+  topbar.style.cssText = 'flex-wrap:wrap;gap:0.5rem;';
   topbar.innerHTML = `
-    <input type="text" class="search-input" placeholder="Search ${escapeHtml(term('client'))}s..." value="${escapeHtml(searchTerm)}">
+    <input type="text" class="search-input" placeholder="Search by name, phone, email, company, ticket #..." value="${escapeHtml(searchTerm)}" style="flex:1;min-width:260px;">
+    <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:var(--gray);">
+      From <input type="date" class="filter-from" value="${escapeHtml(filterFrom)}" style="padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:6px;">
+    </label>
+    <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.85rem;color:var(--gray);">
+      To <input type="date" class="filter-to" value="${escapeHtml(filterTo)}" style="padding:0.35rem 0.5rem;border:1px solid var(--border);border-radius:6px;">
+    </label>
+    ${(searchTerm || filterFrom || filterTo) ? `<button class="btn btn-ghost btn-sm" id="clearFilters">Clear</button>` : ''}
     ${canWrite() ? `<button class="btn btn-primary" id="addContactBtn">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add ${escapeHtml(term('client'))}
@@ -42,6 +69,19 @@ function renderList() {
   topbar.querySelector('.search-input').addEventListener('input', (e) => {
     searchTerm = e.target.value.trim();
     renderContent(container);
+  });
+  topbar.querySelector('.filter-from').addEventListener('change', (e) => {
+    filterFrom = e.target.value;
+    renderContent(container);
+  });
+  topbar.querySelector('.filter-to').addEventListener('change', (e) => {
+    filterTo = e.target.value;
+    renderContent(container);
+  });
+  const clearBtn = topbar.querySelector('#clearFilters');
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    searchTerm = ''; filterFrom = ''; filterTo = '';
+    renderList();
   });
 
   const addBtn = topbar.querySelector('#addContactBtn');
@@ -58,16 +98,46 @@ function renderContent(container) {
   wrapper.className = 'view-content';
 
   let filtered = [...contacts];
-  if (searchTerm) {
-    const lower = searchTerm.toLowerCase();
-    filtered = filtered.filter(c =>
-      (`${c.firstName || ''} ${c.lastName || ''}`).toLowerCase().includes(lower) ||
-      (c.name || '').toLowerCase().includes(lower) ||
-      (c.email || '').toLowerCase().includes(lower) ||
-      (c.phone || '').toLowerCase().includes(lower) ||
-      (c.company || '').toLowerCase().includes(lower)
-    );
+  const lower = searchTerm.toLowerCase();
+
+  // Date range parsing
+  const fromMs = filterFrom ? new Date(filterFrom + 'T00:00:00').getTime() : null;
+  const toMs = filterTo ? new Date(filterTo + 'T23:59:59').getTime() : null;
+
+  function contactMatchesSearch(c) {
+    if (!lower) return true;
+    if ((`${c.firstName || ''} ${c.lastName || ''}`).toLowerCase().includes(lower)) return true;
+    if ((c.name || '').toLowerCase().includes(lower)) return true;
+    if ((c.email || '').toLowerCase().includes(lower)) return true;
+    if ((c.phone || '').toLowerCase().includes(lower)) return true;
+    if ((c.company || '').toLowerCase().includes(lower)) return true;
+    // Match against any of their tickets: ticket number, device, or creation date string
+    const ts = ticketsByContact[c.id] || [];
+    for (const t of ts) {
+      if ((t.ticketNumber || '').toLowerCase().includes(lower)) return true;
+      if ((t.deviceType || '').toLowerCase().includes(lower)) return true;
+      if (t.createdAt && t.createdAt.toDate) {
+        const d = t.createdAt.toDate();
+        const iso = d.toISOString().slice(0, 10);
+        const human = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        if (iso.includes(lower) || human.toLowerCase().includes(lower)) return true;
+      }
+    }
+    return false;
   }
+
+  function contactMatchesDateRange(c) {
+    if (!fromMs && !toMs) return true;
+    const ts = ticketsByContact[c.id] || [];
+    // If no tickets, match date range by contact createdAt
+    const dates = ts.length > 0
+      ? ts.map(t => (t.createdAt && t.createdAt.toDate ? t.createdAt.toDate().getTime() : null)).filter(Boolean)
+      : (c.createdAt && c.createdAt.toDate ? [c.createdAt.toDate().getTime()] : []);
+    if (dates.length === 0) return false;
+    return dates.some(ms => (!fromMs || ms >= fromMs) && (!toMs || ms <= toMs));
+  }
+
+  filtered = filtered.filter(c => contactMatchesSearch(c) && contactMatchesDateRange(c));
 
   if (filtered.length === 0 && contacts.length === 0) {
     wrapper.innerHTML = `
@@ -300,8 +370,10 @@ function renderDetail(raw, isEditing = false) {
 async function loadContactHistory(contactId, host) {
   try {
     const [tickets, invoices] = await Promise.all([
-      queryDocumentsWhere('tickets', 'contactId', '==', contactId, 'createdAt', 'desc').catch(() => []),
-      queryDocumentsWhere('invoices_crm', 'contactId', '==', contactId, 'createdAt', 'desc').catch(() => []),
+      queryDocumentsWhere('tickets', 'contactId', '==', contactId, 'createdAt', 'desc')
+        .catch(e => { console.error('Load tickets for contact failed:', e); return []; }),
+      queryDocumentsWhere('invoices_crm', 'contactId', '==', contactId, 'createdAt', 'desc')
+        .catch(e => { console.error('Load invoices for contact failed:', e); return []; }),
     ]);
 
     host.innerHTML = '';
