@@ -44,7 +44,11 @@ function renderForm() {
       <select id="customerSelect">
         <option value="">— Select a customer —</option>
         <option value="__new__">+ New customer</option>
-        ${contacts.map(c => `<option value="${c.id}">${escapeHtml(c.name || c.email || 'Unnamed')}</option>`).join('')}
+        ${contacts.map(c => {
+          const full = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+          const label = full || c.name || c.email || 'Unnamed';
+          return `<option value="${c.id}">${escapeHtml(label)}</option>`;
+        }).join('')}
       </select>
     </div>
 
@@ -93,16 +97,25 @@ function renderForm() {
         if (!newName) throw new Error('Please enter the new customer name.');
         const newPhone = form.querySelector('[name="newPhone"]').value.trim();
         const newEmail = form.querySelector('[name="newEmail"]').value.trim();
+        const nameParts = newName.split(/\s+/);
+        const firstName = nameParts.shift() || '';
+        const lastName = nameParts.join(' ') || '';
         const ref = await addDocument('contacts', {
-          name: newName,
+          firstName,
+          lastName,
           phone: newPhone,
-          email: newEmail
+          email: newEmail,
+          company: '',
+          notes: ''
         });
         contactId = ref.id;
         customerName = newName;
       } else if (contactId) {
         const c = contacts.find(x => x.id === contactId);
-        customerName = c ? (c.name || c.email || '') : '';
+        if (c) {
+          const full = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+          customerName = full || c.name || c.email || '';
+        }
       } else {
         throw new Error('Please select a customer or add a new one.');
       }

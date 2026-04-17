@@ -150,6 +150,25 @@ function openCreateForm(listContainer) {
 
 function showDetail(contact, listContainer) {
   currentPage = 'detail';
+  renderDetail(contact);
+}
+
+// Fallback: some contacts were created via the check-in flow with {name, phone, email}
+// instead of {firstName, lastName, ...}. Migrate on display so the UI is consistent.
+function normalizeContact(c) {
+  if (!c.firstName && !c.lastName && c.name) {
+    const parts = String(c.name).trim().split(/\s+/);
+    return {
+      ...c,
+      firstName: parts.shift() || '',
+      lastName: parts.join(' ') || '',
+    };
+  }
+  return c;
+}
+
+function renderDetail(raw, isEditing = false) {
+  const contact = normalizeContact(raw);
   const container = document.getElementById('view-contacts');
   container.innerHTML = '';
 
@@ -168,9 +187,13 @@ function showDetail(contact, listContainer) {
       <div class="detail-name">${escapeHtml(contact.firstName || '')} ${escapeHtml(contact.lastName || '')}</div>
       <div class="detail-subtitle">${escapeHtml(contact.company || '')} ${contact.email ? '&middot; ' + escapeHtml(contact.email) : ''}</div>
     </div>
+    ${canWrite() && !isEditing ? '<button class="btn btn-ghost detail-edit-btn">Edit</button>' : ''}
     ${canWrite() ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
+
+  const editBtn = header.querySelector('.detail-edit-btn');
+  if (editBtn) editBtn.addEventListener('click', () => renderDetail(contact, true));
 
   const deleteBtn = header.querySelector('.detail-delete-btn');
   if (deleteBtn) deleteBtn.addEventListener('click', async () => {
@@ -183,6 +206,57 @@ function showDetail(contact, listContainer) {
       alert('Failed to delete: ' + err.message);
     }
   });
+
+  if (isEditing) {
+    const form = document.createElement('form');
+    form.className = 'modal-form';
+    form.style.maxWidth = '600px';
+    form.innerHTML = `
+      <div class="modal-form-grid">
+        <div class="modal-field"><label>First Name *</label><input type="text" name="firstName" value="${escapeHtml(contact.firstName || '')}" required></div>
+        <div class="modal-field"><label>Last Name</label><input type="text" name="lastName" value="${escapeHtml(contact.lastName || '')}"></div>
+      </div>
+      <div class="modal-form-grid">
+        <div class="modal-field"><label>Email</label><input type="email" name="email" value="${escapeHtml(contact.email || '')}"></div>
+        <div class="modal-field"><label>Phone</label><input type="tel" name="phone" value="${escapeHtml(contact.phone || '')}"></div>
+      </div>
+      <div class="modal-field"><label>Company</label><input type="text" name="company" value="${escapeHtml(contact.company || '')}"></div>
+      <div class="modal-field"><label>Notes</label><textarea name="notes" rows="3">${escapeHtml(contact.notes || '')}</textarea></div>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <button type="button" class="btn btn-ghost" id="cancelEdit">Cancel</button>
+      </div>
+    `;
+    form.querySelector('#cancelEdit').addEventListener('click', () => renderDetail(contact, false));
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const patch = {
+        firstName: fd.get('firstName').trim(),
+        lastName: fd.get('lastName').trim(),
+        email: fd.get('email').trim(),
+        phone: fd.get('phone').trim(),
+        company: fd.get('company').trim(),
+        notes: fd.get('notes').trim(),
+        // Clear the legacy `name` field so it doesn't shadow firstName/lastName on future loads
+        name: ''
+      };
+      try {
+        await updateDocument('contacts', contact.id, patch);
+        // Refresh local cache and re-render
+        contacts = await queryDocuments('contacts', 'lastName', 'asc');
+        const fresh = contacts.find(c => c.id === contact.id) || { ...contact, ...patch };
+        renderDetail(fresh, false);
+      } catch (err) {
+        console.error('Save contact failed:', err);
+        alert('Failed to save: ' + err.message);
+      }
+    });
+
+    container.appendChild(form);
+    return;
+  }
 
   const fields = [
     { label: 'First Name', value: contact.firstName },
