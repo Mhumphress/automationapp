@@ -1,5 +1,10 @@
 import { getTenants, getTenant, updateTenant, getTenantUsers, getTenantActivity, getTenantInvoices, getTenantPayments, addTenantActivity } from '../services/tenants.js';
-import { getPackages, getVerticals } from '../services/catalog.js';
+import { getPackages, getVerticals, getAddons } from '../services/catalog.js';
+import {
+  addAddOn, removeAddOn, changePlan, cancelNow, cancelAtPeriodEnd,
+  previewAddAddOn, previewRemoveAddOn, previewChangePlan, previewCancelNow,
+  prorationRatio,
+} from '../services/subscription.js';
 import { createModal } from '../components/modal.js';
 import { showToast, escapeHtml, formatCurrency, formatDate } from '../ui.js';
 
@@ -363,4 +368,131 @@ async function showDetailPage(tenant) {
   layout.appendChild(leftCol);
   layout.appendChild(rightCol);
   container.appendChild(layout);
+
+  // Subscription management section (below the two-column layout)
+  await renderSubscriptionSection(freshTenant, container);
+}
+
+async function renderSubscriptionSection(tenant, container) {
+  const section = document.createElement('div');
+  section.className = 'settings-section';
+  section.style.marginTop = '1.5rem';
+
+  const ratio = prorationRatio(tenant.currentPeriodStart, tenant.currentPeriodEnd);
+  const start = tenant.currentPeriodStart?.toDate ? tenant.currentPeriodStart.toDate() : null;
+  const end = tenant.currentPeriodEnd?.toDate ? tenant.currentPeriodEnd.toDate() : null;
+  const daysRemaining = end ? Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86400000)) : 0;
+
+  section.innerHTML = `
+    <h3 class="section-title">Subscription</h3>
+    <div class="detail-field"><div class="detail-field-label">Current period</div><div class="detail-field-value">${start && end ? `${start.toLocaleDateString()} – ${end.toLocaleDateString()} · ${daysRemaining} days remaining` : '—'}</div></div>
+    ${tenant.cancelAt ? `<div class="detail-field"><div class="detail-field-label" style="color:#d97706;">Cancels on</div><div class="detail-field-value">${tenant.cancelAt.toDate ? tenant.cancelAt.toDate().toLocaleDateString() : '—'}</div></div>` : ''}
+
+    <h4 style="margin:1rem 0 0.5rem;font-size:0.95rem;">Add-ons</h4>
+    <div id="addonsList"></div>
+    <button class="btn btn-ghost btn-sm" id="addAddonBtn" style="margin-top:0.5rem;">+ Add Add-on</button>
+
+    <div style="margin-top:1.5rem;display:flex;gap:0.5rem;">
+      <button class="btn btn-ghost" id="changePlanBtn">Change Plan</button>
+      <button class="btn btn-ghost" id="cancelSubBtn" style="color:var(--danger);margin-left:auto;">Cancel Subscription</button>
+    </div>
+  `;
+  container.appendChild(section);
+
+  // Render add-ons
+  const listEl = section.querySelector('#addonsList');
+  if (!tenant.addOns || tenant.addOns.length === 0) {
+    listEl.innerHTML = '<p style="color:var(--gray-dark);font-size:0.9rem;">No add-ons.</p>';
+  } else {
+    listEl.innerHTML = '<table class="data-table"><thead><tr><th>Name</th><th>Qty</th><th>Monthly</th><th></th></tr></thead><tbody>' +
+      tenant.addOns.map(a => `
+        <tr>
+          <td>${escapeHtml(a.name)}</td>
+          <td>${a.qty || 1}</td>
+          <td>${formatCurrency((a.priceMonthly || 0) * (a.qty || 1))}</td>
+          <td><button class="btn btn-ghost btn-sm remove-addon" data-slug="${escapeHtml(a.slug)}" style="color:var(--danger);">Remove</button></td>
+        </tr>
+      `).join('') + '</tbody></table>';
+  }
+
+  // Wire handlers
+  listEl.querySelectorAll('.remove-addon').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const slug = btn.dataset.slug;
+      const preview = previewRemoveAddOn(tenant, slug);
+      if (!preview) return;
+      const msg = `Remove ${preview.addon.name}?\n\nYou'll issue a credit of ${formatCurrency(preview.refund)} (${preview.addon.priceMonthly}/mo × ${(preview.ratio * 100).toFixed(1)}% of billing period remaining).\n\nContinue?`;
+      if (!confirm(msg)) return;
+      try {
+        await removeAddOn(tenant.id, slug);
+        showToast('Add-on removed', 'success');
+        location.reload();
+      } catch (err) { showToast('Failed: ' + err.message, 'error'); }
+    });
+  });
+
+  section.querySelector('#addAddonBtn').addEventListener('click', async () => {
+    const allAddons = await getAddons();
+    const current = new Set((tenant.addOns || []).map(a => a.slug));
+    const available = allAddons.filter(a => !current.has(a.slug) && a.active !== false);
+    if (available.length === 0) { showToast('No more add-ons available', 'info'); return; }
+    const slug = prompt('Add-on slug? Available:\n\n' + available.map(a => `- ${a.slug}: ${a.name} (${formatCurrency(a.priceMonthly)}/mo)`).join('\n'));
+    if (!slug) return;
+    const addon = available.find(a => a.slug === slug.trim());
+    if (!addon) { showToast('Unknown add-on', 'error'); return; }
+    let qty = 1;
+    if (addon.pricingModel === 'per_unit') {
+      qty = Number(prompt('Quantity?', '1')) || 1;
+    }
+    const preview = previewAddAddOn(tenant, { ...addon, qty });
+    const fee = 25; // matches default from subscription.js
+    const msg = `Add ${addon.name}${qty > 1 ? ` × ${qty}` : ''}?\n\n` +
+      `Prorated: ${formatCurrency(preview.prorated)} (${(preview.ratio * 100).toFixed(1)}% of period remaining)\n` +
+      `Implementation fee: ${formatCurrency(fee)}\n` +
+      `Total: ${formatCurrency(preview.prorated + fee)}\n\n` +
+      `An invoice will be created and sent. Continue?`;
+    if (!confirm(msg)) return;
+    try {
+      await addAddOn(tenant.id, { ...addon, qty });
+      showToast('Add-on added', 'success');
+      location.reload();
+    } catch (err) { showToast('Failed: ' + err.message, 'error'); }
+  });
+
+  section.querySelector('#changePlanBtn').addEventListener('click', async () => {
+    const allPkgs = await getPackages();
+    const same = allPkgs.filter(p => p.vertical === tenant.vertical && p.id !== tenant.packageId && p.active !== false);
+    if (same.length === 0) { showToast('No other packages for this vertical', 'info'); return; }
+    const id = prompt('New package? Available:\n\n' + same.map(p => `- ${p.id}: ${p.name} · ${formatCurrency(p.basePrice)}/mo`).join('\n'));
+    if (!id) return;
+    const preview = await previewChangePlan(tenant, id.trim()).catch(e => { showToast(e.message, 'error'); return null; });
+    if (!preview) return;
+    const msg = `Change to ${preview.newPkg.name}?\n\n` +
+      `Refund previous: ${formatCurrency(preview.refund)}\n` +
+      `Charge new (prorated): ${formatCurrency(preview.charge)}\n` +
+      `Net: ${preview.net >= 0 ? 'charge ' : 'credit '}${formatCurrency(Math.abs(preview.net))}\n\nContinue?`;
+    if (!confirm(msg)) return;
+    try {
+      await changePlan(tenant.id, id.trim());
+      showToast('Plan changed', 'success');
+      location.reload();
+    } catch (err) { showToast('Failed: ' + err.message, 'error'); }
+  });
+
+  section.querySelector('#cancelSubBtn').addEventListener('click', async () => {
+    const choice = prompt('Cancel subscription:\n\n1. End of period (no refund)\n2. Cancel now (prorated refund)\n\nEnter 1 or 2:');
+    if (choice === '1') {
+      await cancelAtPeriodEnd(tenant.id);
+      showToast('Cancellation scheduled', 'success');
+      location.reload();
+    } else if (choice === '2') {
+      const preview = previewCancelNow(tenant);
+      if (!confirm(`Cancel now with refund of ${formatCurrency(preview.refund)}?`)) return;
+      try {
+        await cancelNow(tenant.id);
+        showToast('Subscription cancelled', 'success');
+        location.reload();
+      } catch (err) { showToast('Failed: ' + err.message, 'error'); }
+    }
+  });
 }
