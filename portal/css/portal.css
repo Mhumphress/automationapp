@@ -7,20 +7,33 @@
   --portal-accent-dim: rgba(13, 148, 136, 0.1);
   --portal-accent-dark: #0f766e;
   --portal-sidebar-bg: #134e4a;
+  --portal-sidebar-fg: #ccfbf1;
   --portal-sidebar-tint: rgba(94, 234, 212, 0.12);
 }
 
 .portal-sidebar {
   background: var(--portal-sidebar-bg);
+  color: var(--portal-sidebar-fg);
 }
 
-.portal-sidebar .sidebar-logo svg {
-  color: #5eead4;
+.portal-sidebar .sidebar-logo svg,
+.portal-sidebar .sidebar-logo span {
+  color: var(--portal-sidebar-fg);
+}
+
+.portal-sidebar .nav-item {
+  color: var(--portal-sidebar-fg);
+  opacity: 0.75;
 }
 
 .portal-sidebar .nav-item.active {
   background: var(--portal-sidebar-tint);
-  color: #5eead4;
+  color: var(--portal-sidebar-fg);
+  opacity: 1;
+}
+
+.portal-sidebar .nav-item:hover:not(.active) {
+  opacity: 1;
 }
 
 .portal-sidebar .nav-item:hover:not(.active) {

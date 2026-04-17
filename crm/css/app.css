@@ -46,12 +46,21 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .sidebar {
   grid-row: 1 / -1;
   background: var(--crm-sidebar-bg, var(--black));
+  color: var(--crm-sidebar-fg, var(--gray-light));
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--dark-2);
   overflow-y: auto;
   overflow-x: hidden;
   z-index: 20;
+}
+
+.sidebar .nav-item {
+  color: var(--crm-sidebar-fg, var(--gray));
+}
+
+.sidebar .sidebar-logo span {
+  color: var(--crm-sidebar-fg, var(--accent));
 }
 
 /* --- Logo --- */

@@ -176,36 +176,70 @@ export async function selectTenant(tenantData) {
   }
 }
 
+export const THEMES = {
+  ocean_teal:      { label: 'Ocean Teal (default)',   sidebarBg: '#134e4a', sidebarFg: '#ccfbf1', accent: '#0d9488' },
+  classic_dark:    { label: 'Classic Dark',           sidebarBg: '#0B0F1A', sidebarFg: '#CBD5E1', accent: '#4F7BF7' },
+  red_black:       { label: 'Red / Black',            sidebarBg: '#0a0a0a', sidebarFg: '#e5e5e5', accent: '#dc2626' },
+  red_white_black: { label: 'Red / White / Black',    sidebarBg: '#1a1a1a', sidebarFg: '#f5f5f5', accent: '#ef4444' },
+  blue_white_grey: { label: 'Blue / White / Grey',    sidebarBg: '#475569', sidebarFg: '#f1f5f9', accent: '#3b82f6' },
+  white_blue:      { label: 'White / Blue (light)',   sidebarBg: '#f8fafc', sidebarFg: '#334155', accent: '#2563eb' },
+  forest:          { label: 'Forest Green',           sidebarBg: '#14532d', sidebarFg: '#dcfce7', accent: '#16a34a' },
+  sunset:          { label: 'Sunset Orange',          sidebarBg: '#7c2d12', sidebarFg: '#fed7aa', accent: '#f97316' },
+  purple:          { label: 'Royal Purple',           sidebarBg: '#4c1d95', sidebarFg: '#ede9fe', accent: '#8b5cf6' },
+  monochrome:      { label: 'Monochrome',             sidebarBg: '#262626', sidebarFg: '#d4d4d4', accent: '#737373' },
+};
+
+export function resolveColors(branding) {
+  const b = branding || {};
+  if (b.theme && b.theme !== 'custom' && THEMES[b.theme]) {
+    const t = THEMES[b.theme];
+    return { sidebarBg: t.sidebarBg, sidebarFg: t.sidebarFg, accent: t.accent };
+  }
+  return {
+    sidebarBg: b.sidebarBg || b.primaryColor || '',
+    sidebarFg: b.sidebarFg || '',
+    accent: b.accent || '',
+  };
+}
+
 export function applyBranding(branding) {
   const root = document.documentElement;
-  const color = (branding && branding.primaryColor) || '';
-  const logoUrl = (branding && branding.logoUrl) || '';
+  const { sidebarBg, sidebarFg, accent } = resolveColors(branding);
 
-  if (color) {
-    root.style.setProperty('--portal-sidebar-bg', color);
-    // Derive a tint for the active-nav background from the custom color.
-    root.style.setProperty('--portal-sidebar-tint', hexToRgba(color, 0.12));
+  setOrClear(root, '--portal-sidebar-bg', sidebarBg);
+  setOrClear(root, '--portal-sidebar-fg', sidebarFg);
+  setOrClear(root, '--portal-sidebar-tint', accent ? hexToRgba(accent, 0.12) : '');
+
+  if (accent) {
+    root.style.setProperty('--accent', accent);
+    root.style.setProperty('--accent-dim', hexToRgba(accent, 0.15));
+    root.style.setProperty('--accent-light', lighten(accent, 0.18));
+    root.style.setProperty('--accent-strong', darken(accent, 0.15));
+    root.style.setProperty('--portal-accent', accent);
+    root.style.setProperty('--portal-accent-dim', hexToRgba(accent, 0.1));
+    root.style.setProperty('--portal-accent-dark', darken(accent, 0.15));
   } else {
-    root.style.removeProperty('--portal-sidebar-bg');
-    root.style.removeProperty('--portal-sidebar-tint');
+    ['--accent', '--accent-dim', '--accent-light', '--accent-strong',
+     '--portal-accent', '--portal-accent-dim', '--portal-accent-dark'
+    ].forEach(v => root.style.removeProperty(v));
   }
 
-  // Logo: replace the SVG next to the brand name with an <img> if url provided.
+  // Logo
+  const logoUrl = (branding && branding.logoUrl) || '';
   const logoContainer = document.querySelector('.portal-sidebar .sidebar-logo');
   if (logoContainer) {
     const existingImg = logoContainer.querySelector('.branded-logo');
     const existingSvg = logoContainer.querySelector('svg');
     if (logoUrl) {
-      if (!existingImg) {
+      if (existingImg) existingImg.src = logoUrl;
+      else {
         const img = document.createElement('img');
         img.className = 'branded-logo';
         img.alt = 'Logo';
-        img.style.cssText = 'width:32px;height:32px;object-fit:contain;flex-shrink:0;border-radius:4px;';
         img.src = logoUrl;
+        img.style.cssText = 'width:32px;height:32px;object-fit:contain;flex-shrink:0;border-radius:4px;';
         if (existingSvg) existingSvg.style.display = 'none';
         logoContainer.insertBefore(img, logoContainer.firstChild);
-      } else {
-        existingImg.src = logoUrl;
       }
     } else {
       if (existingImg) existingImg.remove();
@@ -214,14 +248,40 @@ export function applyBranding(branding) {
   }
 }
 
-function hexToRgba(hex, alpha) {
+function setOrClear(root, varName, value) {
+  if (value) root.style.setProperty(varName, value);
+  else root.style.removeProperty(varName);
+}
+
+function hexToRgb(hex) {
   const h = (hex || '').trim().replace(/^#/, '');
-  if (!(h.length === 3 || h.length === 6)) return `rgba(255,255,255,${alpha})`;
+  if (!(h.length === 3 || h.length === 6)) return { r: 0, g: 0, b: 0 };
   const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
+  return {
+    r: parseInt(full.slice(0, 2), 16),
+    g: parseInt(full.slice(2, 4), 16),
+    b: parseInt(full.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex(r, g, b) {
+  const cl = v => Math.max(0, Math.min(255, Math.round(v)));
+  return '#' + [cl(r), cl(g), cl(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToRgba(hex, alpha) {
+  const { r, g, b } = hexToRgb(hex);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function lighten(hex, amount) {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(r + (255 - r) * amount, g + (255 - g) * amount, b + (255 - b) * amount);
+}
+
+function darken(hex, amount) {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
 
 // ── Getters ──

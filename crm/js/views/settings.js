@@ -2,7 +2,7 @@ import { db, auth } from '../config.js';
 import { collection, getDocs, doc, updateDoc, query, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
-import { loadBranding, saveBranding, applyBranding } from '../services/branding.js';
+import { loadBranding, saveBranding, applyBranding, resolveColors, THEMES } from '../services/branding.js';
 
 const containerId = 'view-settings';
 let isAdminUser = false;
@@ -143,35 +143,85 @@ export async function render() {
     brandingSection.className = 'settings-section';
     brandingSection.style.marginTop = '2rem';
     const current = await loadBranding();
+    const initialTheme = current.theme || (current.primaryColor || current.sidebarBg || current.accent ? 'custom' : 'classic_dark');
+    const initialColors = resolveColors(current);
+
+    const themeOptions = Object.entries(THEMES).map(([key, t]) =>
+      `<option value="${key}" ${initialTheme === key ? 'selected' : ''}>${escapeHtml(t.label)}</option>`
+    ).join('') + `<option value="custom" ${initialTheme === 'custom' ? 'selected' : ''}>Custom…</option>`;
+
     brandingSection.innerHTML = `
       <h2 class="section-title">Branding</h2>
-      <p style="color:var(--gray-dark);font-size:0.85rem;margin-bottom:0.75rem;">Customize the CRM's sidebar color and logo.</p>
-      <div class="modal-form-grid">
+      <p style="color:var(--gray-dark);font-size:0.85rem;margin-bottom:0.75rem;">Pick a preset theme, or choose Custom to set each color individually.</p>
+      <div class="modal-field">
+        <label>Theme</label>
+        <select id="crmThemeSelect">${themeOptions}</select>
+      </div>
+      <div id="crmCustomColors" class="modal-form-grid" style="display:${initialTheme === 'custom' ? 'grid' : 'none'};">
         <div class="modal-field">
-          <label>Sidebar Color</label>
-          <input type="color" id="crmBrandColor" value="${escapeHtml(current.primaryColor || '#0f172a')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+          <label>Sidebar Background</label>
+          <input type="color" id="crmSidebarBg" value="${escapeHtml(initialColors.sidebarBg || '#0B0F1A')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
         </div>
         <div class="modal-field">
-          <label>Logo URL</label>
-          <input type="url" id="crmBrandLogo" value="${escapeHtml(current.logoUrl || '')}" placeholder="https://example.com/logo.png">
+          <label>Sidebar Text</label>
+          <input type="color" id="crmSidebarFg" value="${escapeHtml(initialColors.sidebarFg || '#CBD5E1')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+        </div>
+        <div class="modal-field">
+          <label>Accent (buttons)</label>
+          <input type="color" id="crmAccent" value="${escapeHtml(initialColors.accent || '#4F7BF7')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
         </div>
       </div>
-      <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
+      <div class="modal-field" style="margin-top:0.75rem;">
+        <label>Logo URL</label>
+        <input type="url" id="crmBrandLogo" value="${escapeHtml(current.logoUrl || '')}" placeholder="https://example.com/logo.png">
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
         <button class="btn btn-primary btn-sm" id="crmBrandSave">Save Branding</button>
         <button class="btn btn-ghost btn-sm" id="crmBrandReset">Reset to default</button>
       </div>
     `;
     container.appendChild(brandingSection);
 
-    const colorEl = brandingSection.querySelector('#crmBrandColor');
+    const themeSel = brandingSection.querySelector('#crmThemeSelect');
+    const customWrap = brandingSection.querySelector('#crmCustomColors');
+    const bgEl = brandingSection.querySelector('#crmSidebarBg');
+    const fgEl = brandingSection.querySelector('#crmSidebarFg');
+    const accEl = brandingSection.querySelector('#crmAccent');
     const logoEl = brandingSection.querySelector('#crmBrandLogo');
-    colorEl.addEventListener('input', () => applyBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value }));
-    logoEl.addEventListener('change', () => applyBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value }));
+
+    function currentBrandingObj() {
+      const theme = themeSel.value;
+      if (theme !== 'custom') return { theme, logoUrl: logoEl.value.trim() };
+      return {
+        theme: 'custom',
+        sidebarBg: bgEl.value,
+        sidebarFg: fgEl.value,
+        accent: accEl.value,
+        logoUrl: logoEl.value.trim(),
+      };
+    }
+
+    function livePreview() { applyBranding(currentBrandingObj()); }
+
+    themeSel.addEventListener('change', () => {
+      customWrap.style.display = themeSel.value === 'custom' ? 'grid' : 'none';
+      if (themeSel.value !== 'custom' && THEMES[themeSel.value]) {
+        bgEl.value = THEMES[themeSel.value].sidebarBg;
+        fgEl.value = THEMES[themeSel.value].sidebarFg;
+        accEl.value = THEMES[themeSel.value].accent;
+      }
+      livePreview();
+    });
+    bgEl.addEventListener('input', livePreview);
+    fgEl.addEventListener('input', livePreview);
+    accEl.addEventListener('input', livePreview);
+    logoEl.addEventListener('change', livePreview);
 
     brandingSection.querySelector('#crmBrandSave').addEventListener('click', async () => {
       try {
-        await saveBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value.trim() });
-        applyBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value.trim() });
+        const data = currentBrandingObj();
+        await saveBranding(data);
+        applyBranding(data);
         showToast('Branding saved', 'success');
       } catch (err) {
         showToast('Save failed: ' + err.message, 'error');
@@ -179,10 +229,13 @@ export async function render() {
     });
     brandingSection.querySelector('#crmBrandReset').addEventListener('click', async () => {
       try {
-        await saveBranding({ primaryColor: '', logoUrl: '' });
-        colorEl.value = '#0f172a';
+        await saveBranding({ theme: 'classic_dark', sidebarBg: '', sidebarFg: '', accent: '', logoUrl: '', primaryColor: '' });
+        themeSel.value = 'classic_dark';
+        customWrap.style.display = 'none';
+        const t = THEMES.classic_dark;
+        bgEl.value = t.sidebarBg; fgEl.value = t.sidebarFg; accEl.value = t.accent;
         logoEl.value = '';
-        applyBranding({ primaryColor: '', logoUrl: '' });
+        applyBranding({ theme: 'classic_dark' });
         showToast('Branding reset', 'success');
       } catch (err) {
         showToast('Reset failed: ' + err.message, 'error');

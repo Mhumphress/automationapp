@@ -2,7 +2,7 @@ import { auth } from './config.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   loadTenantContext, getTenant, getVertical, getPackage,
-  hasFeature, isReadOnly, isSuspended, getUserRole, term, applyBranding
+  hasFeature, isReadOnly, isSuspended, getUserRole, term, applyBranding, resolveColors, THEMES
 } from './tenant-context.js';
 
 // ── Simple router (inline, no shared dependency for now) ──
@@ -574,18 +574,40 @@ async function renderAccountSettings() {
     </div>
     <div class="settings-section" style="margin-top:1.5rem;">
       <h2 class="section-title">Branding</h2>
-      <p style="color:var(--gray);font-size:0.85rem;margin-bottom:0.75rem;">Customize the portal's look for your team.</p>
-      <div class="modal-form-grid">
+      <p style="color:var(--gray);font-size:0.85rem;margin-bottom:0.75rem;">Pick a preset theme, or choose Custom to set each color individually.</p>
+      ${(() => {
+        const b = generalSettings.branding || {};
+        const initialTheme = b.theme || (b.primaryColor || b.sidebarBg || b.accent ? 'custom' : 'ocean_teal');
+        const initColors = resolveColors(b);
+        const themeOpts = Object.entries(THEMES).map(([key, t]) =>
+          `<option value="${key}" ${initialTheme === key ? 'selected' : ''}>${escapeHtml(t.label)}</option>`
+        ).join('') + `<option value="custom" ${initialTheme === 'custom' ? 'selected' : ''}>Custom…</option>`;
+        return `
         <div class="modal-field">
-          <label>Sidebar Color</label>
-          <input type="color" id="brandColorInput" ${canEdit ? '' : 'disabled'} value="${escapeHtml(generalSettings.branding?.primaryColor || '#134e4a')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+          <label>Theme</label>
+          <select id="portalThemeSelect" ${canEdit ? '' : 'disabled'}>${themeOpts}</select>
         </div>
-        <div class="modal-field">
-          <label>Logo URL</label>
-          <input type="url" id="brandLogoInput" ${canEdit ? '' : 'disabled'} value="${escapeHtml(generalSettings.branding?.logoUrl || '')}" placeholder="https://example.com/logo.png">
+        <div id="portalCustomColors" class="modal-form-grid" style="display:${initialTheme === 'custom' ? 'grid' : 'none'};">
+          <div class="modal-field">
+            <label>Sidebar Background</label>
+            <input type="color" id="portalSidebarBg" ${canEdit ? '' : 'disabled'} value="${escapeHtml(initColors.sidebarBg || '#134e4a')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+          </div>
+          <div class="modal-field">
+            <label>Sidebar Text</label>
+            <input type="color" id="portalSidebarFg" ${canEdit ? '' : 'disabled'} value="${escapeHtml(initColors.sidebarFg || '#ccfbf1')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+          </div>
+          <div class="modal-field">
+            <label>Accent (buttons)</label>
+            <input type="color" id="portalAccent" ${canEdit ? '' : 'disabled'} value="${escapeHtml(initColors.accent || '#0d9488')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+          </div>
         </div>
+        `;
+      })()}
+      <div class="modal-field" style="margin-top:0.75rem;">
+        <label>Logo URL</label>
+        <input type="url" id="brandLogoInput" ${canEdit ? '' : 'disabled'} value="${escapeHtml(generalSettings.branding?.logoUrl || '')}" placeholder="https://example.com/logo.png">
       </div>
-      <div style="display:flex;gap:0.5rem;align-items:center;">
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;">
         ${canEdit ? '<button class="btn btn-primary btn-sm" id="saveBrandBtn">Save Branding</button>' : ''}
         ${canEdit ? '<button class="btn btn-ghost btn-sm" id="resetBrandBtn">Reset to default</button>' : ''}
         <span id="brandSaveStatus" style="color:var(--gray);font-size:0.85rem;"></span>
@@ -618,31 +640,55 @@ async function renderAccountSettings() {
 
   const brandSaveBtn = container.querySelector('#saveBrandBtn');
   const brandResetBtn = container.querySelector('#resetBrandBtn');
-  const colorInput = container.querySelector('#brandColorInput');
+  const themeSel = container.querySelector('#portalThemeSelect');
+  const customWrap = container.querySelector('#portalCustomColors');
+  const bgEl = container.querySelector('#portalSidebarBg');
+  const fgEl = container.querySelector('#portalSidebarFg');
+  const accEl = container.querySelector('#portalAccent');
   const logoInput = container.querySelector('#brandLogoInput');
 
-  // Live preview as user picks
-  if (colorInput) colorInput.addEventListener('input', () => {
-    applyBranding({ primaryColor: colorInput.value, logoUrl: logoInput?.value || '' });
+  function currentBrandingObj() {
+    if (!themeSel) return { logoUrl: logoInput?.value.trim() || '' };
+    const theme = themeSel.value;
+    if (theme !== 'custom') return { theme, logoUrl: logoInput?.value.trim() || '' };
+    return {
+      theme: 'custom',
+      sidebarBg: bgEl?.value || '',
+      sidebarFg: fgEl?.value || '',
+      accent: accEl?.value || '',
+      logoUrl: logoInput?.value.trim() || '',
+    };
+  }
+
+  function livePreview() { applyBranding(currentBrandingObj()); }
+
+  if (themeSel) themeSel.addEventListener('change', () => {
+    customWrap.style.display = themeSel.value === 'custom' ? 'grid' : 'none';
+    if (themeSel.value !== 'custom' && THEMES[themeSel.value]) {
+      if (bgEl) bgEl.value = THEMES[themeSel.value].sidebarBg;
+      if (fgEl) fgEl.value = THEMES[themeSel.value].sidebarFg;
+      if (accEl) accEl.value = THEMES[themeSel.value].accent;
+    }
+    livePreview();
   });
-  if (logoInput) logoInput.addEventListener('change', () => {
-    applyBranding({ primaryColor: colorInput?.value || '', logoUrl: logoInput.value });
-  });
+  if (bgEl) bgEl.addEventListener('input', livePreview);
+  if (fgEl) fgEl.addEventListener('input', livePreview);
+  if (accEl) accEl.addEventListener('input', livePreview);
+  if (logoInput) logoInput.addEventListener('change', livePreview);
 
   if (brandSaveBtn) {
     brandSaveBtn.addEventListener('click', async () => {
       const status = container.querySelector('#brandSaveStatus');
-      const primaryColor = colorInput.value;
-      const logoUrl = (logoInput.value || '').trim();
+      const branding = currentBrandingObj();
       brandSaveBtn.disabled = true;
       status.textContent = 'Saving...';
       try {
         await fbSetDoc(
           fbDoc(fbDb, `tenants/${tenant.id}/settings/general`),
-          { branding: { primaryColor, logoUrl }, updatedAt: fbServerTs() },
+          { branding, updatedAt: fbServerTs() },
           { merge: true }
         );
-        applyBranding({ primaryColor, logoUrl });
+        applyBranding(branding);
         status.textContent = 'Saved.';
         setTimeout(() => { status.textContent = ''; }, 2000);
       } catch (err) {
@@ -658,14 +704,20 @@ async function renderAccountSettings() {
       brandResetBtn.disabled = true;
       status.textContent = 'Resetting...';
       try {
+        const reset = { theme: 'ocean_teal', sidebarBg: '', sidebarFg: '', accent: '', logoUrl: '', primaryColor: '' };
         await fbSetDoc(
           fbDoc(fbDb, `tenants/${tenant.id}/settings/general`),
-          { branding: { primaryColor: '', logoUrl: '' }, updatedAt: fbServerTs() },
+          { branding: reset, updatedAt: fbServerTs() },
           { merge: true }
         );
-        if (colorInput) colorInput.value = '#134e4a';
+        if (themeSel) themeSel.value = 'ocean_teal';
+        if (customWrap) customWrap.style.display = 'none';
+        const t = THEMES.ocean_teal;
+        if (bgEl) bgEl.value = t.sidebarBg;
+        if (fgEl) fgEl.value = t.sidebarFg;
+        if (accEl) accEl.value = t.accent;
         if (logoInput) logoInput.value = '';
-        applyBranding({ primaryColor: '', logoUrl: '' });
+        applyBranding({ theme: 'ocean_teal' });
         status.textContent = 'Reset.';
         setTimeout(() => { status.textContent = ''; }, 2000);
       } catch (err) {
