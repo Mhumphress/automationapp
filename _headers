@@ -10,7 +10,19 @@
 
 /portal/*
   Content-Security-Policy: default-src 'self'; script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com; img-src 'self' data:; frame-ancestors 'none'
-  Cache-Control: no-cache
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /portal/js/*
-  Cache-Control: no-cache
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/portal/js/components/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/portal/js/data/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/portal/js/views/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/portal/js/services/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
