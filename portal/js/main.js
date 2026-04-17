@@ -442,11 +442,19 @@ async function renderBilling() {
     } else {
       html += '<table class="data-table"><thead><tr><th>Invoice #</th><th>Amount</th><th>Status</th><th>Issued</th><th>Due</th></tr></thead><tbody>';
       invoices.forEach(inv => {
-        const statusClass = inv.status === 'paid' ? 'badge-success' : inv.status === 'overdue' ? 'badge-danger' : 'badge-default';
+        const s = inv.status || 'draft';
+        const statusClass =
+          s === 'paid' ? 'badge-success' :
+          s === 'overdue' ? 'badge-danger' :
+          s === 'sent' ? 'badge-info' :
+          s === 'refunded' ? 'badge-warning' :
+          s === 'void' || s === 'cancelled' ? 'badge-default' :
+          'badge-default';
+        const amount = inv.total != null ? inv.total : inv.amount;
         html += `<tr>
           <td style="font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
-          <td>${formatCurrency(inv.amount)}</td>
-          <td><span class="badge ${statusClass}">${escapeHtml(inv.status || 'draft')}</span></td>
+          <td>${formatCurrency(amount)}</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(s)}</span></td>
           <td>${formatDate(inv.issuedDate)}</td>
           <td>${formatDate(inv.dueDate)}</td>
         </tr>`;
