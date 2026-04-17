@@ -127,9 +127,259 @@ function renderTable() {
   wrapper.appendChild(table);
 }
 
-// showDetail is implemented in Task 5
-function showDetail(ticketId) {
-  console.log('showDetail stub — ticket', ticketId);
+let detailState = null; // { ticket, parts }
+
+async function showDetail(ticketId) {
+  currentPage = 'detail';
+  const container = document.getElementById('view-tickets');
+  container.innerHTML = '<div class="loading">Loading ticket...</div>';
+
+  try {
+    const ticket = await getTicket(ticketId);
+    if (!ticket) { container.innerHTML = '<p>Ticket not found.</p>'; return; }
+    const parts = hasFeature('inventory') ? await listParts() : [];
+    detailState = { ticket, parts };
+    renderDetail();
+  } catch (err) {
+    console.error('Load ticket failed:', err);
+    container.innerHTML = `<p style="color:var(--danger);">Failed to load ticket: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderDetail() {
+  const container = document.getElementById('view-tickets');
+  const { ticket, parts } = detailState;
+  container.innerHTML = '';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'detail-back';
+  backBtn.innerHTML = '&larr; Back to tickets';
+  backBtn.addEventListener('click', () => { currentPage = 'list'; renderList(); });
+  container.appendChild(backBtn);
+
+  const header = document.createElement('div');
+  header.className = 'detail-header';
+  header.innerHTML = `
+    <div style="flex:1;">
+      <div class="detail-name">${escapeHtml(ticket.ticketNumber)} &middot; ${escapeHtml(ticket.deviceType || '')}</div>
+      <div class="detail-subtitle">${escapeHtml(ticket.customerName || '-')} &middot; <span class="badge ${statusBadgeClass(ticket.status)}">${escapeHtml(STATUS_LABELS[ticket.status] || ticket.status)}</span></div>
+    </div>
+  `;
+  container.appendChild(header);
+
+  // ── Status + core fields ──
+  const coreSection = document.createElement('div');
+  coreSection.className = 'settings-section';
+  coreSection.innerHTML = `
+    <h3 class="section-title">Details</h3>
+    <div class="modal-form-grid">
+      <div class="modal-field">
+        <label>Status</label>
+        <select name="status" ${canWrite() ? '' : 'disabled'}>
+          ${STATUS_ORDER.map(s => `<option value="${s}" ${ticket.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Estimated Completion</label>
+        <input type="date" name="estimatedCompletion" ${canWrite() ? '' : 'disabled'} value="${formatDateInput(ticket.estimatedCompletion)}">
+      </div>
+    </div>
+    <div class="modal-form-grid">
+      <div class="modal-field"><label>Serial / IMEI</label><input type="text" name="serial" ${canWrite() ? '' : 'disabled'} value="${escapeHtml(ticket.serial || '')}"></div>
+      <div class="modal-field"><label>Device Type</label><input type="text" name="deviceType" ${canWrite() ? '' : 'disabled'} value="${escapeHtml(ticket.deviceType || '')}"></div>
+    </div>
+    <div class="modal-field"><label>Issue</label><textarea name="issue" rows="2" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.issue || '')}</textarea></div>
+    <div class="modal-field"><label>Condition Notes</label><textarea name="condition" rows="2" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.condition || '')}</textarea></div>
+    <div class="modal-field"><label>Internal Notes</label><textarea name="notes" rows="3" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.notes || '')}</textarea></div>
+    ${canWrite() ? '<button class="btn btn-primary btn-sm" id="saveCoreBtn">Save Changes</button>' : ''}
+  `;
+  container.appendChild(coreSection);
+
+  const saveBtn = coreSection.querySelector('#saveCoreBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', gateWrite(async () => {
+      const patch = {
+        status: coreSection.querySelector('[name="status"]').value,
+        estimatedCompletion: coreSection.querySelector('[name="estimatedCompletion"]').value || null,
+        serial: coreSection.querySelector('[name="serial"]').value,
+        deviceType: coreSection.querySelector('[name="deviceType"]').value,
+        issue: coreSection.querySelector('[name="issue"]').value,
+        condition: coreSection.querySelector('[name="condition"]').value,
+        notes: coreSection.querySelector('[name="notes"]').value
+      };
+      try {
+        const statusChanged = patch.status !== ticket.status;
+        await updateTicket(ticket.id, patch);
+        if (statusChanged) {
+          await appendTicketHistory(ticket.id, {
+            type: 'status_change',
+            description: `Status changed from ${STATUS_LABELS[ticket.status] || ticket.status} to ${STATUS_LABELS[patch.status] || patch.status}`
+          });
+        }
+        const refreshed = await getTicket(ticket.id);
+        detailState.ticket = refreshed;
+        renderDetail();
+      } catch (err) {
+        alert('Save failed: ' + err.message);
+      }
+    }));
+  }
+
+  // ── Parts section ──
+  const partsSection = document.createElement('div');
+  partsSection.className = 'settings-section';
+  partsSection.style.marginTop = '1rem';
+
+  if (hasFeature('inventory')) {
+    // Pro tier — inventory-linked parts picker
+    let partsHtml = `<h3 class="section-title">Parts Used</h3>`;
+    if ((ticket.partsUsed || []).length === 0) {
+      partsHtml += `<p style="color:var(--gray);font-size:0.9rem;">No parts added yet.</p>`;
+    } else {
+      partsHtml += `<table class="data-table"><thead><tr><th>SKU</th><th>Name</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>`;
+      ticket.partsUsed.forEach((p, idx) => {
+        const amount = (p.qty || 0) * (p.unitPrice || 0);
+        partsHtml += `<tr>
+          <td style="font-family:monospace;">${escapeHtml(p.sku || '-')}</td>
+          <td>${escapeHtml(p.name || '-')}</td>
+          <td style="text-align:right;">${p.qty || 0}</td>
+          <td style="text-align:right;">${formatCurrency(p.unitPrice)}</td>
+          <td style="text-align:right;">${formatCurrency(amount)}</td>
+          <td style="text-align:right;">${canWrite() ? `<button class="btn btn-ghost btn-sm remove-part-btn" data-index="${idx}" style="color:var(--danger);">&times;</button>` : ''}</td>
+        </tr>`;
+      });
+      partsHtml += `</tbody></table>`;
+    }
+
+    if (canWrite()) {
+      partsHtml += `
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;align-items:flex-end;">
+          <div class="modal-field" style="flex:1;margin-bottom:0;">
+            <label>Add Part</label>
+            <select id="addPartSelect">
+              <option value="">— Select a part —</option>
+              ${parts.filter(p => (p.quantity || 0) > 0).map(p => `<option value="${p.id}" data-qty="${p.quantity}">${escapeHtml(p.name)} (${p.quantity} in stock)</option>`).join('')}
+            </select>
+          </div>
+          <div class="modal-field" style="width:100px;margin-bottom:0;">
+            <label>Qty</label>
+            <input type="number" id="addPartQty" min="1" step="1" value="1">
+          </div>
+          <button class="btn btn-primary" id="addPartBtn" style="height:38px;">Add</button>
+        </div>
+      `;
+    }
+
+    partsSection.innerHTML = partsHtml;
+    container.appendChild(partsSection);
+
+    partsSection.querySelectorAll('.remove-part-btn').forEach(btn => {
+      btn.addEventListener('click', gateWrite(async () => {
+        const idx = Number(btn.dataset.index);
+        if (!confirm('Remove this part? Stock will be returned to inventory.')) return;
+        try {
+          await removePartFromTicket(ticket.id, idx);
+          await showDetail(ticket.id);
+        } catch (err) { alert('Remove failed: ' + err.message); }
+      }));
+    });
+
+    const addBtn = partsSection.querySelector('#addPartBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', gateWrite(async () => {
+        const sel = partsSection.querySelector('#addPartSelect');
+        const qtyInput = partsSection.querySelector('#addPartQty');
+        const partId = sel.value;
+        const qty = Number(qtyInput.value) || 0;
+        if (!partId || qty <= 0) { alert('Select a part and enter a positive quantity.'); return; }
+        try {
+          await addPartToTicket(ticket.id, partId, qty);
+          await showDetail(ticket.id);
+        } catch (err) { alert(err.message); }
+      }));
+    }
+  } else {
+    // Basic tier — partsNotes textarea fallback (implemented in Task 6)
+    renderBasicPartsSection(partsSection, ticket);
+    container.appendChild(partsSection);
+  }
+
+  // ── Labor section ──
+  const laborSection = document.createElement('div');
+  laborSection.className = 'settings-section';
+  laborSection.style.marginTop = '1rem';
+  laborSection.innerHTML = `
+    <h3 class="section-title">Labor</h3>
+    <div style="display:flex;gap:0.5rem;align-items:flex-end;">
+      <div class="modal-field" style="width:150px;margin-bottom:0;">
+        <label>Minutes</label>
+        <input type="number" id="laborInput" min="0" step="1" ${canWrite() ? '' : 'disabled'} value="${ticket.laborMinutes || 0}">
+      </div>
+      ${canWrite() ? `
+      <button class="btn btn-ghost btn-sm" data-add="15">+15</button>
+      <button class="btn btn-ghost btn-sm" data-add="30">+30</button>
+      <button class="btn btn-ghost btn-sm" data-add="60">+60</button>
+      <button class="btn btn-primary btn-sm" id="saveLaborBtn" style="margin-left:auto;">Save Labor</button>
+      ` : ''}
+    </div>
+  `;
+  container.appendChild(laborSection);
+  const laborInput = laborSection.querySelector('#laborInput');
+  laborSection.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      laborInput.value = (Number(laborInput.value) || 0) + Number(btn.dataset.add);
+    });
+  });
+  const saveLaborBtn = laborSection.querySelector('#saveLaborBtn');
+  if (saveLaborBtn) {
+    saveLaborBtn.addEventListener('click', gateWrite(async () => {
+      try {
+        await updateTicket(ticket.id, { laborMinutes: Number(laborInput.value) || 0 });
+        const refreshed = await getTicket(ticket.id);
+        detailState.ticket = refreshed;
+        renderDetail();
+      } catch (err) { alert('Save labor failed: ' + err.message); }
+    }));
+  }
+
+  // ── Invoice generation (Task 9 implements the button handler) ──
+  const invoiceSection = renderInvoiceSection(ticket);
+  if (invoiceSection) container.appendChild(invoiceSection);
+
+  // ── History ──
+  const historySection = document.createElement('div');
+  historySection.className = 'settings-section';
+  historySection.style.marginTop = '1rem';
+  let historyHtml = '<h3 class="section-title">Activity</h3>';
+  if (!ticket.history || ticket.history.length === 0) {
+    historyHtml += '<p style="color:var(--gray);font-size:0.9rem;">No activity yet.</p>';
+  } else {
+    historyHtml += '<ul style="list-style:none;padding:0;margin:0;">';
+    ticket.history.forEach(h => {
+      historyHtml += `<li style="padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
+        <strong>${escapeHtml(h.description || '')}</strong>
+        <div style="color:var(--gray);font-size:0.75rem;">${formatDate(h.at)} &middot; ${escapeHtml(h.byEmail || 'system')}</div>
+      </li>`;
+    });
+    historyHtml += '</ul>';
+  }
+  historySection.innerHTML = historyHtml;
+  container.appendChild(historySection);
+}
+
+// renderBasicPartsSection and renderInvoiceSection are added in later tasks
+function renderBasicPartsSection(section, ticket) {
+  section.innerHTML = '<h3 class="section-title">Parts Used</h3><p style="color:var(--gray);">Basic tier — implemented in Task 6.</p>';
+}
+function renderInvoiceSection(ticket) { return null; }
+
+function formatDateInput(ts) {
+  if (!ts) return '';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString().split('T')[0];
+  } catch { return ''; }
 }
 
 function escapeHtml(str) {
