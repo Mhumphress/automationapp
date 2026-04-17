@@ -327,10 +327,16 @@ async function registerAllViews() {
     destroy: ticketsMod.destroy
   });
 
+  const checkinMod = await import('./views/repair/checkin.js');
+  registerView('checkin', {
+    init: checkinMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Check In'; checkinMod.render(); },
+    destroy: checkinMod.destroy
+  });
+
   // Placeholder views for modules not yet implemented
   const placeholderViews = [
     'scheduling', 'reporting',
-    'checkin',
     'jobs', 'dispatching', 'quoting',
     'bom', 'work-orders',
     'projects', 'time-tracking', 'proposals',
