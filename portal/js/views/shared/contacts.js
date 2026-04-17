@@ -1,4 +1,4 @@
-import { addDocument, updateDocument, deleteDocument, queryDocuments } from '../../services/firestore.js';
+import { addDocument, updateDocument, deleteDocument, queryDocuments, queryDocumentsWhere } from '../../services/firestore.js';
 import { canWrite, isReadOnly, gateWrite, term } from '../../tenant-context.js';
 
 let contacts = [];
@@ -8,7 +8,17 @@ let currentPage = 'list';
 export function init() {}
 
 export async function render() {
-  try { contacts = await queryDocuments('contacts', 'lastName', 'asc'); } catch (err) { console.error(err); contacts = []; }
+  try {
+    // Firestore orderBy filters out docs missing the field, so we sort client-side
+    // to include legacy contacts (shape {name, phone, email}) alongside new ones
+    // with {firstName, lastName, ...}.
+    contacts = await queryDocuments('contacts', 'createdAt', 'desc');
+    contacts.sort((a, b) => {
+      const aName = (`${a.firstName || ''} ${a.lastName || ''}`).trim() || a.name || a.email || '';
+      const bName = (`${b.firstName || ''} ${b.lastName || ''}`).trim() || b.name || b.email || '';
+      return aName.localeCompare(bName);
+    });
+  } catch (err) { console.error(err); contacts = []; }
   if (currentPage === 'list') renderList();
 }
 
@@ -52,6 +62,7 @@ function renderContent(container) {
     const lower = searchTerm.toLowerCase();
     filtered = filtered.filter(c =>
       (`${c.firstName || ''} ${c.lastName || ''}`).toLowerCase().includes(lower) ||
+      (c.name || '').toLowerCase().includes(lower) ||
       (c.email || '').toLowerCase().includes(lower) ||
       (c.phone || '').toLowerCase().includes(lower) ||
       (c.company || '').toLowerCase().includes(lower)
@@ -75,8 +86,9 @@ function renderContent(container) {
     filtered.forEach(c => {
       const tr = document.createElement('tr');
       tr.className = 'clickable';
+      const displayName = (`${c.firstName || ''} ${c.lastName || ''}`).trim() || c.name || '(No name)';
       tr.innerHTML = `
-        <td style="font-weight:500;">${escapeHtml(c.firstName || '')} ${escapeHtml(c.lastName || '')}</td>
+        <td style="font-weight:500;">${escapeHtml(displayName)}</td>
         <td>${escapeHtml(c.email || '\u2014')}</td>
         <td>${escapeHtml(c.phone || '\u2014')}</td>
         <td>${escapeHtml(c.company || '\u2014')}</td>
@@ -275,6 +287,107 @@ function renderDetail(raw, isEditing = false) {
     detailFields.appendChild(field);
   });
   container.appendChild(detailFields);
+
+  // Repair tickets + invoices history
+  const historyHost = document.createElement('div');
+  historyHost.id = 'contactHistory';
+  historyHost.style.marginTop = '1.5rem';
+  historyHost.innerHTML = '<p style="color:var(--gray);font-size:0.9rem;">Loading history…</p>';
+  container.appendChild(historyHost);
+  loadContactHistory(contact.id, historyHost);
+}
+
+async function loadContactHistory(contactId, host) {
+  try {
+    const [tickets, invoices] = await Promise.all([
+      queryDocumentsWhere('tickets', 'contactId', '==', contactId, 'createdAt', 'desc').catch(() => []),
+      queryDocumentsWhere('invoices_crm', 'contactId', '==', contactId, 'createdAt', 'desc').catch(() => []),
+    ]);
+
+    host.innerHTML = '';
+
+    // Tickets section
+    const ticketsSection = document.createElement('div');
+    ticketsSection.className = 'settings-section';
+    ticketsSection.style.marginBottom = '1rem';
+    let ticketsHtml = `<h3 class="section-title">Repair History (${tickets.length})</h3>`;
+    if (tickets.length === 0) {
+      ticketsHtml += '<p style="color:var(--gray);font-size:0.9rem;">No tickets yet.</p>';
+    } else {
+      ticketsHtml += '<table class="data-table"><thead><tr><th>Ticket #</th><th>Device</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+      tickets.forEach(t => {
+        const statusClass = t.status === 'completed' ? 'badge-success'
+          : t.status === 'ready' ? 'badge-info'
+          : t.status === 'awaiting_parts' ? 'badge-warning'
+          : 'badge-default';
+        const labelMap = {
+          checked_in: 'Checked In', diagnosed: 'Diagnosed',
+          awaiting_parts: 'Awaiting Parts', in_repair: 'In Repair',
+          qc: 'Quality Check', ready: 'Ready', completed: 'Completed'
+        };
+        ticketsHtml += `<tr>
+          <td style="font-family:monospace;font-weight:500;">${escapeHtml(t.ticketNumber || '-')}</td>
+          <td>${escapeHtml(t.deviceType || '-')}</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(labelMap[t.status] || t.status || '-')}</span></td>
+          <td>${formatDate(t.createdAt)}</td>
+        </tr>`;
+      });
+      ticketsHtml += '</tbody></table>';
+    }
+    ticketsSection.innerHTML = ticketsHtml;
+    host.appendChild(ticketsSection);
+
+    // Invoices section
+    const invoicesSection = document.createElement('div');
+    invoicesSection.className = 'settings-section';
+    const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (Number(i.total) || 0), 0);
+    const totalOutstanding = invoices.filter(i => ['draft','sent','overdue'].includes(i.status)).reduce((s, i) => s + (Number(i.total) || 0), 0);
+    let invoicesHtml = `<h3 class="section-title">Invoices (${invoices.length})</h3>`;
+    if (invoices.length > 0) {
+      invoicesHtml += `<div style="display:flex;gap:1.5rem;font-size:0.9rem;margin-bottom:0.75rem;">
+        <div><span style="color:var(--gray);">Paid:</span> <strong>${formatCurrency(totalPaid)}</strong></div>
+        <div><span style="color:var(--gray);">Outstanding:</span> <strong>${formatCurrency(totalOutstanding)}</strong></div>
+      </div>`;
+      invoicesHtml += '<table class="data-table"><thead><tr><th>Invoice #</th><th>Ticket</th><th>Total</th><th>Status</th><th>Issued</th></tr></thead><tbody>';
+      invoices.forEach(inv => {
+        const statusClass = inv.status === 'paid' ? 'badge-success'
+          : inv.status === 'sent' ? 'badge-info'
+          : inv.status === 'overdue' ? 'badge-danger'
+          : inv.status === 'void' || inv.status === 'cancelled' ? 'badge-default'
+          : inv.status === 'refunded' ? 'badge-warning'
+          : 'badge-default';
+        invoicesHtml += `<tr>
+          <td style="font-family:monospace;font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
+          <td style="font-family:monospace;font-size:0.85rem;color:var(--gray);">${escapeHtml(inv.ticketNumber || '-')}</td>
+          <td>${formatCurrency(inv.total)}</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(inv.status || 'draft')}</span></td>
+          <td>${escapeHtml(inv.issueDate || '-')}</td>
+        </tr>`;
+      });
+      invoicesHtml += '</tbody></table>';
+    } else {
+      invoicesHtml += '<p style="color:var(--gray);font-size:0.9rem;">No invoices yet.</p>';
+    }
+    invoicesSection.innerHTML = invoicesHtml;
+    host.appendChild(invoicesSection);
+  } catch (err) {
+    console.error('Load contact history failed:', err);
+    host.innerHTML = '<p style="color:var(--danger);font-size:0.9rem;">Failed to load history.</p>';
+  }
+}
+
+function formatCurrency(amount) {
+  if (amount == null || isNaN(amount)) return '$0.00';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+}
+
+function formatDate(ts) {
+  if (!ts) return '\u2014';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return '\u2014';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return '\u2014'; }
 }
 
 function escapeHtml(str) {
