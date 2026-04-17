@@ -27,11 +27,20 @@ export function init() {
   modal = createModal();
 }
 
+let pendingDeepLinkId = null;
+export function requestInvoice(id) { pendingDeepLinkId = id; }
+
 export async function render() {
   try {
     await loadData();
   } catch (err) {
     console.error('Invoices render error:', err);
+  }
+  if (pendingDeepLinkId) {
+    const id = pendingDeepLinkId;
+    pendingDeepLinkId = null;
+    const inv = invoices.find(i => i.id === id);
+    if (inv) return showDetailPage(inv);
   }
   if (currentPage === 'list') renderListView();
 }

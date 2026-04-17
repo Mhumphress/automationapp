@@ -20,11 +20,20 @@ export function init() {
   modal = createModal();
 }
 
+let pendingContactId = null;
+export function requestContact(id) { pendingContactId = id; }
+
 export async function render() {
   try {
     await loadData();
   } catch (err) {
     console.error('Contacts render error:', err);
+  }
+  if (pendingContactId) {
+    const id = pendingContactId;
+    pendingContactId = null;
+    const c = contacts.find(x => x.id === id);
+    if (c) return showDetailPage(c);
   }
   if (currentPage === 'list') renderListView();
 }
@@ -550,9 +559,10 @@ async function showDetailPage(contact) {
     `;
     container.appendChild(iSection);
     iSection.querySelectorAll('tr[data-invoice-id]').forEach(tr => {
-      tr.addEventListener('click', () => {
+      tr.addEventListener('click', async () => {
+        const m = await import('./invoices.js');
+        m.requestInvoice(tr.dataset.invoiceId);
         window.location.hash = 'invoices';
-        // Could add a deep-link here later
       });
     });
   }

@@ -342,14 +342,21 @@ registerView('dashboard', {
     populateDrilldown('drillContacts', contactsList.slice(0, 5).map(c => ({
       name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c.name || 'Unnamed'),
       sub: c.company || c.companyName || '',
-      onClick: () => navigate('contacts')
+      onClick: async () => {
+        const m = await import('./views/contacts.js');
+        m.requestContact(c.id);
+        navigate('contacts');
+      }
     })));
 
     populateDrilldown('drillDeals', activeQuotes.slice(0, 5).map(q => ({
       name: `${q.quoteNumber || '-'} · ${(q.customerSnapshot?.firstName || '') + ' ' + (q.customerSnapshot?.lastName || '')}`.trim(),
       value: q.total ? fmtCurrency(q.total) : '',
       sub: (q.customerSnapshot?.company || '') + (q.status ? ` · ${q.status}` : ''),
-      onClick: () => navigate('pipeline')
+      onClick: async () => {
+        const m = await import('./views/quote-builder.js');
+        m.openBuilder(q.id);
+      }
     })));
 
     populateDrilldown('drillTasks', openTasks.slice(0, 5).map(t => ({
@@ -363,7 +370,11 @@ registerView('dashboard', {
       name: `${i.invoiceNumber || '-'} · ${i.clientName || ''}`,
       value: i.total ? fmtCurrency(i.total) : '',
       sub: formatDate(i.createdAt || i.issueDate),
-      onClick: () => navigate('invoices')
+      onClick: async () => {
+        const m = await import('./views/invoices.js');
+        m.requestInvoice(i.id);
+        navigate('invoices');
+      }
     })));
 
     // --- Wire stat card click toggling ---
@@ -526,7 +537,11 @@ function buildRevenueChart(paidItems) {
             <div class="drilldown-item-name">${escapeHtml(label)}</div>
             <div class="drilldown-item-value">${fmtCurrency(item.total || item.value || 0)}</div>
           `;
-          row.addEventListener('click', () => navigate('invoices'));
+          row.addEventListener('click', async () => {
+            const m = await import('./views/invoices.js');
+            m.requestInvoice(item.id);
+            navigate('invoices');
+          });
           drill.appendChild(row);
         });
         drillContainer.appendChild(drill);
@@ -626,7 +641,10 @@ function buildActivityChart(items) {
             </div>
             ${q.total ? `<div class="drilldown-item-value">${fmtCurrency(q.total)}</div>` : ''}
           `;
-          row.addEventListener('click', () => navigate('pipeline'));
+          row.addEventListener('click', async () => {
+            const m = await import('./views/quote-builder.js');
+            m.openBuilder(q.id);
+          });
           drill.appendChild(row);
         });
         drillContainer.appendChild(drill);
