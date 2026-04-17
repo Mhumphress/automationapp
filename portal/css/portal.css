@@ -169,3 +169,54 @@
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
 }
+
+/* ── Claim tag print ───────────────────── */
+
+.claim-tag-print-only {
+  display: none;
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .claim-tag-print-only, .claim-tag-print-only * { visibility: visible; }
+  .claim-tag-print-only {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .claim-tag {
+    width: 4in;
+    padding: 0.25in;
+    font-family: 'Courier New', monospace;
+    font-size: 11pt;
+    color: #000;
+  }
+  .claim-tag-header {
+    text-align: center;
+    border-bottom: 2px solid #000;
+    padding-bottom: 0.1in;
+    margin-bottom: 0.2in;
+  }
+  .claim-tag-title {
+    font-size: 14pt;
+    font-weight: bold;
+    letter-spacing: 2px;
+  }
+  .claim-tag-number {
+    font-size: 20pt;
+    font-weight: bold;
+    margin-top: 0.1in;
+  }
+  .claim-tag-row {
+    padding: 0.05in 0;
+    border-bottom: 1px dashed #666;
+  }
+  .claim-tag-row span {
+    display: inline-block;
+    min-width: 1in;
+    font-weight: bold;
+  }
+  @page { size: 4in 6in; margin: 0; }
+}
