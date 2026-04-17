@@ -277,26 +277,34 @@ registerView('dashboard', {
     document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('expanded'));
 
     let contactsList = [];
-    let dealsList = [];
+    let quotesList = [];
+    let invoicesList = [];
 
     try {
       const results = await Promise.allSettled([
         queryDocuments('contacts'),
-        queryDocuments('deals')
+        queryDocuments('quotes').catch(() => []),
+        queryDocuments('invoices').catch(() => []),
       ]);
       contactsList = results[0].status === 'fulfilled' ? results[0].value : [];
-      dealsList = results[1].status === 'fulfilled' ? results[1].value : [];
+      quotesList = results[1].status === 'fulfilled' ? results[1].value : [];
+      invoicesList = results[2].status === 'fulfilled' ? results[2].value : [];
     } catch (err) {
       console.error('Dashboard data error:', err);
     }
 
-    const activeDeals = dealsList.filter(d => d.stage !== 'won' && d.stage !== 'lost');
-    const wonDeals = dealsList.filter(d => d.stage === 'won');
-    const revenue = wonDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+    // Active = draft, sent, accepted (in-flight quotes)
+    const activeQuotes = quotesList.filter(q => ['draft', 'sent', 'accepted'].includes(q.status));
+    const wonQuotes = quotesList.filter(q => q.status === 'provisioned');
+    // Revenue = sum of paid invoices (authoritative revenue source)
+    const paidInvoices = invoicesList.filter(i => i.status === 'paid');
+    const revenue = paidInvoices.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
+    // Pipeline value = expected revenue from active quotes
+    const pipelineValue = activeQuotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0);
 
-    // Update stat values
+    // Update stat values — map to the existing DOM ids
     document.getElementById('statContacts').textContent = contactsList.length;
-    document.getElementById('statProjects').textContent = activeDeals.length;
+    document.getElementById('statProjects').textContent = activeQuotes.length;
     let tasksList = [];
     let openTasks = [];
     try {
@@ -307,7 +315,7 @@ registerView('dashboard', {
     document.getElementById('statRevenue').textContent = fmtCurrency(revenue);
 
     // Show/hide empty state vs content
-    const hasData = contactsList.length > 0 || dealsList.length > 0;
+    const hasData = contactsList.length > 0 || quotesList.length > 0 || invoicesList.length > 0;
     document.getElementById('dashboardEmpty').style.display = hasData ? 'none' : 'flex';
     document.getElementById('statsGrid').style.display = hasData ? '' : 'none';
     document.getElementById('chartsGrid').style.display = hasData ? '' : 'none';
@@ -332,15 +340,15 @@ registerView('dashboard', {
 
     // --- Populate drill-down data ---
     populateDrilldown('drillContacts', contactsList.slice(0, 5).map(c => ({
-      name: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-      sub: c.companyName || '',
+      name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c.name || 'Unnamed'),
+      sub: c.company || c.companyName || '',
       onClick: () => navigate('contacts')
     })));
 
-    populateDrilldown('drillDeals', activeDeals.slice(0, 5).map(d => ({
-      name: d.name,
-      value: d.value ? fmtCurrency(d.value) : '',
-      sub: d.stage,
+    populateDrilldown('drillDeals', activeQuotes.slice(0, 5).map(q => ({
+      name: `${q.quoteNumber || '-'} · ${(q.customerSnapshot?.firstName || '') + ' ' + (q.customerSnapshot?.lastName || '')}`.trim(),
+      value: q.total ? fmtCurrency(q.total) : '',
+      sub: (q.customerSnapshot?.company || '') + (q.status ? ` · ${q.status}` : ''),
       onClick: () => navigate('pipeline')
     })));
 
@@ -351,11 +359,11 @@ registerView('dashboard', {
         onClick: () => navigate('tasks')
       })));
 
-    populateDrilldown('drillRevenue', wonDeals.slice(0, 5).map(d => ({
-      name: d.name,
-      value: d.value ? fmtCurrency(d.value) : '',
-      sub: formatDate(d.createdAt),
-      onClick: () => navigate('pipeline')
+    populateDrilldown('drillRevenue', paidInvoices.slice(0, 5).map(i => ({
+      name: `${i.invoiceNumber || '-'} · ${i.clientName || ''}`,
+      value: i.total ? fmtCurrency(i.total) : '',
+      sub: formatDate(i.createdAt || i.issueDate),
+      onClick: () => navigate('invoices')
     })));
 
     // --- Wire stat card click toggling ---
@@ -376,11 +384,11 @@ registerView('dashboard', {
       });
     });
 
-    // --- Revenue Bar Chart ---
-    buildRevenueChart(wonDeals);
+    // --- Revenue Bar Chart --- (now driven by paid invoices)
+    buildRevenueChart(paidInvoices);
 
-    // --- Deal Activity Line Chart ---
-    buildActivityChart(dealsList);
+    // --- Pipeline Activity Line Chart --- (quotes created over time)
+    buildActivityChart(quotesList);
   }
 });
 
@@ -438,25 +446,26 @@ function getMonthKey(timestamp) {
 }
 
 // --- Build Revenue Bar Chart ---
-function buildRevenueChart(wonDeals) {
+function buildRevenueChart(paidItems) {
   const wrap = document.getElementById('revenueChartWrap');
   const drillContainer = document.getElementById('revenueChartDrill');
   const canvas = document.getElementById('revenueChart');
 
-  if (wonDeals.length === 0) {
-    wrap.innerHTML = '<div class="chart-empty">Revenue data will appear as you close deals.</div>';
+  if (!paidItems || paidItems.length === 0) {
+    wrap.innerHTML = '<div class="chart-empty">Revenue data will appear as customers pay their invoices.</div>';
     return;
   }
 
   const months = getLast6Months();
   const grouped = {};
   months.forEach(m => { grouped[m.key] = []; });
-  wonDeals.forEach(d => {
-    const key = getMonthKey(d.createdAt);
-    if (key && grouped[key] !== undefined) grouped[key].push(d);
+  paidItems.forEach(item => {
+    const key = getMonthKey(item.createdAt || item.issueDate);
+    if (key && grouped[key] !== undefined) grouped[key].push(item);
   });
 
-  const data = months.map(m => grouped[m.key].reduce((sum, d) => sum + (d.value || 0), 0));
+  // Each item is a paid invoice (preferred) or legacy deal — sum total || value
+  const data = months.map(m => grouped[m.key].reduce((sum, item) => sum + (Number(item.total) || Number(item.value) || 0), 0));
 
   revenueChartInstance = new Chart(canvas.getContext('2d'), {
     type: 'bar',
@@ -500,21 +509,24 @@ function buildRevenueChart(wonDeals) {
         if (elements.length === 0) return;
         const idx = elements[0].index;
         const monthKey = months[idx].key;
-        const monthDeals = grouped[monthKey];
+        const monthItems = grouped[monthKey];
         drillContainer.innerHTML = '';
-        if (monthDeals.length === 0) return;
+        if (!monthItems || monthItems.length === 0) return;
 
         const drill = document.createElement('div');
         drill.className = 'chart-drilldown';
-        drill.innerHTML = `<div class="chart-drilldown-title">${months[idx].label} Deals</div>`;
-        monthDeals.slice(0, 10).forEach(d => {
+        drill.innerHTML = `<div class="chart-drilldown-title">${months[idx].label} — paid invoices</div>`;
+        monthItems.slice(0, 10).forEach(item => {
           const row = document.createElement('div');
           row.className = 'drilldown-item';
+          const label = item.invoiceNumber
+            ? `${item.invoiceNumber} · ${item.clientName || ''}`
+            : (item.name || 'Item');
           row.innerHTML = `
-            <div class="drilldown-item-name">${escapeHtml(d.name)}</div>
-            <div class="drilldown-item-value">${fmtCurrency(d.value)}</div>
+            <div class="drilldown-item-name">${escapeHtml(label)}</div>
+            <div class="drilldown-item-value">${fmtCurrency(item.total || item.value || 0)}</div>
           `;
-          row.addEventListener('click', () => navigate('pipeline'));
+          row.addEventListener('click', () => navigate('invoices'));
           drill.appendChild(row);
         });
         drillContainer.appendChild(drill);
@@ -524,22 +536,22 @@ function buildRevenueChart(wonDeals) {
 }
 
 // --- Build Deal Activity Line Chart ---
-function buildActivityChart(allDeals) {
+function buildActivityChart(items) {
   const wrap = document.getElementById('activityChartWrap');
   const drillContainer = document.getElementById('activityChartDrill');
   const canvas = document.getElementById('activityChart');
 
-  if (allDeals.length === 0) {
-    wrap.innerHTML = '<div class="chart-empty">Deal activity will appear as you add deals.</div>';
+  if (!items || items.length === 0) {
+    wrap.innerHTML = '<div class="chart-empty">Pipeline activity will appear as you build quotes.</div>';
     return;
   }
 
   const months = getLast6Months();
   const grouped = {};
   months.forEach(m => { grouped[m.key] = []; });
-  allDeals.forEach(d => {
-    const key = getMonthKey(d.createdAt);
-    if (key && grouped[key] !== undefined) grouped[key].push(d);
+  items.forEach(item => {
+    const key = getMonthKey(item.createdAt);
+    if (key && grouped[key] !== undefined) grouped[key].push(item);
   });
 
   const data = months.map(m => grouped[m.key].length);
@@ -596,22 +608,23 @@ function buildActivityChart(allDeals) {
         if (elements.length === 0) return;
         const idx = elements[0].index;
         const monthKey = months[idx].key;
-        const monthDeals = grouped[monthKey];
+        const monthItems = grouped[monthKey];
         drillContainer.innerHTML = '';
-        if (monthDeals.length === 0) return;
+        if (!monthItems || monthItems.length === 0) return;
 
         const drill = document.createElement('div');
         drill.className = 'chart-drilldown';
-        drill.innerHTML = `<div class="chart-drilldown-title">${months[idx].label} Deals</div>`;
-        monthDeals.slice(0, 10).forEach(d => {
+        drill.innerHTML = `<div class="chart-drilldown-title">${months[idx].label} — quotes created</div>`;
+        monthItems.slice(0, 10).forEach(q => {
           const row = document.createElement('div');
           row.className = 'drilldown-item';
+          const cust = `${q.customerSnapshot?.firstName || ''} ${q.customerSnapshot?.lastName || ''}`.trim() || (q.customerSnapshot?.company || '');
           row.innerHTML = `
             <div>
-              <div class="drilldown-item-name">${escapeHtml(d.name)}</div>
-              <div class="drilldown-item-sub">${escapeHtml(d.stage || '')}</div>
+              <div class="drilldown-item-name">${escapeHtml(q.quoteNumber || '-')} · ${escapeHtml(cust)}</div>
+              <div class="drilldown-item-sub">${escapeHtml(q.status || '')}</div>
             </div>
-            ${d.value ? `<div class="drilldown-item-value">${fmtCurrency(d.value)}</div>` : ''}
+            ${q.total ? `<div class="drilldown-item-value">${fmtCurrency(q.total)}</div>` : ''}
           `;
           row.addEventListener('click', () => navigate('pipeline'));
           drill.appendChild(row);
