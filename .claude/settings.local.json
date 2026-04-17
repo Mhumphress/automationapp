@@ -48,7 +48,8 @@
       "Bash(node --check crm/js/services/danger.js)",
       "Bash(node --check crm/js/views/settings.js)",
       "Bash(node --check crm/js/services/invoice-sync.js)",
-      "Bash(node --check crm/js/views/invoices.js)"
+      "Bash(node --check crm/js/views/invoices.js)",
+      "Bash(node --check crm/js/views/pipeline.js)"
     ]
   }
 }

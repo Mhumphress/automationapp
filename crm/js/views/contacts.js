@@ -37,14 +37,21 @@ export function destroy() {
 // Data
 // ---------------------------------------------------------------------------
 
+let allQuotes = [];
+let allInvoices = [];
+
 async function loadData() {
   try {
     const results = await Promise.allSettled([
       queryDocuments('contacts', 'lastName', 'asc'),
-      queryDocuments('companies', 'name', 'asc')
+      queryDocuments('companies', 'name', 'asc'),
+      queryDocuments('quotes', 'createdAt', 'desc').catch(() => []),
+      queryDocuments('invoices', 'createdAt', 'desc').catch(() => []),
     ]);
     contacts = results[0].status === 'fulfilled' ? results[0].value : [];
     companies = results[1].status === 'fulfilled' ? results[1].value : [];
+    allQuotes = results[2].status === 'fulfilled' ? results[2].value : [];
+    allInvoices = results[3].status === 'fulfilled' ? results[3].value : [];
     if (results[0].status === 'rejected') console.error('Failed to load contacts:', results[0].reason);
     if (results[1].status === 'rejected') console.error('Failed to load companies:', results[1].reason);
   } catch (err) {
@@ -476,6 +483,78 @@ async function showDetailPage(contact) {
         });
       });
     }
+  }
+
+  // Quotes for this customer
+  const customerQuotes = allQuotes.filter(q => q.contactId === contact.id);
+  if (customerQuotes.length > 0) {
+    const qSection = document.createElement('div');
+    qSection.className = 'settings-section';
+    qSection.style.marginTop = '1rem';
+    const badgeClass = (s) => s === 'provisioned' ? 'badge-success'
+      : s === 'accepted' ? 'badge-info'
+      : s === 'sent' ? 'badge-info'
+      : s === 'declined' || s === 'expired' ? 'badge-danger'
+      : 'badge-default';
+    qSection.innerHTML = `
+      <h3 class="section-title">Quotes (${customerQuotes.length})</h3>
+      <table class="data-table"><thead><tr><th>Quote #</th><th>Total</th><th>Status</th><th>Sent</th></tr></thead><tbody>
+      ${customerQuotes.map(q => `
+        <tr class="clickable" data-quote-id="${q.id}">
+          <td style="font-family:var(--font-mono);font-weight:500;">${escapeHtml(q.quoteNumber || '-')}</td>
+          <td>${formatCurrency(q.total || 0)}</td>
+          <td><span class="badge ${badgeClass(q.status)}">${escapeHtml(q.status || 'draft')}</span></td>
+          <td>${q.sentAt ? formatDate(q.sentAt) : '—'}</td>
+        </tr>
+      `).join('')}
+      </tbody></table>
+    `;
+    container.appendChild(qSection);
+    qSection.querySelectorAll('tr[data-quote-id]').forEach(tr => {
+      tr.addEventListener('click', async () => {
+        const m = await import('./quote-builder.js');
+        m.openBuilder(tr.dataset.quoteId);
+      });
+    });
+  }
+
+  // Invoices for this customer (root-level CRM invoices linked by clientId)
+  const customerInvoices = allInvoices.filter(i => i.clientId === contact.id);
+  if (customerInvoices.length > 0) {
+    const paidTotal = customerInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + (Number(i.total) || 0), 0);
+    const openTotal = customerInvoices.filter(i => ['sent', 'draft', 'overdue'].includes(i.status)).reduce((s, i) => s + (Number(i.total) || 0), 0);
+    const iSection = document.createElement('div');
+    iSection.className = 'settings-section';
+    iSection.style.marginTop = '1rem';
+    const badgeClass = (s) => s === 'paid' ? 'badge-success'
+      : s === 'sent' ? 'badge-info'
+      : s === 'overdue' ? 'badge-danger'
+      : s === 'refunded' ? 'badge-warning'
+      : 'badge-default';
+    iSection.innerHTML = `
+      <h3 class="section-title">Invoices (${customerInvoices.length})</h3>
+      <div style="display:flex;gap:1.5rem;font-size:0.85rem;margin-bottom:0.5rem;">
+        <div><span style="color:var(--gray-dark);">Paid:</span> <strong>${formatCurrency(paidTotal)}</strong></div>
+        <div><span style="color:var(--gray-dark);">Open:</span> <strong>${formatCurrency(openTotal)}</strong></div>
+      </div>
+      <table class="data-table"><thead><tr><th>Invoice #</th><th>Total</th><th>Status</th><th>Issued</th></tr></thead><tbody>
+      ${customerInvoices.map(i => `
+        <tr class="clickable" data-invoice-id="${i.id}">
+          <td style="font-family:var(--font-mono);font-weight:500;">${escapeHtml(i.invoiceNumber || '-')}</td>
+          <td>${formatCurrency(i.total || 0)}</td>
+          <td><span class="badge ${badgeClass(i.status)}">${escapeHtml(i.status || 'draft')}</span></td>
+          <td>${escapeHtml(i.issueDate || '—')}</td>
+        </tr>
+      `).join('')}
+      </tbody></table>
+    `;
+    container.appendChild(iSection);
+    iSection.querySelectorAll('tr[data-invoice-id]').forEach(tr => {
+      tr.addEventListener('click', () => {
+        window.location.hash = 'invoices';
+        // Could add a deep-link here later
+      });
+    });
   }
 }
 
