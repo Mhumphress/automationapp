@@ -4,6 +4,7 @@ import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
 import { loadBranding, saveBranding, applyBranding, resolveColors, THEMES } from '../services/branding.js';
 import { seedContacts } from '../services/seed-data.js';
+import { wipeCustomerData } from '../services/danger.js';
 
 const containerId = 'view-settings';
 let isAdminUser = false;
@@ -278,6 +279,60 @@ export async function render() {
       } catch (err) {
         status.textContent = 'Failed: ' + err.message;
         showToast('Seed failed: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Danger Zone ──
+    const dangerSection = document.createElement('div');
+    dangerSection.className = 'settings-section';
+    dangerSection.style.cssText = 'margin-top:2rem;border:1px solid var(--danger);background:rgba(248,113,113,0.03);';
+    dangerSection.innerHTML = `
+      <h2 class="section-title" style="color:var(--danger);">Danger Zone</h2>
+      <p style="color:var(--gray-dark);font-size:0.85rem;margin-bottom:0.75rem;">
+        Wipe all customer, company, quote, invoice, subscription, tenant, and transactional data.
+        <strong>Preserves:</strong> your service catalog (packages, add-ons, features, verticals), CRM admin users, branding, and global settings.
+        <strong>Temporary:</strong> remove this section when you're done with bulk testing.
+      </p>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" id="wipeDataBtn" style="color:var(--danger);border:1px solid var(--danger);">Wipe All Customer Data</button>
+        <span id="wipeStatus" style="color:var(--gray-dark);font-size:0.85rem;"></span>
+      </div>
+      <pre id="wipeLog" style="margin-top:0.75rem;background:#0f172a;color:#e2e8f0;padding:0.75rem;border-radius:6px;font-size:0.75rem;max-height:200px;overflow:auto;white-space:pre-wrap;display:none;"></pre>
+    `;
+    container.appendChild(dangerSection);
+
+    dangerSection.querySelector('#wipeDataBtn').addEventListener('click', async () => {
+      const confirmation = prompt(
+        'This will permanently delete all customers, companies, quotes, invoices, subscriptions, tenants, and related data. ' +
+        'Service catalog and CRM admin users will NOT be touched.\n\n' +
+        'Type DELETE ALL to confirm:'
+      );
+      if (confirmation !== 'DELETE ALL') {
+        showToast('Cancelled', 'info');
+        return;
+      }
+      const btn = dangerSection.querySelector('#wipeDataBtn');
+      const status = dangerSection.querySelector('#wipeStatus');
+      const logEl = dangerSection.querySelector('#wipeLog');
+      btn.disabled = true;
+      status.textContent = 'Wiping…';
+      logEl.style.display = 'block';
+      logEl.textContent = '';
+      try {
+        const totals = await wipeCustomerData({
+          onProgress: (msg) => {
+            logEl.textContent += msg + '\n';
+            logEl.scrollTop = logEl.scrollHeight;
+          },
+        });
+        status.textContent = `Done. Removed ${totals.rootDocs + totals.subcollectionDocs + totals.tenantDocs} documents.`;
+        showToast('All customer data wiped', 'success');
+      } catch (err) {
+        console.error('Wipe failed:', err);
+        status.textContent = 'Failed: ' + err.message;
+        showToast('Wipe failed — see log + console', 'error');
       } finally {
         btn.disabled = false;
       }
