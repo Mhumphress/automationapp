@@ -369,7 +369,24 @@ function renderDetail() {
 
 // renderBasicPartsSection and renderInvoiceSection are added in later tasks
 function renderBasicPartsSection(section, ticket) {
-  section.innerHTML = '<h3 class="section-title">Parts Used</h3><p style="color:var(--gray);">Basic tier — implemented in Task 6.</p>';
+  section.innerHTML = `
+    <h3 class="section-title">Parts Used</h3>
+    <div class="modal-field">
+      <label>Free-text parts log (e.g., "2× iPhone 14 screens — $120, 1× battery — $40")</label>
+      <textarea id="partsNotesInput" rows="3" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.partsNotes || '')}</textarea>
+    </div>
+    ${canWrite() ? '<button class="btn btn-primary btn-sm" id="savePartsNotesBtn">Save Notes</button>' : ''}
+  `;
+  const saveBtn = section.querySelector('#savePartsNotesBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', gateWrite(async () => {
+      const val = section.querySelector('#partsNotesInput').value;
+      try {
+        await updateTicket(ticket.id, { partsNotes: val });
+        await appendTicketHistory(ticket.id, { type: 'note', description: 'Parts notes updated' });
+      } catch (err) { alert('Save failed: ' + err.message); }
+    }));
+  }
 }
 function renderInvoiceSection(ticket) { return null; }
 
