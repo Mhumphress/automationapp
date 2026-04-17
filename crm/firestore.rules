@@ -209,12 +209,14 @@ service cloud.firestore {
     }
 
     // ── User-Tenant Mapping ───────────────────
-    // Portal users can only read their OWN mapping (by email).
+    // Portal users can only read their OWN mapping (by email). CRM admins can
+    // list all mappings (needed for wipe + support operations).
     // Tenant admins can invite users to their own tenant (create/update/delete
     // mapping where tenantId points at their tenant).
     match /user_tenants/{emailKey} {
-      allow read: if isAuth() && request.auth.token.email != null
-                  && emailKey == request.auth.token.email;
+      allow read: if isAdmin()
+                  || (isAuth() && request.auth.token.email != null
+                      && emailKey == request.auth.token.email);
       allow create: if isAdmin()
                     || (isAuth() && request.resource.data.tenantId is string
                         && isTenantAdmin(request.resource.data.tenantId));

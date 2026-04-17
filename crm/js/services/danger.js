@@ -80,37 +80,56 @@ async function deleteAllDocsIn(collRef, onDelete) {
 }
 
 export async function wipeCustomerData({ onProgress } = {}) {
-  let totals = { rootDocs: 0, tenantDocs: 0, subcollectionDocs: 0 };
+  let totals = { rootDocs: 0, tenantDocs: 0, subcollectionDocs: 0, errors: 0 };
   const log = (msg) => onProgress && onProgress(msg);
+
+  async function tryWipe(label, fn) {
+    try {
+      return await fn();
+    } catch (err) {
+      totals.errors++;
+      log(`  ! ${label} FAILED: ${err.code || err.message}`);
+      return null;
+    }
+  }
 
   // 1. Tenants — delete all known subcollections, then the tenant doc itself
   log('Scanning tenants…');
-  const tenantsSnap = await getDocs(collection(db, 'tenants'));
-  const tenantIds = tenantsSnap.docs.map(d => d.id);
-  log(`Found ${tenantIds.length} tenant${tenantIds.length === 1 ? '' : 's'}.`);
+  let tenantIds = [];
+  try {
+    const tenantsSnap = await getDocs(collection(db, 'tenants'));
+    tenantIds = tenantsSnap.docs.map(d => d.id);
+    log(`Found ${tenantIds.length} tenant${tenantIds.length === 1 ? '' : 's'}.`);
+  } catch (err) {
+    log(`! list tenants FAILED: ${err.code || err.message}`);
+    totals.errors++;
+  }
 
   for (const tid of tenantIds) {
     log(`Wiping tenants/${tid}…`);
     for (const sub of TENANT_SUBCOLLECTIONS) {
-      const subRef = collection(db, 'tenants', tid, sub);
-      const n = await deleteAllDocsIn(subRef);
-      if (n > 0) {
+      const n = await tryWipe(`tenants/${tid}/${sub}`, () =>
+        deleteAllDocsIn(collection(db, 'tenants', tid, sub))
+      );
+      if (n && n > 0) {
         totals.subcollectionDocs += n;
         log(`  tenants/${tid}/${sub} — ${n}`);
       }
     }
-    await deleteDoc(doc(db, 'tenants', tid));
-    totals.tenantDocs++;
+    const deleted = await tryWipe(`tenants/${tid}`, () => deleteDoc(doc(db, 'tenants', tid)));
+    if (deleted !== null) totals.tenantDocs++;
   }
 
   // 2. Root-level customer + transactional collections
   for (const name of ROOT_COLLECTIONS) {
     log(`Wiping ${name}…`);
-    const n = await deleteAllDocsIn(collection(db, name));
-    totals.rootDocs += n;
-    log(`  ${name} — ${n}`);
+    const n = await tryWipe(name, () => deleteAllDocsIn(collection(db, name)));
+    if (n != null) {
+      totals.rootDocs += n;
+      log(`  ${name} — ${n}`);
+    }
   }
 
-  log(`Done. Deleted ${totals.rootDocs} root docs + ${totals.tenantDocs} tenants + ${totals.subcollectionDocs} subcollection docs.`);
+  log(`Done. Deleted ${totals.rootDocs} root docs + ${totals.tenantDocs} tenants + ${totals.subcollectionDocs} subcollection docs. Errors: ${totals.errors}.`);
   return totals;
 }
