@@ -824,8 +824,9 @@ async function handleQuoteAccepted(responseId, responseData) {
     }
     const total = lineItems.reduce((s, l) => s + (l.amount || 0), 0);
 
+    const invoiceNumber = `INV-T-${Date.now().toString().slice(-6)}`;
     const invoiceRef = await addTenantInvoice(tenantId, {
-      invoiceNumber: `INV-T-${Date.now().toString().slice(-6)}`,
+      invoiceNumber,
       type: 'charge',
       amount: total, total,
       status: 'sent',
@@ -835,10 +836,46 @@ async function handleQuoteAccepted(responseId, responseData) {
       reason: `First invoice from quote ${quote.quoteNumber}`,
     });
 
+    // Mirror to root /invoices so it shows in the CRM's revenue view.
+    // (tenants/{t}/invoices is the tenant's billing statement; the root
+    // invoices collection is how the CRM tracks revenue across customers.)
+    const todayIso = new Date().toISOString().split('T')[0];
+    const dueIso = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+    const customerName = `${quote.customerSnapshot?.firstName || ''} ${quote.customerSnapshot?.lastName || ''}`.trim() || (quote.customerSnapshot?.company || '');
+    const crmInvoiceData = {
+      invoiceNumber,
+      clientId: quote.contactId || '',
+      clientName: quote.customerSnapshot?.company || customerName || 'Unknown',
+      customerName,
+      tenantId,
+      tenantInvoiceId: invoiceRef.id,
+      quoteId: quoteDoc.id,
+      quoteNumber: quote.quoteNumber,
+      issueDate: todayIso,
+      dueDate: dueIso,
+      lineItems,
+      subtotal: total,
+      taxRate: 0,
+      taxAmount: 0,
+      total,
+      status: 'sent',
+      notes: `Auto-generated from quote ${quote.quoteNumber}`,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    let crmInvoiceId = null;
+    try {
+      const { addDocument } = await import('./services/firestore.js');
+      const crmInvRef = await addDocument('invoices', crmInvoiceData);
+      crmInvoiceId = crmInvRef.id;
+    } catch (err) {
+      console.warn('Root invoice mirror write failed (tenant invoice still created):', err);
+    }
+
     await addTenantActivity(tenantId, {
       type: 'quote_accepted',
       description: `Provisioned from quote ${quote.quoteNumber}`,
-      metadata: { quoteId: quoteDoc.id, invoiceId: invoiceRef.id, signatureName: responseData.signatureName || '' },
+      metadata: { quoteId: quoteDoc.id, invoiceId: invoiceRef.id, crmInvoiceId, signatureName: responseData.signatureName || '' },
     });
 
     // Update quote as provisioned
@@ -847,6 +884,7 @@ async function handleQuoteAccepted(responseId, responseData) {
       provisionedAt: serverTimestamp(),
       tenantId,
       invoiceId: invoiceRef.id,
+      crmInvoiceId,
     });
 
     // Delete the public view so the URL stops exposing pricing
