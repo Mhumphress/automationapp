@@ -339,43 +339,12 @@ registerView('dashboard', {
     if (!hasData) return;
 
     // --- Populate drill-down data ---
-    populateDrilldown('drillContacts', contactsList.slice(0, 5).map(c => ({
-      name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c.name || 'Unnamed'),
-      sub: c.company || c.companyName || '',
-      onClick: async () => {
-        const m = await import('./views/contacts.js');
-        m.requestContact(c.id);
-        navigate('contacts');
-      }
-    })));
-
-    populateDrilldown('drillDeals', activeQuotes.slice(0, 5).map(q => ({
-      name: `${q.quoteNumber || '-'} · ${(q.customerSnapshot?.firstName || '') + ' ' + (q.customerSnapshot?.lastName || '')}`.trim(),
-      value: q.total ? fmtCurrency(q.total) : '',
-      sub: (q.customerSnapshot?.company || '') + (q.status ? ` · ${q.status}` : ''),
-      onClick: async () => {
-        const m = await import('./views/quote-builder.js');
-        m.openBuilder(q.id);
-      }
-    })));
-
-    populateDrilldown('drillTasks', openTasks.slice(0, 5).map(t => ({
-        name: t.title,
-        sub: t.priority ? t.priority.charAt(0).toUpperCase() + t.priority.slice(1) + ' priority' : '',
-        value: t.dueDate ? formatDate(t.dueDate) : '',
-        onClick: () => navigate('tasks')
-      })));
-
-    populateDrilldown('drillRevenue', paidInvoices.slice(0, 5).map(i => ({
-      name: `${i.invoiceNumber || '-'} · ${i.clientName || ''}`,
-      value: i.total ? fmtCurrency(i.total) : '',
-      sub: formatDate(i.createdAt || i.issueDate),
-      onClick: async () => {
-        const m = await import('./views/invoices.js');
-        m.requestInvoice(i.id);
-        navigate('invoices');
-      }
-    })));
+    // Rich drill-downs: show what the number means, what contributes to it, and
+    // where to dive deeper. Each drilldown panel is a mini-dashboard for that stat.
+    renderCustomersDrill(contactsList, quotesList, invoicesList);
+    renderQuotesDrill(quotesList);
+    renderTasksDrill(openTasks);
+    renderRevenueDrill(paidInvoices);
 
     // --- Wire stat card click toggling ---
     document.querySelectorAll('#statsGrid .stat-card').forEach(card => {
@@ -402,6 +371,309 @@ registerView('dashboard', {
     buildActivityChart(quotesList);
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Rich dashboard drill-downs — each one is an insight panel, not just a list
+// ─────────────────────────────────────────────────────────────────────────
+
+const DASH_DRILL_CSS_ID = 'dashDrillCSS';
+
+function ensureDrillStyles() {
+  if (document.getElementById(DASH_DRILL_CSS_ID)) return;
+  const style = document.createElement('style');
+  style.id = DASH_DRILL_CSS_ID;
+  style.textContent = `
+    .drill-rich { padding:0.5rem 0.25rem; }
+    .drill-kpis { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:0.75rem; padding:0.5rem 0.75rem; background:var(--off-white,#F8FAFC); border-radius:8px; }
+    .drill-kpi { font-size:0.8rem; }
+    .drill-kpi .label { color:var(--gray-dark,#64748B); display:block; text-transform:uppercase; font-size:0.65rem; letter-spacing:0.05em; }
+    .drill-kpi .val { font-weight:600; color:var(--black,#0F172A); font-size:1.05rem; }
+    .drill-kpi .delta { margin-left:0.25rem; font-size:0.7rem; font-weight:500; padding:0.05rem 0.4rem; border-radius:999px; }
+    .drill-kpi .delta.up { background:rgba(5,150,105,0.1); color:#059669; }
+    .drill-kpi .delta.down { background:rgba(220,38,38,0.1); color:#dc2626; }
+    .drill-kpi .delta.flat { background:rgba(100,116,139,0.1); color:#64748b; }
+    .drill-section { margin-top:0.75rem; }
+    .drill-section h5 { font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--gray-dark,#64748B); margin:0 0 0.4rem; font-weight:600; }
+    .drill-bars { display:flex; flex-direction:column; gap:0.35rem; }
+    .drill-bar { display:grid; grid-template-columns:90px 1fr 50px; align-items:center; gap:0.5rem; font-size:0.8rem; }
+    .drill-bar .name { color:var(--black,#0F172A); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .drill-bar .track { height:6px; background:var(--off-white,#F1F5F9); border-radius:3px; overflow:hidden; }
+    .drill-bar .fill { height:100%; background:var(--accent,#4F7BF7); border-radius:3px; }
+    .drill-bar .val { text-align:right; font-variant-numeric:tabular-nums; color:var(--gray-dark,#64748B); font-size:0.75rem; }
+    .drill-top-list { display:flex; flex-direction:column; }
+    .drill-top-row { display:flex; justify-content:space-between; gap:0.5rem; padding:0.35rem 0; border-bottom:1px solid var(--off-white,#F1F5F9); font-size:0.82rem; cursor:pointer; }
+    .drill-top-row:last-child { border-bottom:none; }
+    .drill-top-row:hover { background:var(--accent-dim,rgba(79,123,247,0.08)); }
+    .drill-top-row .sub { color:var(--gray-dark,#64748B); font-size:0.72rem; }
+    .drill-top-row .value { font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .drill-cta { display:inline-block; margin-top:0.6rem; font-size:0.78rem; color:var(--accent,#4F7BF7); cursor:pointer; font-weight:500; }
+    .drill-cta:hover { text-decoration:underline; }
+  `;
+  document.head.appendChild(style);
+}
+
+function pct(n) { if (!isFinite(n)) return '—'; return (n >= 0 ? '+' : '') + n.toFixed(1) + '%'; }
+function deltaClass(n) { return n > 1 ? 'up' : n < -1 ? 'down' : 'flat'; }
+function sum(arr, key) { return arr.reduce((s, x) => s + (Number(x[key]) || 0), 0); }
+
+function renderKpiStrip(kpis) {
+  return `<div class="drill-kpis">${kpis.map(k => `
+    <div class="drill-kpi">
+      <span class="label">${escapeHtml(k.label)}</span>
+      <span class="val">${escapeHtml(k.value)}${k.delta != null ? `<span class="delta ${deltaClass(k.delta)}">${pct(k.delta)}</span>` : ''}</span>
+    </div>
+  `).join('')}</div>`;
+}
+function renderBars(items, { max } = {}) {
+  const m = max != null ? max : Math.max(1, ...items.map(i => i.value));
+  return `<div class="drill-bars">${items.map(i => `
+    <div class="drill-bar" title="${escapeHtml(i.name)} — ${escapeHtml(i.displayValue || String(i.value))}">
+      <div class="name">${escapeHtml(i.name)}</div>
+      <div class="track"><div class="fill" style="width:${Math.min(100, (i.value / m) * 100)}%;"></div></div>
+      <div class="val">${escapeHtml(i.displayValue || String(i.value))}</div>
+    </div>
+  `).join('')}</div>`;
+}
+function renderTopList(items) {
+  return `<div class="drill-top-list">${items.map((i, idx) => `
+    <div class="drill-top-row" data-idx="${idx}">
+      <div><div>${escapeHtml(i.name)}</div>${i.sub ? `<div class="sub">${escapeHtml(i.sub)}</div>` : ''}</div>
+      <div class="value">${escapeHtml(i.value || '')}</div>
+    </div>
+  `).join('')}</div>`;
+}
+
+// ── Customers drilldown ──
+function renderCustomersDrill(contacts, quotes, invoices) {
+  ensureDrillStyles();
+  const el = document.getElementById('drillContacts');
+  if (!el) return;
+  const now = Date.now();
+  const start30 = now - 30 * 86400000;
+  const start60 = now - 60 * 86400000;
+  const toMs = d => d && d.toDate ? d.toDate().getTime() : (d ? new Date(d).getTime() : 0);
+  const new30 = contacts.filter(c => toMs(c.createdAt) >= start30).length;
+  const newPrev30 = contacts.filter(c => { const t = toMs(c.createdAt); return t >= start60 && t < start30; }).length;
+  const delta = newPrev30 > 0 ? ((new30 - newPrev30) / newPrev30) * 100 : (new30 > 0 ? 100 : 0);
+
+  // Customers with quotes
+  const quotedSet = new Set(quotes.map(q => q.contactId).filter(Boolean));
+  const activeSet = new Set(invoices.filter(i => i.status === 'paid').map(i => i.clientId).filter(Boolean));
+
+  // Top 5 by lifetime invoice revenue
+  const revByContact = {};
+  invoices.filter(i => i.status === 'paid').forEach(i => {
+    const id = i.clientId || '_unknown';
+    revByContact[id] = (revByContact[id] || 0) + (Number(i.total) || 0);
+  });
+  const topCustomers = Object.entries(revByContact)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id, total]) => {
+      const c = contacts.find(x => x.id === id);
+      const name = c ? (`${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || 'Unknown') : 'Unknown';
+      const company = c ? (c.company || c.companyName || '') : '';
+      return { id, name, company, total };
+    });
+
+  el.innerHTML = `
+    <div class="drill-rich">
+      ${renderKpiStrip([
+        { label: 'Total', value: contacts.length.toString() },
+        { label: 'New (30d)', value: new30.toString(), delta },
+        { label: 'Quoted', value: quotedSet.size.toString() },
+        { label: 'Paid', value: activeSet.size.toString() },
+      ])}
+      ${topCustomers.length > 0 ? `
+        <div class="drill-section">
+          <h5>Top by lifetime revenue</h5>
+          ${renderTopList(topCustomers.map(t => ({
+            name: t.name,
+            sub: t.company,
+            value: fmtCurrency(t.total),
+          })))}
+        </div>
+      ` : ''}
+      <a class="drill-cta" data-action="all-customers">View all customers →</a>
+    </div>
+  `;
+  el.querySelectorAll('.drill-top-row').forEach((row, idx) => {
+    row.addEventListener('click', async () => {
+      const c = topCustomers[idx];
+      if (!c) return;
+      const m = await import('./views/contacts.js');
+      m.requestContact(c.id);
+      navigate('contacts');
+    });
+  });
+  el.querySelector('[data-action="all-customers"]').addEventListener('click', () => navigate('contacts'));
+}
+
+// ── Open Quotes drilldown ──
+function renderQuotesDrill(quotes) {
+  ensureDrillStyles();
+  const el = document.getElementById('drillDeals');
+  if (!el) return;
+  const open = quotes.filter(q => ['draft', 'sent', 'accepted'].includes(q.status));
+  const pipelineValue = sum(open, 'total');
+  const sent = quotes.filter(q => q.status === 'sent');
+  const accepted = quotes.filter(q => q.status === 'accepted' || q.status === 'provisioned');
+  const conversion = sent.length + accepted.length > 0
+    ? (accepted.length / (sent.length + accepted.length)) * 100
+    : 0;
+
+  // Breakdown by status
+  const byStatus = ['draft', 'sent', 'accepted'].map(s => ({
+    name: s.charAt(0).toUpperCase() + s.slice(1),
+    value: open.filter(q => q.status === s).length,
+    displayValue: open.filter(q => q.status === s).length.toString(),
+  }));
+
+  // Top 5 open quotes by value
+  const top = [...open].sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 5);
+
+  el.innerHTML = `
+    <div class="drill-rich">
+      ${renderKpiStrip([
+        { label: 'Open', value: open.length.toString() },
+        { label: 'Pipeline $', value: fmtCurrency(pipelineValue) },
+        { label: 'Conversion', value: conversion.toFixed(0) + '%' },
+      ])}
+      <div class="drill-section">
+        <h5>By status</h5>
+        ${renderBars(byStatus)}
+      </div>
+      ${top.length > 0 ? `
+        <div class="drill-section">
+          <h5>Highest-value open quotes</h5>
+          ${renderTopList(top.map(q => ({
+            name: `${q.quoteNumber || '-'} · ${(q.customerSnapshot?.firstName || '') + ' ' + (q.customerSnapshot?.lastName || '')}`.trim(),
+            sub: `${q.customerSnapshot?.company || ''}${q.status ? ' · ' + q.status : ''}`,
+            value: fmtCurrency(q.total || 0),
+          })))}
+        </div>
+      ` : ''}
+      <a class="drill-cta" data-action="pipeline">Open Pipeline →</a>
+    </div>
+  `;
+  el.querySelectorAll('.drill-top-row').forEach((row, idx) => {
+    row.addEventListener('click', async () => {
+      const q = top[idx];
+      const m = await import('./views/quote-builder.js');
+      m.openBuilder(q.id);
+    });
+  });
+  el.querySelector('[data-action="pipeline"]').addEventListener('click', () => navigate('pipeline'));
+}
+
+// ── Tasks drilldown ──
+function renderTasksDrill(openTasks) {
+  ensureDrillStyles();
+  const el = document.getElementById('drillTasks');
+  if (!el) return;
+  const now = Date.now();
+  const overdue = openTasks.filter(t => t.dueDate && new Date(t.dueDate).getTime() < now);
+  const dueSoon = openTasks
+    .filter(t => t.dueDate)
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 5);
+  const byPriority = ['high', 'medium', 'low'].map(p => ({
+    name: p.charAt(0).toUpperCase() + p.slice(1),
+    value: openTasks.filter(t => (t.priority || 'low') === p).length,
+    displayValue: openTasks.filter(t => (t.priority || 'low') === p).length.toString(),
+  }));
+
+  el.innerHTML = `
+    <div class="drill-rich">
+      ${renderKpiStrip([
+        { label: 'Open', value: openTasks.length.toString() },
+        { label: 'Overdue', value: overdue.length.toString() },
+      ])}
+      <div class="drill-section">
+        <h5>By priority</h5>
+        ${renderBars(byPriority)}
+      </div>
+      ${dueSoon.length > 0 ? `
+        <div class="drill-section">
+          <h5>Due soon</h5>
+          ${renderTopList(dueSoon.map(t => ({
+            name: t.title || 'Task',
+            sub: (t.priority || 'low') + ' priority',
+            value: formatDate(t.dueDate) || '',
+          })))}
+        </div>
+      ` : ''}
+      <a class="drill-cta" data-action="tasks">Open Tasks →</a>
+    </div>
+  `;
+  el.querySelector('[data-action="tasks"]').addEventListener('click', () => navigate('tasks'));
+}
+
+// ── Revenue drilldown ──
+function renderRevenueDrill(paidInvoices) {
+  ensureDrillStyles();
+  const el = document.getElementById('drillRevenue');
+  if (!el) return;
+  const now = Date.now();
+  const start30 = now - 30 * 86400000;
+  const start60 = now - 60 * 86400000;
+  const toMs = i => i.createdAt && i.createdAt.toDate ? i.createdAt.toDate().getTime() : (i.issueDate ? new Date(i.issueDate).getTime() : 0);
+  const r30 = paidInvoices.filter(i => toMs(i) >= start30);
+  const rPrev30 = paidInvoices.filter(i => { const t = toMs(i); return t >= start60 && t < start30; });
+  const rev30 = sum(r30, 'total');
+  const revPrev30 = sum(rPrev30, 'total');
+  const delta = revPrev30 > 0 ? ((rev30 - revPrev30) / revPrev30) * 100 : (rev30 > 0 ? 100 : 0);
+  const avg = paidInvoices.length > 0 ? sum(paidInvoices, 'total') / paidInvoices.length : 0;
+
+  // By customer (top 5 last 30d)
+  const byCust = {};
+  r30.forEach(i => {
+    const name = i.clientName || 'Unknown';
+    byCust[name] = (byCust[name] || 0) + (Number(i.total) || 0);
+  });
+  const topCust = Object.entries(byCust).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxCust = topCust.length ? topCust[0][1] : 1;
+
+  // Recent 5 paid
+  const recent = [...paidInvoices].sort((a, b) => toMs(b) - toMs(a)).slice(0, 5);
+
+  el.innerHTML = `
+    <div class="drill-rich">
+      ${renderKpiStrip([
+        { label: 'Revenue (30d)', value: fmtCurrency(rev30), delta },
+        { label: 'Avg invoice', value: fmtCurrency(avg) },
+        { label: 'Paid invoices', value: paidInvoices.length.toString() },
+      ])}
+      ${topCust.length > 0 ? `
+        <div class="drill-section">
+          <h5>Top customers (30d)</h5>
+          ${renderBars(topCust.map(([n, v]) => ({ name: n, value: v, displayValue: fmtCurrency(v) })), { max: maxCust })}
+        </div>
+      ` : ''}
+      ${recent.length > 0 ? `
+        <div class="drill-section">
+          <h5>Recent paid invoices</h5>
+          ${renderTopList(recent.map(i => ({
+            name: `${i.invoiceNumber || '-'} · ${i.clientName || ''}`,
+            sub: formatDate(i.createdAt || i.issueDate) || '',
+            value: fmtCurrency(i.total || 0),
+          })))}
+        </div>
+      ` : ''}
+      <a class="drill-cta" data-action="invoices">Open Invoices →</a>
+    </div>
+  `;
+  el.querySelectorAll('.drill-top-row').forEach((row, idx) => {
+    row.addEventListener('click', async () => {
+      const i = recent[idx];
+      if (!i) return;
+      const m = await import('./views/invoices.js');
+      m.requestInvoice(i.id);
+      navigate('invoices');
+    });
+  });
+  el.querySelector('[data-action="invoices"]').addEventListener('click', () => navigate('invoices'));
+}
 
 // --- Helper: populate drill-down list ---
 function populateDrilldown(containerId, items) {
