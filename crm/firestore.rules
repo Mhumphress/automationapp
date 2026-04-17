@@ -389,6 +389,13 @@ service cloud.firestore {
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
+
+      // Counters — per-tenant auto-increment docs (e.g., ticket numbers).
+      // Reads + writes inside runTransaction must be permitted for active tenant members.
+      match /counters/{counterId} {
+        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow write: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
+      }
     }
   }
 }
