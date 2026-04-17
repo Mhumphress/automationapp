@@ -2,6 +2,7 @@ import { db, auth } from '../config.js';
 import { collection, getDocs, doc, updateDoc, query, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { isAdmin } from '../services/roles.js';
 import { showToast, escapeHtml } from '../ui.js';
+import { loadBranding, saveBranding, applyBranding } from '../services/branding.js';
 
 const containerId = 'view-settings';
 let isAdminUser = false;
@@ -136,6 +137,58 @@ export async function render() {
       auditSection.innerHTML = `<h2 class="section-title">Audit Log</h2>
         <p style="color:var(--gray-dark);padding:1rem;">Unable to load audit log.</p>`;
     }
+
+    // ── Branding Section ──
+    const brandingSection = document.createElement('div');
+    brandingSection.className = 'settings-section';
+    brandingSection.style.marginTop = '2rem';
+    const current = await loadBranding();
+    brandingSection.innerHTML = `
+      <h2 class="section-title">Branding</h2>
+      <p style="color:var(--gray-dark);font-size:0.85rem;margin-bottom:0.75rem;">Customize the CRM's sidebar color and logo.</p>
+      <div class="modal-form-grid">
+        <div class="modal-field">
+          <label>Sidebar Color</label>
+          <input type="color" id="crmBrandColor" value="${escapeHtml(current.primaryColor || '#0f172a')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+        </div>
+        <div class="modal-field">
+          <label>Logo URL</label>
+          <input type="url" id="crmBrandLogo" value="${escapeHtml(current.logoUrl || '')}" placeholder="https://example.com/logo.png">
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
+        <button class="btn btn-primary btn-sm" id="crmBrandSave">Save Branding</button>
+        <button class="btn btn-ghost btn-sm" id="crmBrandReset">Reset to default</button>
+      </div>
+    `;
+    container.appendChild(brandingSection);
+
+    const colorEl = brandingSection.querySelector('#crmBrandColor');
+    const logoEl = brandingSection.querySelector('#crmBrandLogo');
+    colorEl.addEventListener('input', () => applyBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value }));
+    logoEl.addEventListener('change', () => applyBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value }));
+
+    brandingSection.querySelector('#crmBrandSave').addEventListener('click', async () => {
+      try {
+        await saveBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value.trim() });
+        applyBranding({ primaryColor: colorEl.value, logoUrl: logoEl.value.trim() });
+        showToast('Branding saved', 'success');
+      } catch (err) {
+        showToast('Save failed: ' + err.message, 'error');
+      }
+    });
+    brandingSection.querySelector('#crmBrandReset').addEventListener('click', async () => {
+      try {
+        await saveBranding({ primaryColor: '', logoUrl: '' });
+        colorEl.value = '#0f172a';
+        logoEl.value = '';
+        applyBranding({ primaryColor: '', logoUrl: '' });
+        showToast('Branding reset', 'success');
+      } catch (err) {
+        showToast('Reset failed: ' + err.message, 'error');
+      }
+    });
+
   } catch (err) {
     container.innerHTML = '<div class="empty-state"><div class="empty-title">Error</div><p class="empty-description">Failed to load users.</p></div>';
     console.error(err);

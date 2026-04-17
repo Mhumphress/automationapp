@@ -14,6 +14,7 @@ import * as packagesView from './views/packages.js';
 import * as renewalsView from './views/renewals.js';
 import { queryDocuments } from './services/firestore.js';
 import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './services/roles.js';
+import { loadBranding, applyBranding } from './services/branding.js';
 
 // ── Auth guard ──────────────────────────
 // Wait for Firebase Auth to restore session before deciding.
@@ -53,6 +54,8 @@ onAuthStateChanged(auth, (user) => {
         `;
         return;
       }
+      // Load and apply branding (fire-and-forget — non-blocking)
+      loadBranding().then(applyBranding).catch(() => {});
       return getCurrentUserRole();
     })
     .then(role => {

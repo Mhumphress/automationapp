@@ -2,7 +2,7 @@ import { auth } from './config.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   loadTenantContext, getTenant, getVertical, getPackage,
-  hasFeature, isReadOnly, isSuspended, getUserRole, term
+  hasFeature, isReadOnly, isSuspended, getUserRole, term, applyBranding
 } from './tenant-context.js';
 
 // ── Simple router (inline, no shared dependency for now) ──
@@ -572,6 +572,25 @@ async function renderAccountSettings() {
       ${canEdit ? '<button class="btn btn-primary btn-sm" id="saveSettingsBtn">Save</button>' : ''}
       <span id="settingsSaveStatus" style="margin-left:0.75rem;color:var(--gray);font-size:0.85rem;"></span>
     </div>
+    <div class="settings-section" style="margin-top:1.5rem;">
+      <h2 class="section-title">Branding</h2>
+      <p style="color:var(--gray);font-size:0.85rem;margin-bottom:0.75rem;">Customize the portal's look for your team.</p>
+      <div class="modal-form-grid">
+        <div class="modal-field">
+          <label>Sidebar Color</label>
+          <input type="color" id="brandColorInput" ${canEdit ? '' : 'disabled'} value="${escapeHtml(generalSettings.branding?.primaryColor || '#134e4a')}" style="width:100%;height:42px;padding:0.15rem;cursor:pointer;">
+        </div>
+        <div class="modal-field">
+          <label>Logo URL</label>
+          <input type="url" id="brandLogoInput" ${canEdit ? '' : 'disabled'} value="${escapeHtml(generalSettings.branding?.logoUrl || '')}" placeholder="https://example.com/logo.png">
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        ${canEdit ? '<button class="btn btn-primary btn-sm" id="saveBrandBtn">Save Branding</button>' : ''}
+        ${canEdit ? '<button class="btn btn-ghost btn-sm" id="resetBrandBtn">Reset to default</button>' : ''}
+        <span id="brandSaveStatus" style="color:var(--gray);font-size:0.85rem;"></span>
+      </div>
+    </div>
   `;
 
   const saveBtn = container.querySelector('#saveSettingsBtn');
@@ -593,6 +612,66 @@ async function renderAccountSettings() {
         status.textContent = 'Save failed: ' + err.message;
       } finally {
         saveBtn.disabled = false;
+      }
+    });
+  }
+
+  const brandSaveBtn = container.querySelector('#saveBrandBtn');
+  const brandResetBtn = container.querySelector('#resetBrandBtn');
+  const colorInput = container.querySelector('#brandColorInput');
+  const logoInput = container.querySelector('#brandLogoInput');
+
+  // Live preview as user picks
+  if (colorInput) colorInput.addEventListener('input', () => {
+    applyBranding({ primaryColor: colorInput.value, logoUrl: logoInput?.value || '' });
+  });
+  if (logoInput) logoInput.addEventListener('change', () => {
+    applyBranding({ primaryColor: colorInput?.value || '', logoUrl: logoInput.value });
+  });
+
+  if (brandSaveBtn) {
+    brandSaveBtn.addEventListener('click', async () => {
+      const status = container.querySelector('#brandSaveStatus');
+      const primaryColor = colorInput.value;
+      const logoUrl = (logoInput.value || '').trim();
+      brandSaveBtn.disabled = true;
+      status.textContent = 'Saving...';
+      try {
+        await fbSetDoc(
+          fbDoc(fbDb, `tenants/${tenant.id}/settings/general`),
+          { branding: { primaryColor, logoUrl }, updatedAt: fbServerTs() },
+          { merge: true }
+        );
+        applyBranding({ primaryColor, logoUrl });
+        status.textContent = 'Saved.';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch (err) {
+        status.textContent = 'Save failed: ' + err.message;
+      } finally {
+        brandSaveBtn.disabled = false;
+      }
+    });
+  }
+  if (brandResetBtn) {
+    brandResetBtn.addEventListener('click', async () => {
+      const status = container.querySelector('#brandSaveStatus');
+      brandResetBtn.disabled = true;
+      status.textContent = 'Resetting...';
+      try {
+        await fbSetDoc(
+          fbDoc(fbDb, `tenants/${tenant.id}/settings/general`),
+          { branding: { primaryColor: '', logoUrl: '' }, updatedAt: fbServerTs() },
+          { merge: true }
+        );
+        if (colorInput) colorInput.value = '#134e4a';
+        if (logoInput) logoInput.value = '';
+        applyBranding({ primaryColor: '', logoUrl: '' });
+        status.textContent = 'Reset.';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch (err) {
+        status.textContent = 'Reset failed: ' + err.message;
+      } finally {
+        brandResetBtn.disabled = false;
       }
     });
   }

@@ -34,8 +34,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
   grid-template-rows: var(--header-height) 1fr;
-  min-height: 100vh;
+  height: 100dvh;
   width: 100%;
+  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════
@@ -44,7 +45,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .sidebar {
   grid-row: 1 / -1;
-  background: var(--black);
+  background: var(--crm-sidebar-bg, var(--black));
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--dark-2);

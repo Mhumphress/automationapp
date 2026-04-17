@@ -165,6 +165,63 @@ export async function selectTenant(tenantData) {
       else effectiveFeatures.delete(slug);
     });
   }
+
+  // Branding — load from settings/general if present and apply to the DOM
+  try {
+    const settingsSnap = await getDoc(doc(db, `tenants/${tenantData.id}/settings/general`));
+    const branding = settingsSnap.exists() ? (settingsSnap.data().branding || {}) : {};
+    applyBranding(branding);
+  } catch (err) {
+    console.warn('Load branding failed:', err);
+  }
+}
+
+export function applyBranding(branding) {
+  const root = document.documentElement;
+  const color = (branding && branding.primaryColor) || '';
+  const logoUrl = (branding && branding.logoUrl) || '';
+
+  if (color) {
+    root.style.setProperty('--portal-sidebar-bg', color);
+    // Derive a tint for the active-nav background from the custom color.
+    root.style.setProperty('--portal-sidebar-tint', hexToRgba(color, 0.12));
+  } else {
+    root.style.removeProperty('--portal-sidebar-bg');
+    root.style.removeProperty('--portal-sidebar-tint');
+  }
+
+  // Logo: replace the SVG next to the brand name with an <img> if url provided.
+  const logoContainer = document.querySelector('.portal-sidebar .sidebar-logo');
+  if (logoContainer) {
+    const existingImg = logoContainer.querySelector('.branded-logo');
+    const existingSvg = logoContainer.querySelector('svg');
+    if (logoUrl) {
+      if (!existingImg) {
+        const img = document.createElement('img');
+        img.className = 'branded-logo';
+        img.alt = 'Logo';
+        img.style.cssText = 'width:32px;height:32px;object-fit:contain;flex-shrink:0;border-radius:4px;';
+        img.src = logoUrl;
+        if (existingSvg) existingSvg.style.display = 'none';
+        logoContainer.insertBefore(img, logoContainer.firstChild);
+      } else {
+        existingImg.src = logoUrl;
+      }
+    } else {
+      if (existingImg) existingImg.remove();
+      if (existingSvg) existingSvg.style.display = '';
+    }
+  }
+}
+
+function hexToRgba(hex, alpha) {
+  const h = (hex || '').trim().replace(/^#/, '');
+  if (!(h.length === 3 || h.length === 6)) return `rgba(255,255,255,${alpha})`;
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // ── Getters ──

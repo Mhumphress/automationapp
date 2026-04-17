@@ -6,10 +6,12 @@
   --portal-accent: #0d9488;
   --portal-accent-dim: rgba(13, 148, 136, 0.1);
   --portal-accent-dark: #0f766e;
+  --portal-sidebar-bg: #134e4a;
+  --portal-sidebar-tint: rgba(94, 234, 212, 0.12);
 }
 
 .portal-sidebar {
-  background: #134e4a;
+  background: var(--portal-sidebar-bg);
 }
 
 .portal-sidebar .sidebar-logo svg {
@@ -17,7 +19,7 @@
 }
 
 .portal-sidebar .nav-item.active {
-  background: rgba(94, 234, 212, 0.12);
+  background: var(--portal-sidebar-tint);
   color: #5eead4;
 }
 
