@@ -2,6 +2,7 @@ import { listTickets, getTicket, createTicket, updateTicket, appendTicketHistory
   addPartToTicket, removePartFromTicket, generateInvoiceFromTicket } from '../../services/tickets.js';
 import { listParts } from '../../services/inventory.js';
 import { canWrite, gateWrite, hasFeature } from '../../tenant-context.js';
+import { renderDevicePicker, attachDevicePickerHandlers, getDevicePickerValue } from '../../components/device-picker.js';
 
 const STATUS_LABELS = {
   checked_in: 'Checked In',
@@ -184,16 +185,16 @@ function renderDetail() {
         <input type="date" name="estimatedCompletion" ${canWrite() ? '' : 'disabled'} value="${formatDateInput(ticket.estimatedCompletion)}">
       </div>
     </div>
-    <div class="modal-form-grid">
-      <div class="modal-field"><label>Serial / IMEI</label><input type="text" name="serial" ${canWrite() ? '' : 'disabled'} value="${escapeHtml(ticket.serial || '')}"></div>
-      <div class="modal-field"><label>Device Type</label><input type="text" name="deviceType" ${canWrite() ? '' : 'disabled'} value="${escapeHtml(ticket.deviceType || '')}"></div>
-    </div>
+    ${renderDevicePicker({ idPrefix: 'ticketDevice', initialValue: ticket.deviceType || '', disabled: !canWrite(), required: false })}
+    <div class="modal-field"><label>Serial / IMEI</label><input type="text" name="serial" ${canWrite() ? '' : 'disabled'} value="${escapeHtml(ticket.serial || '')}"></div>
     <div class="modal-field"><label>Issue</label><textarea name="issue" rows="2" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.issue || '')}</textarea></div>
     <div class="modal-field"><label>Condition Notes</label><textarea name="condition" rows="2" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.condition || '')}</textarea></div>
     <div class="modal-field"><label>Internal Notes</label><textarea name="notes" rows="3" ${canWrite() ? '' : 'disabled'}>${escapeHtml(ticket.notes || '')}</textarea></div>
     ${canWrite() ? '<button class="btn btn-primary btn-sm" id="saveCoreBtn">Save Changes</button>' : ''}
   `;
   container.appendChild(coreSection);
+
+  attachDevicePickerHandlers(coreSection, 'ticketDevice');
 
   const saveBtn = coreSection.querySelector('#saveCoreBtn');
   if (saveBtn) {
@@ -202,7 +203,7 @@ function renderDetail() {
         status: coreSection.querySelector('[name="status"]').value,
         estimatedCompletion: coreSection.querySelector('[name="estimatedCompletion"]').value || null,
         serial: coreSection.querySelector('[name="serial"]').value,
-        deviceType: coreSection.querySelector('[name="deviceType"]').value,
+        deviceType: getDevicePickerValue(coreSection, 'ticketDevice') || ticket.deviceType || '',
         issue: coreSection.querySelector('[name="issue"]').value,
         condition: coreSection.querySelector('[name="condition"]').value,
         notes: coreSection.querySelector('[name="notes"]').value

@@ -1,5 +1,6 @@
 import { listParts, createPart, updatePart, deletePart } from '../../services/inventory.js';
 import { canWrite, gateWrite } from '../../tenant-context.js';
+import { PARTS_CATALOG, getPartsByCategory } from '../../data/parts-catalog.js';
 
 let parts = [];
 let currentPage = 'list';
@@ -21,12 +22,16 @@ function renderList() {
   topbar.className = 'view-topbar';
   topbar.innerHTML = `
     <input type="search" id="partsSearch" placeholder="Search parts by SKU or name..." style="flex:1;max-width:360px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;">
+    ${canWrite() ? `<button class="btn btn-ghost" id="browseCatalogBtn">Browse Catalog</button>` : ''}
     ${canWrite() ? `<button class="btn btn-primary" id="addPartBtn">+ New Part</button>` : ''}
   `;
   container.appendChild(topbar);
 
   const addBtn = topbar.querySelector('#addPartBtn');
   if (addBtn) addBtn.addEventListener('click', gateWrite(() => openForm(null)));
+
+  const browseBtn = topbar.querySelector('#browseCatalogBtn');
+  if (browseBtn) browseBtn.addEventListener('click', gateWrite(() => openCatalog()));
 
   const searchInput = topbar.querySelector('#partsSearch');
   searchInput.addEventListener('input', () => renderTable(searchInput.value.trim().toLowerCase()));
@@ -174,6 +179,148 @@ function openForm(existing) {
   });
 
   container.appendChild(form);
+}
+
+function openCatalog() {
+  currentPage = 'catalog';
+  const container = document.getElementById('view-inventory');
+  container.innerHTML = '';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'detail-back';
+  backBtn.innerHTML = '&larr; Back';
+  backBtn.addEventListener('click', () => { currentPage = 'list'; renderList(); });
+  container.appendChild(backBtn);
+
+  const existingSkus = new Set(parts.map(p => (p.sku || '').toUpperCase()));
+  const grouped = getPartsByCategory();
+  const categories = Object.keys(grouped).sort();
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'max-width:960px;';
+  wrapper.innerHTML = `
+    <h2 style="margin-bottom:0.5rem;">Parts Catalog</h2>
+    <p style="color:var(--gray);margin-bottom:1rem;font-size:0.9rem;">Select parts to add to your inventory at quantity 0. You can adjust stock and prices after adding.</p>
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+      <input type="search" id="catalogSearch" placeholder="Search catalog..." style="flex:1;max-width:360px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;">
+      <button class="btn btn-ghost btn-sm" id="selectAllBtn">Select All</button>
+      <button class="btn btn-ghost btn-sm" id="clearAllBtn">Clear</button>
+    </div>
+    <div id="catalogBody"></div>
+    <div style="position:sticky;bottom:0;background:var(--surface);padding:1rem 0;border-top:1px solid var(--border);margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;align-items:center;">
+      <span id="catalogSelectedCount" style="color:var(--gray);font-size:0.9rem;">0 selected</span>
+      <button class="btn btn-primary" id="addSelectedBtn" disabled>Add Selected to Inventory</button>
+    </div>
+  `;
+  container.appendChild(wrapper);
+
+  const body = wrapper.querySelector('#catalogBody');
+  const selectedSkus = new Set();
+
+  function renderCatalogBody(filter = '') {
+    body.innerHTML = '';
+    const needle = filter.trim().toLowerCase();
+
+    categories.forEach(cat => {
+      const items = grouped[cat].filter(p =>
+        !needle ||
+        (p.sku || '').toLowerCase().includes(needle) ||
+        (p.name || '').toLowerCase().includes(needle) ||
+        (p.category || '').toLowerCase().includes(needle)
+      );
+      if (items.length === 0) return;
+
+      const section = document.createElement('div');
+      section.className = 'settings-section';
+      section.style.marginBottom = '1rem';
+      section.innerHTML = `<h3 class="section-title">${escapeHtml(cat)}</h3>`;
+
+      const table = document.createElement('table');
+      table.className = 'data-table';
+      table.innerHTML = `
+        <thead><tr>
+          <th style="width:40px;"></th>
+          <th>SKU</th><th>Name</th>
+          <th style="text-align:right;">Cost</th>
+          <th style="text-align:right;">Price</th>
+          <th></th>
+        </tr></thead>
+      `;
+      const tbody = document.createElement('tbody');
+      items.forEach(p => {
+        const already = existingSkus.has((p.sku || '').toUpperCase());
+        const checked = selectedSkus.has(p.sku) ? 'checked' : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" class="catalog-check" data-sku="${escapeHtml(p.sku)}" ${already ? 'disabled' : checked}></td>
+          <td style="font-family:monospace;">${escapeHtml(p.sku)}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td style="text-align:right;">${formatCurrency(p.unitCost)}</td>
+          <td style="text-align:right;">${formatCurrency(p.unitPrice)}</td>
+          <td style="color:var(--gray);font-size:0.8rem;">${already ? 'Already added' : ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      section.appendChild(table);
+      body.appendChild(section);
+    });
+
+    body.querySelectorAll('.catalog-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedSkus.add(cb.dataset.sku);
+        else selectedSkus.delete(cb.dataset.sku);
+        updateSelectedCount();
+      });
+    });
+  }
+
+  function updateSelectedCount() {
+    const count = selectedSkus.size;
+    wrapper.querySelector('#catalogSelectedCount').textContent = `${count} selected`;
+    wrapper.querySelector('#addSelectedBtn').disabled = count === 0;
+  }
+
+  wrapper.querySelector('#catalogSearch').addEventListener('input', (e) => {
+    renderCatalogBody(e.target.value);
+  });
+
+  wrapper.querySelector('#selectAllBtn').addEventListener('click', () => {
+    body.querySelectorAll('.catalog-check:not(:disabled)').forEach(cb => {
+      cb.checked = true;
+      selectedSkus.add(cb.dataset.sku);
+    });
+    updateSelectedCount();
+  });
+
+  wrapper.querySelector('#clearAllBtn').addEventListener('click', () => {
+    selectedSkus.clear();
+    body.querySelectorAll('.catalog-check').forEach(cb => { cb.checked = false; });
+    updateSelectedCount();
+  });
+
+  wrapper.querySelector('#addSelectedBtn').addEventListener('click', async () => {
+    const addBtn = wrapper.querySelector('#addSelectedBtn');
+    addBtn.disabled = true;
+    const originalText = addBtn.textContent;
+    addBtn.textContent = `Adding ${selectedSkus.size}...`;
+
+    const toAdd = PARTS_CATALOG.filter(p => selectedSkus.has(p.sku));
+    try {
+      for (const p of toAdd) {
+        await createPart({ ...p, quantity: 0 });
+      }
+      currentPage = 'list';
+      await render();
+    } catch (err) {
+      console.error('Bulk add failed:', err);
+      alert('Failed to add parts: ' + err.message);
+      addBtn.disabled = false;
+      addBtn.textContent = originalText;
+    }
+  });
+
+  renderCatalogBody('');
 }
 
 function escapeHtml(str) {

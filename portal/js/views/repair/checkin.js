@@ -3,6 +3,7 @@ import { createTicket } from '../../services/tickets.js';
 import { db } from '../../config.js';
 import { addDoc, collection, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { canWrite, gateWrite, getTenantId, hasFeature } from '../../tenant-context.js';
+import { renderDevicePicker, attachDevicePickerHandlers, getDevicePickerValue } from '../../components/device-picker.js';
 
 let contacts = [];
 let currentPage = 'form';
@@ -55,10 +56,9 @@ function renderForm() {
       <div class="modal-field"><label>Email</label><input type="email" name="newEmail"></div>
     </div>
 
-    <div class="modal-form-grid">
-      <div class="modal-field"><label>Device Type *</label><input type="text" name="deviceType" required placeholder="e.g., iPhone 14 Pro"></div>
-      <div class="modal-field"><label>Serial / IMEI</label><input type="text" name="serial"></div>
-    </div>
+    ${renderDevicePicker({ idPrefix: 'checkinDevice', initialValue: '', required: true })}
+
+    <div class="modal-field"><label>Serial / IMEI</label><input type="text" name="serial"></div>
 
     <div class="modal-field"><label>Issue *</label><textarea name="issue" rows="3" required placeholder="What's wrong with the device?"></textarea></div>
     <div class="modal-field"><label>Condition Notes</label><textarea name="condition" rows="2" placeholder="Scratches, dents, missing parts..."></textarea></div>
@@ -75,6 +75,8 @@ function renderForm() {
   selectEl.addEventListener('change', () => {
     newBlock.style.display = selectEl.value === '__new__' ? 'block' : 'none';
   });
+
+  attachDevicePickerHandlers(form, 'checkinDevice');
 
   form.addEventListener('submit', gateWrite(async (e) => {
     e.preventDefault();
@@ -108,10 +110,13 @@ function renderForm() {
       const etaStr = form.querySelector('[name="estimatedCompletion"]').value;
       const etaTs = etaStr ? Timestamp.fromDate(new Date(etaStr)) : null;
 
+      const deviceType = getDevicePickerValue(form, 'checkinDevice');
+      if (!deviceType) throw new Error('Please select a device (Manufacturer, Product Line, and Model).');
+
       const result = await createTicket({
         contactId,
         customerName,
-        deviceType: form.querySelector('[name="deviceType"]').value.trim(),
+        deviceType,
         serial: form.querySelector('[name="serial"]').value.trim(),
         issue: form.querySelector('[name="issue"]').value.trim(),
         condition: form.querySelector('[name="condition"]').value.trim(),
@@ -123,7 +128,7 @@ function renderForm() {
       const tid = getTenantId();
       await addDoc(collection(db, `tenants/${tid}/activity`), {
         type: 'ticket_created',
-        description: `Ticket ${result.ticketNumber} — ${form.querySelector('[name="deviceType"]').value.trim()} for ${customerName}`,
+        description: `Ticket ${result.ticketNumber} — ${deviceType} for ${customerName}`,
         metadata: { ticketId: result.id, ticketNumber: result.ticketNumber },
         createdAt: serverTimestamp()
       });
@@ -132,7 +137,7 @@ function renderForm() {
         id: result.id,
         ticketNumber: result.ticketNumber,
         customerName,
-        deviceType: form.querySelector('[name="deviceType"]').value.trim(),
+        deviceType,
         serial: form.querySelector('[name="serial"]').value.trim(),
         issue: form.querySelector('[name="issue"]').value.trim(),
         condition: form.querySelector('[name="condition"]').value.trim(),
