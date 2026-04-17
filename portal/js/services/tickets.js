@@ -1,6 +1,6 @@
 import { db, auth } from '../config.js';
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc,
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   query, orderBy, serverTimestamp, runTransaction, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getTenantId } from '../tenant-context.js';
@@ -88,6 +88,17 @@ export async function createTicket(data) {
 
     return { id: newRef.id, ticketNumber };
   });
+}
+
+// ── Delete ticket ──
+// Does NOT touch inventory (parts already pulled are a completed transaction
+// in the real world — restoring stock would misrepresent history). Does NOT
+// touch linked invoice — caller should decide whether to also delete it.
+
+export async function deleteTicket(ticketId) {
+  const tid = getTenantId();
+  if (!tid) throw new Error('No tenant context');
+  return deleteDoc(doc(db, `tenants/${tid}/tickets/${ticketId}`));
 }
 
 // ── Update basic fields (no inventory-touching changes) ──

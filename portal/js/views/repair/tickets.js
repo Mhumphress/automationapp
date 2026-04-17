@@ -1,5 +1,6 @@
 import { listTickets, getTicket, createTicket, updateTicket, appendTicketHistory,
-  addPartToTicket, removePartFromTicket, generateInvoiceFromTicket } from '../../services/tickets.js';
+  addPartToTicket, removePartFromTicket, generateInvoiceFromTicket, deleteTicket } from '../../services/tickets.js';
+import { deleteDocument } from '../../services/firestore.js';
 import { listParts } from '../../services/inventory.js';
 import { canWrite, gateWrite, hasFeature } from '../../tenant-context.js';
 import { renderDevicePicker, attachDevicePickerHandlers, getDevicePickerValue } from '../../components/device-picker.js';
@@ -200,8 +201,42 @@ function renderDetail() {
       <div class="detail-name">${escapeHtml(ticket.ticketNumber)} &middot; ${escapeHtml(ticket.deviceType || '')}</div>
       <div class="detail-subtitle">${escapeHtml(ticket.customerName || '-')} &middot; <span class="badge ${statusBadgeClass(ticket.status)}">${escapeHtml(STATUS_LABELS[ticket.status] || ticket.status)}</span></div>
     </div>
+    ${canWrite() ? '<button class="btn btn-ghost delete-ticket-btn" style="color:var(--danger);">Delete Ticket</button>' : ''}
   `;
   container.appendChild(header);
+
+  const deleteBtn = header.querySelector('.delete-ticket-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', gateWrite(async () => {
+      if (!confirm(`Delete ticket ${ticket.ticketNumber}?\n\nThis cannot be undone. Any parts already pulled from inventory will stay pulled.`)) return;
+
+      // If there's a linked invoice, ask whether to also delete it
+      let alsoDeleteInvoice = false;
+      if (ticket.invoiceId) {
+        alsoDeleteInvoice = confirm(
+          `This ticket has a linked invoice. Also delete the invoice?\n\n` +
+          `• OK  — delete the invoice too (use for drafts or mistakes)\n` +
+          `• Cancel — keep the invoice (use if the customer was already billed/paid)`
+        );
+      }
+
+      try {
+        if (alsoDeleteInvoice && ticket.invoiceId) {
+          try { await deleteDocument('invoices_crm', ticket.invoiceId); }
+          catch (e) {
+            console.warn('Linked invoice delete failed:', e.message);
+            if (!confirm('Failed to delete the linked invoice. Delete the ticket anyway?')) return;
+          }
+        }
+        await deleteTicket(ticket.id);
+        currentPage = 'list';
+        await render();
+      } catch (err) {
+        console.error('Delete ticket failed:', err);
+        alert('Failed to delete ticket: ' + err.message);
+      }
+    }));
+  }
 
   // ── Status + core fields ──
   const coreSection = document.createElement('div');
