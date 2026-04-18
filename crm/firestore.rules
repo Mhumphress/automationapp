@@ -42,6 +42,15 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tenants/$(tenantId)).data.status == 'active';
     }
 
+    // Access = active OR past_due (grace period, read-only).
+    // Anything else (suspended, cancelled, unknown) → no access.
+    // This gates READS on tenant data so a suspended tenant cannot bypass
+    // the UI and read data directly from the Firestore SDK.
+    function tenantHasAccess(tenantId) {
+      let status = get(/databases/$(database)/documents/tenants/$(tenantId)).data.status;
+      return status == 'active' || status == 'past_due';
+    }
+
     // Check if user has a valid user_tenants mapping for this tenant
     function hasValidTenantMapping(tenantId) {
       return isAuth()
@@ -290,7 +299,7 @@ service cloud.firestore {
 
       // Invitations — gated by tenantIsActive
       match /invitations/{inviteId} {
-        allow read: if isAdmin() || isTenantAdmin(tenantId);
+        allow read: if isAdmin() || (isTenantAdmin(tenantId) && tenantHasAccess(tenantId));
         allow create: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
         allow update: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
@@ -298,14 +307,14 @@ service cloud.firestore {
 
       // Tenant billing — admin + tenant admins (for self-service seat invoices).
       match /invoices/{invoiceId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create: if isAdmin() || isTenantAdmin(tenantId);
         allow update: if isAdmin();
         allow delete: if isAdmin();
       }
 
       match /payments/{paymentId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
@@ -313,13 +322,13 @@ service cloud.firestore {
 
       // Activity — members can read and create, never edit/delete
       match /activity/{activityId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow update, delete: if false;
       }
 
       match /notifications/{notifId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create: if isAdmin();
         allow update, delete: if false;
       }
@@ -333,115 +342,115 @@ service cloud.firestore {
       // ── Tenant CRM data — all gated by membership + active status ──
 
       match /contacts/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /invoices_crm/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /tasks/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /scheduling/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /inventory/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /tickets/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /jobs/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /quotes/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /work_orders/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /bom/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /projects/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /properties/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /leases/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /maintenance/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /appointments/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /services_menu/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /loyalty/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /time_entries/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
       match /proposals/{docId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
@@ -449,7 +458,7 @@ service cloud.firestore {
       // Tenant-level files — metadata for uploaded documents. Storage path
       // referenced from inside the doc.
       match /files/{fileId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
@@ -457,7 +466,7 @@ service cloud.firestore {
       // Counters — per-tenant auto-increment docs (e.g., ticket numbers).
       // Reads + writes inside runTransaction must be permitted for active tenant members.
       match /counters/{counterId} {
-        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow write: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
       }
     }

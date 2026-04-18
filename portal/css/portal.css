@@ -233,3 +233,127 @@
   }
   @page { size: 4in 6in; margin: 0; }
 }
+
+/* ═══════════════════════════════════════════════
+   Suspended lockout — full-screen, nothing else visible
+   ═══════════════════════════════════════════════ */
+
+body.suspended-mode .sidebar,
+body.suspended-mode .sidebar-overlay,
+body.suspended-mode .app-header,
+body.suspended-mode .app-main > *:not(#suspendedState) {
+  display: none !important;
+}
+
+body.suspended-mode .app-layout {
+  grid-template-columns: 1fr !important;
+}
+
+body.suspended-mode .app-main {
+  grid-column: 1 / -1 !important;
+  padding: 0 !important;
+}
+
+.suspended-lockout {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  z-index: 2000;
+}
+
+.suspended-card {
+  max-width: 560px;
+  width: 100%;
+  background: white;
+  border-radius: 16px;
+  padding: 3rem 2.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.15);
+}
+
+.suspended-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+
+.suspended-title {
+  font-family: var(--font-display, 'Cormorant Garamond', serif);
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: #0F172A;
+  margin: 0 0 0.75rem;
+  letter-spacing: -0.01em;
+}
+
+.suspended-body {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 2rem;
+}
+
+.suspended-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.suspended-actions .btn {
+  min-width: 160px;
+}
+
+.suspended-contact {
+  padding: 1rem 1.25rem;
+  background: #F8FAFC;
+  border-radius: 10px;
+  color: #334155;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.suspended-contact a {
+  color: var(--accent, #0d9488);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.suspended-contact .suspended-contact-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.suspended-contact .suspended-contact-label {
+  color: #64748B;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.suspended-signout {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.suspended-signout:hover {
+  color: #475569;
+  text-decoration: underline;
+}

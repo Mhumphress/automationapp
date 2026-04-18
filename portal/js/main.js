@@ -2,7 +2,8 @@ import { auth } from './config.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import {
   loadTenantContext, getTenant, getVertical, getPackage,
-  hasFeature, isReadOnly, isSuspended, getUserRole, term, applyBranding, resolveColors, THEMES
+  hasFeature, isReadOnly, isSuspended, getUserRole, term, applyBranding, resolveColors, THEMES,
+  subscribeToTenantStatus, getSupportContact
 } from './tenant-context.js';
 
 // ── Simple router (inline, no shared dependency for now) ──
@@ -73,9 +74,10 @@ onAuthStateChanged(auth, async (user) => {
     // Hide loading
     document.getElementById('portalLoading').style.display = 'none';
 
-    // Check status
+    // Check status — if suspended/cancelled, render lockout and stop here.
+    // No sidebar, no views, no data fetch.
     if (isSuspended()) {
-      document.getElementById('suspendedState').style.display = 'flex';
+      await showSuspendedLockout();
       return;
     }
 
@@ -98,6 +100,18 @@ onAuthStateChanged(auth, async (user) => {
     await registerAllViews();
     initRouter('dashboard');
 
+    // Subscribe to tenant doc so status changes mid-session take effect
+    // immediately (e.g., admin suspends while the customer is logged in).
+    subscribeToTenantStatus(async (newStatus) => {
+      if (newStatus && (newStatus === 'active' || newStatus === 'past_due')) {
+        // Restored — reload to rebuild the UI cleanly.
+        window.location.reload();
+        return;
+      }
+      // Anything else = lockout.
+      await showSuspendedLockout();
+    });
+
   } catch (err) {
     console.error('Portal init error:', err);
     document.getElementById('portalLoading').style.display = 'none';
@@ -116,6 +130,77 @@ onAuthStateChanged(auth, async (user) => {
     }
   }
 });
+
+// ── Suspended lockout ──
+//
+// Hides sidebar, header, and every other view. Fills the lockout card with
+// contact info from settings/branding. Wires the Call / Email / Sign-out
+// buttons. Once this runs, the user can only contact support or sign out.
+
+async function showSuspendedLockout() {
+  document.body.classList.add('suspended-mode');
+  document.getElementById('portalLoading').style.display = 'none';
+  document.getElementById('noTenantState').style.display = 'none';
+  document.getElementById('statusBanner').style.display = 'none';
+  const lockout = document.getElementById('suspendedState');
+  lockout.style.display = 'flex';
+
+  const contact = await getSupportContact();
+  const tenant = getTenant();
+  const who = contact.businessName || 'our support team';
+
+  const callBtn = lockout.querySelector('#suspendedCallBtn');
+  const emailBtn = lockout.querySelector('#suspendedEmailBtn');
+  const contactBlock = lockout.querySelector('#suspendedContact');
+
+  // Call button — only show if we actually have a phone number.
+  if (contact.phone) {
+    const telHref = `tel:${contact.phone.replace(/[^\d+]/g, '')}`;
+    callBtn.href = telHref;
+    callBtn.style.display = '';
+  } else {
+    callBtn.style.display = 'none';
+  }
+
+  // Email button — always present; we have a fallback.
+  const subject = encodeURIComponent(`Account access — ${tenant?.companyName || tenant?.id || ''}`);
+  emailBtn.href = `mailto:${contact.email}?subject=${subject}`;
+
+  // Contact block rows
+  const rows = [];
+  if (contact.phone) {
+    rows.push(`
+      <div class="suspended-contact-row">
+        <span class="suspended-contact-label">Phone</span>
+        <a href="tel:${escapeAttr(contact.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(contact.phone)}</a>
+      </div>
+    `);
+  }
+  rows.push(`
+    <div class="suspended-contact-row">
+      <span class="suspended-contact-label">Email</span>
+      <a href="mailto:${escapeAttr(contact.email)}">${escapeHtml(contact.email)}</a>
+    </div>
+  `);
+  contactBlock.innerHTML = rows.join('');
+
+  // Sign out button
+  const signOutBtn = lockout.querySelector('#suspendedSignOutBtn');
+  if (signOutBtn && !signOutBtn.dataset.wired) {
+    signOutBtn.dataset.wired = '1';
+    signOutBtn.addEventListener('click', async () => {
+      try {
+        localStorage.removeItem('portal_tenant_id');
+        await signOut(auth);
+      } catch {}
+      window.location.replace('index.html');
+    });
+  }
+}
+
+function escapeAttr(s) {
+  return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ── Logout ──
 

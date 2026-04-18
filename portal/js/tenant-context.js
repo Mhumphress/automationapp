@@ -1,6 +1,6 @@
 import { db, auth } from './config.js';
 import {
-  collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp
+  collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let currentTenant = null;
@@ -303,17 +303,75 @@ export function getEffectiveFeatures() {
 }
 
 // ── Status checks ──
+//
+// Allowed statuses:
+//   'active'    — full access
+//   'past_due'  — grace period; read-only (banner shown)
+// Any other status (suspended, cancelled, or unknown) → full lockout.
+
+const ALLOWED_STATUSES = new Set(['active', 'past_due']);
 
 export function isReadOnly() {
   return currentTenant && currentTenant.status === 'past_due';
 }
 
 export function isSuspended() {
-  return currentTenant && (currentTenant.status === 'suspended' || currentTenant.status === 'cancelled');
+  if (!currentTenant) return false;
+  const s = currentTenant.status || '';
+  return !ALLOWED_STATUSES.has(s);
 }
 
 export function canWrite() {
   return currentTenant && !isSuspended() && !isReadOnly();
+}
+
+// ── Real-time status subscription ──
+//
+// Portal subscribes to the tenant doc so that if the CRM flips status to
+// suspended/cancelled mid-session, the lockout is enforced immediately —
+// without waiting for a page reload.
+
+let tenantUnsubscribe = null;
+
+export function subscribeToTenantStatus(onStatusChange) {
+  if (!currentTenant) return () => {};
+  if (tenantUnsubscribe) tenantUnsubscribe();
+  tenantUnsubscribe = onSnapshot(doc(db, 'tenants', currentTenant.id), (snap) => {
+    if (!snap.exists()) {
+      onStatusChange(null);
+      return;
+    }
+    const data = snap.data();
+    const prevStatus = currentTenant.status;
+    currentTenant = { ...currentTenant, ...data };
+    if (data.status !== prevStatus) {
+      onStatusChange(data.status);
+    }
+  }, (err) => {
+    console.warn('Tenant status subscription error:', err);
+  });
+  return tenantUnsubscribe;
+}
+
+// ── Support contact (for the lockout screen) ──
+//
+// Reads from root settings/branding which is public-readable. Falls back to
+// the admin email so the screen always shows a useful contact channel.
+
+export async function getSupportContact() {
+  const fallback = { email: 'mh@automationapp.org', phone: '' };
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'branding'));
+    if (!snap.exists()) return fallback;
+    const data = snap.data();
+    return {
+      email: data.supportEmail || fallback.email,
+      phone: data.supportPhone || fallback.phone,
+      businessName: data.businessName || '',
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 export function gateWrite(fn) {
