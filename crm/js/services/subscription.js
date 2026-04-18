@@ -5,6 +5,21 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getPackage } from './catalog.js';
 import { createRootInvoiceMirror } from './invoice-sync.js';
+import { recordEvent, EVENT_TYPES } from './subscription-events.js';
+
+function snapshotTenantState(tenant) {
+  if (!tenant) return null;
+  return {
+    packageId:     tenant.packageId || null,
+    tier:          tenant.tier || null,
+    basePrice:     tenant.basePrice != null ? Number(tenant.basePrice) : null,
+    priceOverride: tenant.priceOverride != null ? Number(tenant.priceOverride) : null,
+    addOns:        Array.isArray(tenant.addOns) ? tenant.addOns.map(a => ({ ...a })) : [],
+    billingCycle:  tenant.billingCycle || 'monthly',
+    status:        tenant.status || 'active',
+    extraUsers:    Number(tenant.extraUsers) || 0,
+  };
+}
 
 async function mirrorToCrmInvoices(tenantId, tenantInvoiceId, tenantInvoiceData) {
   try {
@@ -134,6 +149,18 @@ export async function addAddOn(tenantId, addon) {
     createdAt: serverTimestamp(),
   });
 
+  const fromState = snapshotTenantState(tenant);
+  const toState = snapshotTenantState({ ...tenant, addOns: newAddOns });
+  await recordEvent({
+    tenantId,
+    contactId: tenant.contactId || null,
+    type: EVENT_TYPES.ADDON_ADDED,
+    fromState, toState,
+    invoiceId: invoiceRef.id,
+    reason: `Added ${addon.name}`,
+    metadata: { slug: addon.slug, qty: addon.qty || 1 },
+  });
+
   return { invoiceId: invoiceRef.id, total };
 }
 
@@ -186,6 +213,19 @@ export async function removeAddOn(tenantId, slug) {
       metadata: { slug, invoiceId: invoiceRef.id },
       createdAt: serverTimestamp(),
     });
+
+    const fromState = snapshotTenantState(tenant);
+    const toState = snapshotTenantState({ ...tenant, addOns: newAddOns });
+    await recordEvent({
+      tenantId,
+      contactId: tenant.contactId || null,
+      type: EVENT_TYPES.ADDON_REMOVED,
+      fromState, toState,
+      invoiceId: invoiceRef.id,
+      reason: `Removed ${preview.addon.name}`,
+      metadata: { slug, refund: preview.refund },
+    });
+
     return { invoiceId: invoiceRef.id, refund: preview.refund };
   }
 
@@ -195,6 +235,18 @@ export async function removeAddOn(tenantId, slug) {
     metadata: { slug },
     createdAt: serverTimestamp(),
   });
+
+  const fromStateNoRefund = snapshotTenantState(tenant);
+  const toStateNoRefund = snapshotTenantState({ ...tenant, addOns: newAddOns });
+  await recordEvent({
+    tenantId,
+    contactId: tenant.contactId || null,
+    type: EVENT_TYPES.ADDON_REMOVED,
+    fromState: fromStateNoRefund, toState: toStateNoRefund,
+    reason: `Removed ${preview.addon.name} (no refund)`,
+    metadata: { slug, refund: 0 },
+  });
+
   return { invoiceId: null, refund: 0 };
 }
 
@@ -260,6 +312,30 @@ export async function changePlan(tenantId, newPackageId) {
     metadata: { oldPackageId: tenant.packageId, newPackageId, invoiceId: invoiceRef.id },
     createdAt: serverTimestamp(),
   });
+
+  const fromState = snapshotTenantState(tenant);
+  const toState = snapshotTenantState({
+    ...tenant,
+    packageId:     newPackageId,
+    tier:          preview.newPkg.tier,
+    basePrice:     preview.newPkg.basePrice || 0,
+    priceOverride: null,
+  });
+  await recordEvent({
+    tenantId,
+    contactId: tenant.contactId || null,
+    type: EVENT_TYPES.PLAN_CHANGED,
+    fromState, toState,
+    invoiceId: invoiceRef.id,
+    reason: `Plan changed: ${preview.oldPkg?.name || '-'} → ${preview.newPkg.name}`,
+    metadata: {
+      oldPackageId: tenant.packageId,
+      newPackageId,
+      oldPrice: preview.oldPkg ? (tenant.priceOverride ?? preview.oldPkg.basePrice ?? 0) : 0,
+      newPrice: preview.newPkg.basePrice || 0,
+    },
+  });
+
   return { invoiceId: invoiceRef.id, total };
 }
 
@@ -313,6 +389,19 @@ export async function cancelNow(tenantId) {
     metadata: { invoiceId },
     createdAt: serverTimestamp(),
   });
+
+  const fromState = snapshotTenantState(tenant);
+  const toState = snapshotTenantState({ ...tenant, status: 'cancelled' });
+  await recordEvent({
+    tenantId,
+    contactId: tenant.contactId || null,
+    type: EVENT_TYPES.CANCELLED,
+    fromState, toState,
+    invoiceId,
+    reason: refund > 0 ? `Cancelled with $${refund.toFixed(2)} prorated refund` : 'Cancelled immediately',
+    metadata: { refund, immediate: true },
+  });
+
   return { invoiceId, refund };
 }
 
@@ -334,6 +423,17 @@ export async function cancelAtPeriodEnd(tenantId) {
     metadata: {},
     createdAt: serverTimestamp(),
   });
+
+  const fromState = snapshotTenantState(tenant);
+  await recordEvent({
+    tenantId,
+    contactId: tenant.contactId || null,
+    type: EVENT_TYPES.CANCEL_SCHEDULED,
+    fromState, toState: fromState,
+    reason: 'Cancellation scheduled for end of billing period',
+    metadata: { scheduledFor: tenant.currentPeriodEnd || null },
+  });
+
   return { scheduledFor: tenant.currentPeriodEnd };
 }
 
@@ -350,12 +450,26 @@ export async function enforceCancellations() {
     if (cancelAt && cancelAt <= now) due.push(docSnap.id);
   });
   for (const id of due) {
+    const tSnap = await getDoc(doc(db, 'tenants', id));
+    const tenantData = tSnap.exists() ? tSnap.data() : {};
     await updateDoc(doc(db, 'tenants', id), { status: 'cancelled', updatedAt: serverTimestamp() });
     await addDoc(collection(db, 'tenants', id, 'activity'), {
       type: 'subscription_cancelled',
       description: 'Scheduled cancellation took effect',
       createdAt: serverTimestamp(),
     });
+    try {
+      const fromState = snapshotTenantState(tenantData);
+      const toState = snapshotTenantState({ ...tenantData, status: 'cancelled' });
+      await recordEvent({
+        tenantId: id,
+        contactId: tenantData.contactId || null,
+        type: EVENT_TYPES.CANCELLED,
+        fromState, toState,
+        reason: 'Scheduled cancellation took effect',
+        metadata: { scheduled: true },
+      });
+    } catch (err) { console.warn('Event write failed during enforceCancellations:', err); }
   }
   return due.length;
 }

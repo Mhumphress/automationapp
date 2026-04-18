@@ -19,6 +19,8 @@ import { getCurrentUserRole, clearRoleCache, bootstrapCurrentUser } from './serv
 import { loadBranding, applyBranding } from './services/branding.js';
 import { subscribeToResponses, getQuote } from './services/quotes.js';
 import { enforceCancellations } from './services/subscription.js';
+import { recordEvent as recordSubEvent, EVENT_TYPES as SUB_EVENTS, backfillSubscriptionEvents } from './services/subscription-events.js';
+import * as money from './services/money.js';
 import { createTenant, addTenantActivity, addTenantInvoice, addTenantUser } from './services/tenants.js';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, runTransaction, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -77,6 +79,7 @@ onAuthStateChanged(auth, (user) => {
         // Start listening for quote responses + enforce scheduled cancellations
         subscribeToResponses(handleQuoteAccepted, handleQuoteDeclined);
         runCompaniesMigration().catch(err => console.error('Migration failed:', err));
+        backfillSubscriptionEvents().catch(err => console.error('Events backfill failed:', err));
         enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
         mountUniversalSearch();
       }
@@ -268,7 +271,7 @@ registerView('dashboard', {
     if (activityChartInstance) { activityChartInstance.destroy(); activityChartInstance = null; }
 
     // Clear drill-downs
-    ['drillContacts', 'drillDeals', 'drillTasks', 'drillRevenue', 'revenueChartDrill', 'activityChartDrill'].forEach(id => {
+    ['drillContacts', 'drillDeals', 'drillTasks', 'drillRevenue', 'drillSubscriptions', 'drillARR', 'revenueChartDrill', 'activityChartDrill'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
     });
@@ -279,28 +282,30 @@ registerView('dashboard', {
     let contactsList = [];
     let quotesList = [];
     let invoicesList = [];
+    let tenantsList = [];
 
     try {
       const results = await Promise.allSettled([
         queryDocuments('contacts'),
         queryDocuments('quotes').catch(() => []),
         queryDocuments('invoices').catch(() => []),
+        queryDocuments('tenants').catch(() => []),
       ]);
       contactsList = results[0].status === 'fulfilled' ? results[0].value : [];
       quotesList = results[1].status === 'fulfilled' ? results[1].value : [];
       invoicesList = results[2].status === 'fulfilled' ? results[2].value : [];
+      tenantsList = results[3].status === 'fulfilled' ? results[3].value : [];
     } catch (err) {
       console.error('Dashboard data error:', err);
     }
 
     // Active = draft, sent, accepted (in-flight quotes)
     const activeQuotes = quotesList.filter(q => ['draft', 'sent', 'accepted'].includes(q.status));
-    const wonQuotes = quotesList.filter(q => q.status === 'provisioned');
-    // Revenue = sum of paid invoices (authoritative revenue source)
+    // Paid invoices (authoritative revenue source) — all money math via money.js
     const paidInvoices = invoicesList.filter(i => i.status === 'paid');
-    const revenue = paidInvoices.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
-    // Pipeline value = expected revenue from active quotes
-    const pipelineValue = activeQuotes.reduce((sum, q) => sum + (Number(q.total) || 0), 0);
+    const revenue = money.sumPaid(invoicesList);          // net paid (refunds subtract)
+    const mrr = money.totalMRR(tenantsList);
+    const arr = money.totalARR(tenantsList);
 
     // Update stat values — map to the existing DOM ids
     document.getElementById('statContacts').textContent = contactsList.length;
@@ -313,6 +318,10 @@ registerView('dashboard', {
     } catch (err) { console.error('Tasks load error:', err); }
     document.getElementById('statTasks').textContent = openTasks.length;
     document.getElementById('statRevenue').textContent = fmtCurrency(revenue);
+    const mrrEl = document.getElementById('statMRR');
+    const arrEl = document.getElementById('statARR');
+    if (mrrEl) mrrEl.textContent = fmtCurrency(mrr);
+    if (arrEl) arrEl.textContent = fmtCurrency(arr);
 
     // Show/hide empty state vs content
     const hasData = contactsList.length > 0 || quotesList.length > 0 || invoicesList.length > 0;
@@ -360,7 +369,9 @@ registerView('dashboard', {
     renderCustomersDrill(contactsList, quotesList, invoicesList);
     renderQuotesDrill(quotesList);
     renderTasksDrill(openTasks);
-    renderRevenueDrill(paidInvoices);
+    renderRevenueDrill(invoicesList);
+    renderSubscriptionsDrill(tenantsList);
+    renderARRDrill(tenantsList);
 
     // --- Revenue Bar Chart --- (now driven by paid invoices)
     buildRevenueChart(paidInvoices);
@@ -608,20 +619,23 @@ function renderTasksDrill(openTasks) {
 }
 
 // ── Revenue drilldown ──
-function renderRevenueDrill(paidInvoices) {
+function renderRevenueDrill(allInvoices) {
   ensureDrillStyles();
   const el = document.getElementById('drillRevenue');
   if (!el) return;
+  const paidInvoices = allInvoices.filter(i => i.status === 'paid');
   const now = Date.now();
   const start30 = now - 30 * 86400000;
   const start60 = now - 60 * 86400000;
   const toMs = i => i.createdAt && i.createdAt.toDate ? i.createdAt.toDate().getTime() : (i.issueDate ? new Date(i.issueDate).getTime() : 0);
   const r30 = paidInvoices.filter(i => toMs(i) >= start30);
   const rPrev30 = paidInvoices.filter(i => { const t = toMs(i); return t >= start60 && t < start30; });
-  const rev30 = sum(r30, 'total');
-  const revPrev30 = sum(rPrev30, 'total');
+  const rev30 = money.sumPaid(r30);
+  const revPrev30 = money.sumPaid(rPrev30);
   const delta = revPrev30 > 0 ? ((rev30 - revPrev30) / revPrev30) * 100 : (rev30 > 0 ? 100 : 0);
-  const avg = paidInvoices.length > 0 ? sum(paidInvoices, 'total') / paidInvoices.length : 0;
+  const gross30 = money.sumGrossPaid(r30);
+  const refunds30 = Math.abs(money.sumRefunds(r30));
+  const avg = paidInvoices.length > 0 ? money.sumGrossPaid(paidInvoices) / paidInvoices.length : 0;
 
   // By customer (top 5 last 30d)
   const byCust = {};
@@ -638,9 +652,10 @@ function renderRevenueDrill(paidInvoices) {
   el.innerHTML = `
     <div class="drill-rich">
       ${renderKpiStrip([
-        { label: 'Revenue (30d)', value: fmtCurrency(rev30), delta },
+        { label: 'Net revenue (30d)', value: fmtCurrency(rev30), delta },
+        { label: 'Gross (30d)', value: fmtCurrency(gross30) },
+        { label: 'Refunds (30d)', value: fmtCurrency(refunds30) },
         { label: 'Avg invoice', value: fmtCurrency(avg) },
-        { label: 'Paid invoices', value: paidInvoices.length.toString() },
       ])}
       ${topCust.length > 0 ? `
         <div class="drill-section">
@@ -671,6 +686,86 @@ function renderRevenueDrill(paidInvoices) {
     });
   });
   el.querySelector('[data-action="invoices"]').addEventListener('click', () => navigate('invoices'));
+}
+
+// ── Subscriptions drilldown (MRR) ──
+function renderSubscriptionsDrill(tenants) {
+  ensureDrillStyles();
+  const el = document.getElementById('drillSubscriptions');
+  if (!el) return;
+  const active = tenants.filter(t => t.status === 'active');
+  const pastDue = tenants.filter(t => t.status === 'past_due');
+  const cancelled = tenants.filter(t => t.status === 'cancelled');
+  const mrr = money.totalMRR(active);
+
+  // Churn and net new MRR in the last 30d require subscription_events;
+  // for initial render we show what we can derive from tenants directly.
+  const tsMs = t => t && t.toDate ? t.toDate().getTime() : (t ? new Date(t).getTime() : 0);
+  const now = Date.now();
+  const cancelledIn30 = tenants.filter(t => {
+    const c = tsMs(t.cancelAt);
+    return c && c >= now - 30 * 86400000 && c <= now;
+  });
+
+  const topTenants = [...active]
+    .map(t => ({ t, mrr: money.computeMRR(t) }))
+    .sort((a, b) => b.mrr - a.mrr)
+    .slice(0, 5);
+
+  el.innerHTML = `
+    <div class="drill-rich">
+      ${renderKpiStrip([
+        { label: 'MRR', value: fmtCurrency(mrr) },
+        { label: 'Active', value: active.length.toString() },
+        { label: 'Past due', value: pastDue.length.toString() },
+        { label: 'Churn (30d)', value: cancelledIn30.length.toString() },
+      ])}
+      ${topTenants.length > 0 ? `
+        <div class="drill-section">
+          <h5>Top tenants by MRR</h5>
+          ${renderTopList(topTenants.map(x => ({
+            name: x.t.companyName || x.t.id,
+            sub: `${x.t.tier || ''}${x.t.billingCycle ? ' · ' + x.t.billingCycle : ''}`,
+            value: fmtCurrency(x.mrr),
+          })))}
+        </div>
+      ` : ''}
+      <a class="drill-cta" data-action="tenants">Open Tenants →</a>
+    </div>
+  `;
+  el.querySelector('[data-action="tenants"]').addEventListener('click', () => navigate('tenants'));
+}
+
+// ── ARR drilldown ──
+function renderARRDrill(tenants) {
+  ensureDrillStyles();
+  const el = document.getElementById('drillARR');
+  if (!el) return;
+  const active = tenants.filter(t => t.status === 'active');
+  const arr = money.totalARR(active);
+  const annualTenants = active.filter(t => t.billingCycle === 'annual');
+  const monthlyTenants = active.filter(t => t.billingCycle !== 'annual');
+  const arrFromAnnual = money.totalARR(annualTenants);
+  const arrFromMonthly = money.totalARR(monthlyTenants);
+
+  el.innerHTML = `
+    <div class="drill-rich">
+      ${renderKpiStrip([
+        { label: 'ARR', value: fmtCurrency(arr) },
+        { label: 'From annual', value: fmtCurrency(arrFromAnnual) },
+        { label: 'From monthly', value: fmtCurrency(arrFromMonthly) },
+      ])}
+      <div class="drill-section">
+        <h5>Cycle breakdown</h5>
+        ${renderBars([
+          { name: 'Annual', value: annualTenants.length, displayValue: annualTenants.length.toString() },
+          { name: 'Monthly', value: monthlyTenants.length, displayValue: monthlyTenants.length.toString() },
+        ])}
+      </div>
+      <a class="drill-cta" data-action="tenants">Open Tenants →</a>
+    </div>
+  `;
+  el.querySelector('[data-action="tenants"]').addEventListener('click', () => navigate('tenants'));
 }
 
 // --- Helper: populate drill-down list ---
@@ -1187,6 +1282,34 @@ async function handleQuoteAccepted(responseId, responseData) {
       invoiceId: invoiceRef.id,
       crmInvoiceId,
     });
+
+    // Record structured subscription_events doc so the customer timeline
+    // has a first entry to hang everything else from.
+    try {
+      const basePrice = quote.priceOverride ?? quote.basePrice ?? 0;
+      const toState = {
+        packageId:     quote.packageId || null,
+        tier:          quote.tier || null,
+        basePrice:     Number(basePrice) || 0,
+        priceOverride: quote.priceOverride != null ? Number(quote.priceOverride) : null,
+        addOns:        Array.isArray(quote.addOns) ? quote.addOns.map(a => ({ ...a })) : [],
+        billingCycle:  quote.billingCycle || 'monthly',
+        status:        'active',
+        extraUsers:    Number(quote.extraUsers) || 0,
+      };
+      await recordSubEvent({
+        tenantId,
+        contactId: quote.contactId || null,
+        type: SUB_EVENTS.CREATED,
+        fromState: null,
+        toState,
+        invoiceId: invoiceRef.id,
+        reason: `Provisioned from quote ${quote.quoteNumber}`,
+        metadata: { quoteId: quoteDoc.id, crmInvoiceId },
+      });
+    } catch (err) {
+      console.warn('subscription_events created write failed:', err);
+    }
 
     // Delete the public view so the URL stops exposing pricing
     try { await deleteDoc(doc(db, 'quote_views', responseData.token)); } catch {}
