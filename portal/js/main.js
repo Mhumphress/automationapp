@@ -470,17 +470,15 @@ async function registerAllViews() {
     destroy: checkinMod.destroy
   });
 
-  // Placeholder views for modules not yet implemented
-  const placeholderViews = [
-    'scheduling',
-    'jobs', 'dispatching', 'quoting',
-    'bom', 'work-orders',
-    'projects', 'time-tracking', 'proposals',
-    'properties', 'leases', 'maintenance',
-    'appointments', 'service-menu', 'staff-calendar', 'loyalty'
-  ];
+  // Vertical modules — all driven by the generic records component
+  // plus per-vertical configuration.
+  const { VIEW_CONFIG } = await import('./views/record-configs.js');
+  const { mountRecords } = await import('./components/records.js');
+  const { isReadOnly: isRO, isSuspended: isSus } = await import('./tenant-context.js');
 
-  placeholderViews.forEach(name => {
+  const recordViews = Object.keys(VIEW_CONFIG);
+
+  recordViews.forEach(name => {
     if (!document.getElementById(`view-${name}`)) {
       const div = document.createElement('div');
       div.id = `view-${name}`;
@@ -488,18 +486,23 @@ async function registerAllViews() {
       document.getElementById('appMain').appendChild(div);
     }
 
+    let instance = null;
+
     registerView(name, {
+      destroy() { if (instance) { try { instance.destroy(); } catch {} instance = null; } },
       render() {
-        const title = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        document.getElementById('headerTitle').textContent = title;
+        const cfg = VIEW_CONFIG[name];
+        document.getElementById('headerTitle').textContent = cfg.title;
         const container = document.getElementById(`view-${name}`);
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-title">${title}</div>
-            <p class="empty-description">This module is coming soon.</p>
-          </div>
-        `;
-      }
+        container.innerHTML = '';
+        const tenant = getTenant();
+        if (!tenant) return;
+        if (instance) { try { instance.destroy(); } catch {} }
+        instance = mountRecords(container, cfg, {
+          tenantId: tenant.id,
+          canWrite: !isRO() && !isSus(),
+        });
+      },
     });
   });
 }
