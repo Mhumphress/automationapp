@@ -216,6 +216,46 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isApprovedUser() && isOwner());
     }
 
+    // ── Messaging: threaded conversations between operator and tenants ──
+    //
+    // message_threads is a root collection so operators can query across all
+    // tenants, while each thread carries a `tenantId` that restricts access
+    // to members of that tenant.
+
+    match /message_threads/{threadId} {
+      allow read: if isApprovedUser()
+        || (isAuth() && isTenantMember(resource.data.tenantId));
+      allow create: if isApprovedUser()
+        || (isAuth()
+            && request.resource.data.tenantId is string
+            && isTenantMember(request.resource.data.tenantId)
+            && tenantHasAccess(request.resource.data.tenantId));
+      // Both sides can update to flip unread flags / bump lastMessage metadata.
+      allow update: if isApprovedUser()
+        || (isAuth() && isTenantMember(resource.data.tenantId));
+      allow delete: if isApprovedUser();
+
+      match /messages/{messageId} {
+        allow read: if isApprovedUser()
+          || (isAuth() && isTenantMember(
+                get(/databases/$(database)/documents/message_threads/$(threadId)).data.tenantId
+              ));
+        // Tenant users can only create messages with sender === 'tenant'.
+        // Operators (isApprovedUser) can create either sender.
+        allow create: if isApprovedUser()
+          || (isAuth()
+              && isTenantMember(
+                   get(/databases/$(database)/documents/message_threads/$(threadId)).data.tenantId
+                 )
+              && tenantHasAccess(
+                   get(/databases/$(database)/documents/message_threads/$(threadId)).data.tenantId
+                 )
+              && request.resource.data.sender == 'tenant');
+        // Messages are immutable once written (for audit integrity).
+        allow update, delete: if isApprovedUser();
+      }
+    }
+
     // ── Activity (collection group for CRM audit log — admin only) ──
     match /{path=**}/activity/{activityId} {
       allow read: if isAdmin();

@@ -100,6 +100,9 @@ onAuthStateChanged(auth, async (user) => {
     await registerAllViews();
     initRouter('dashboard');
 
+    // Messages badge (portal-side)
+    startPortalMessagesBadge(getTenant().id);
+
     // Subscribe to tenant doc so status changes mid-session take effect
     // immediately (e.g., admin suspends while the customer is logged in).
     subscribeToTenantStatus(async (newStatus) => {
@@ -130,6 +133,33 @@ onAuthStateChanged(auth, async (user) => {
     }
   }
 });
+
+// ── Messages unread badge (portal) ──
+
+async function startPortalMessagesBadge(tenantId) {
+  if (!tenantId) return;
+  try {
+    const { subscribeToThreads, countUnread } = await import('./services/messages.js');
+    subscribeToThreads({ tenantId }, (threads) => {
+      const count = countUnread(threads, 'tenant');
+      const navItem = document.querySelector('.nav-item[data-view="messages"]');
+      if (!navItem) return;
+      let badge = navItem.querySelector('.nav-badge');
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'nav-badge';
+          navItem.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? '99+' : String(count);
+      } else if (badge) {
+        badge.remove();
+      }
+    });
+  } catch (err) {
+    console.warn('Messages badge subscription failed:', err);
+  }
+}
 
 // ── Suspended lockout ──
 //
@@ -243,6 +273,9 @@ function buildSidebar() {
   if (hasFeature('contacts')) {
     addNavItem(nav, 'contacts', term('client') + 's', '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>');
   }
+
+  // Messages — always available (support channel)
+  addNavItem(nav, 'messages', 'Messages', '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>');
 
   // Vertical-specific modules
   if (vertical) {
@@ -407,6 +440,13 @@ async function registerAllViews() {
     init: reportingMod.init,
     render() { document.getElementById('headerTitle').textContent = 'Reporting'; reportingMod.render(); },
     destroy: reportingMod.destroy
+  });
+
+  const messagesMod = await import('./views/shared/messages.js');
+  registerView('messages', {
+    init: messagesMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Messages'; messagesMod.render(); },
+    destroy: messagesMod.destroy
   });
 
   const inventoryMod = await import('./views/repair/inventory.js');

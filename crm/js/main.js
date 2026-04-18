@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 import { registerView, navigate, initRouter } from './router.js';
 import { showToast, escapeHtml, formatDate, timeAgo, formatCurrency as fmtCurrency } from './ui.js';
 import * as contactsView from './views/contacts.js';
+import * as messagesView from './views/messages.js';
 import * as companiesView from './views/companies.js';
 import * as quotesView from './views/quotes.js';
 import { mountUniversalSearch } from './components/universal-search.js';
@@ -21,6 +22,7 @@ import { subscribeToResponses, getQuote } from './services/quotes.js';
 import { enforceCancellations } from './services/subscription.js';
 import { recordEvent as recordSubEvent, EVENT_TYPES as SUB_EVENTS, backfillSubscriptionEvents } from './services/subscription-events.js';
 import * as money from './services/money.js';
+import { subscribeToThreads, countUnread } from './services/messages.js';
 import { createTenant, addTenantActivity, addTenantInvoice, addTenantUser } from './services/tenants.js';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, runTransaction, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -82,6 +84,7 @@ onAuthStateChanged(auth, (user) => {
         backfillSubscriptionEvents().catch(err => console.error('Events backfill failed:', err));
         enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
         mountUniversalSearch();
+        startMessagesBadge();
       }
     })
     .catch(err => console.error('Role setup error:', err));
@@ -256,6 +259,15 @@ registerView('renewals', {
     renewalsView.render();
   },
   destroy: renewalsView.destroy
+});
+
+registerView('messages', {
+  init: messagesView.init,
+  render() {
+    document.getElementById('headerTitle').textContent = 'Messages';
+    messagesView.render();
+  },
+  destroy: messagesView.destroy
 });
 
 // ── Dashboard ───────────────────────────
@@ -1049,6 +1061,29 @@ async function checkTaskNotifications() {
   } catch (err) {
     console.error('Notification check error:', err);
   }
+}
+
+// ── Messages unread badge in sidebar ──────────────────
+
+function startMessagesBadge() {
+  let unsub = null;
+  try { unsub && unsub(); } catch {}
+  unsub = subscribeToThreads({}, (threads) => {
+    const count = countUnread(threads, 'operator');
+    const navItem = document.querySelector('.nav-item[data-view="messages"]');
+    if (!navItem) return;
+    let badge = navItem.querySelector('.nav-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'nav-badge';
+        navItem.appendChild(badge);
+      }
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else if (badge) {
+      badge.remove();
+    }
+  });
 }
 
 // ── Nav click handlers ──────────────────
