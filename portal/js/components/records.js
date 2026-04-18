@@ -131,7 +131,18 @@ function renderTopbar(state) {
     state.view = btn.dataset.view;
     render(state);
   }));
-  bar.querySelector('[data-action="new"]')?.addEventListener('click', () => openCreateModal(state, {}));
+  bar.querySelector('[data-action="new"]')?.addEventListener('click', () => {
+    // Config can override the default "+ New" behavior with its own flow.
+    if (typeof state.config.createOverride === 'function') {
+      state.config.createOverride({
+        tenantId: state.env.tenantId,
+        env: state.env,
+        onCreated: () => render(state),
+      });
+    } else {
+      openCreateModal(state, {});
+    }
+  });
   return bar;
 }
 

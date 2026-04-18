@@ -9,6 +9,7 @@ import { db, auth } from '../config.js';
 import {
   collection, query, where, onSnapshot, addDoc, serverTimestamp, writeBatch, doc
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { openAssignLease } from './assign-lease-modal.js';
 
 export function renderPropertyUnitsSection(property, env, ctx) {
   const wrap = document.createElement('div');
@@ -89,6 +90,9 @@ export function renderPropertyUnitsSection(property, env, ctx) {
             <td><span class="badge ${badgeFor(u.status)}">${escapeHtml(u.status || 'vacant')}</span></td>
             <td>${escapeHtml(u.currentTenantName || '—')}</td>
             <td style="text-align:right;white-space:nowrap;">
+              ${env.canWrite && (u.status === 'vacant' || !u.currentLeaseId)
+                ? `<button class="btn btn-primary btn-sm" data-action="assign" data-unit-id="${escapeHtml(u.id)}">Assign Tenant</button>`
+                : ''}
               ${env.canWrite ? `<button class="btn btn-ghost btn-sm" data-action="edit" data-unit-id="${escapeHtml(u.id)}">Edit</button>` : ''}
             </td>
           </tr>
@@ -104,10 +108,17 @@ export function renderPropertyUnitsSection(property, env, ctx) {
         if (unit) openAddUnitModal(property, tenantId, unitsCache, unit);
       });
     });
+    table.querySelectorAll('[data-action="assign"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const unit = unitsCache.find(u => u.id === btn.dataset.unitId);
+        if (unit) openAssignLease(unit, { tenantId, canWrite: env.canWrite });
+      });
+    });
     table.querySelectorAll('[data-unit-id]').forEach(row => {
       if (row.tagName !== 'TR') return;
       row.addEventListener('click', (e) => {
-        if (e.target.closest('[data-action="edit"]')) return;
+        if (e.target.closest('[data-action]')) return;
         const unit = unitsCache.find(u => u.id === row.dataset.unitId);
         if (unit) openAddUnitModal(property, tenantId, unitsCache, unit);
       });

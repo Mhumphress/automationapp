@@ -7,6 +7,7 @@ import { renderLeaseBillingSection } from './lease-billing-section.js';
 import { makeQuickInvoiceSection } from './quick-invoice-section.js';
 import { renderPropertyUnitsSection } from './property-units-section.js';
 import { renderUnitDetailSection } from './unit-detail-section.js';
+import { openAssignTenantPicker } from './assign-tenant-picker.js';
 
 // ── Salon ─────────────────────────────────────────────────
 
@@ -440,6 +441,7 @@ export const leasesConfig = {
   detailSections: [
     { title: 'Billing', render: renderLeaseBillingSection },
   ],
+  createOverride: openAssignTenantPicker,
 };
 
 export const maintenanceConfig = {
