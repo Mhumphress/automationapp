@@ -8,6 +8,8 @@ import { makeQuickInvoiceSection } from './quick-invoice-section.js';
 import { renderPropertyUnitsSection } from './property-units-section.js';
 import { renderUnitDetailSection } from './unit-detail-section.js';
 import { openAssignTenantPicker } from './assign-tenant-picker.js';
+import { renderTenantProfileHeader } from './tenant-profile-header.js';
+import { renderTenantMaintenanceSection } from './tenant-maintenance-section.js';
 
 // ── Salon ─────────────────────────────────────────────────
 
@@ -439,7 +441,9 @@ export const leasesConfig = {
     { key: 'notes', label: 'Notes', type: 'textarea' },
   ],
   detailSections: [
-    { title: 'Billing', render: renderLeaseBillingSection },
+    { title: '', render: renderTenantProfileHeader },
+    { title: 'Maintenance at this unit', render: renderTenantMaintenanceSection },
+    { title: 'Rent billing & payments', render: renderLeaseBillingSection },
   ],
   createOverride: openAssignTenantPicker,
 };
