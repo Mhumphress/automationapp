@@ -63,6 +63,7 @@ export async function sendQuote(quoteId) {
   // Minimal set of fields the customer needs to see.
   const viewDoc = {
     quoteNumber: quote.quoteNumber,
+    revision: Number(quote.revision) || 1,
     customerSnapshot: quote.customerSnapshot || {},
     vertical: quote.vertical || '',
     packageId: quote.packageId || '',

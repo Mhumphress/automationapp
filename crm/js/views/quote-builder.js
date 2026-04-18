@@ -43,6 +43,8 @@ export async function openBuilder(existingQuoteId) {
     discount: existing?.discount || { reason: '', type: 'percent', value: 0 },
     notes: existing?.notes || 'This quote is valid for 30 days. Payment due within 14 days of invoice.',
     status: existing?.status || 'draft',
+    revision: existing?.revision || 0,
+    dirty: false, // flips to true on first user edit after open
   };
 
   let packages = formState.vertical ? await getPackagesByVertical(formState.vertical) : [];
@@ -51,6 +53,8 @@ export async function openBuilder(existingQuoteId) {
   container.appendChild(renderShell(existing, verticals, packages, addons, contacts));
   attachBuilderHandlers(verticals, packages, addons, contacts);
   recalc();
+  // Track dirty AFTER initial render so programmatic input fills don't mark dirty
+  setTimeout(() => wireDirtyTracker(), 0);
 }
 
 function renderShell(existing, verticals, packages, addons, contacts) {
@@ -473,23 +477,85 @@ function renderLivePanel() {
     ${discount > 0 ? `<div class="tip-row" style="color:#059669;"><span>Discount</span><strong>-${formatCurrency(discount)}</strong></div>` : ''}
     <div class="tip-row" style="font-size:1.15rem;padding-top:0.5rem;"><span>Total today</span><strong>${formatCurrency(totalToday)}</strong></div>
     <div class="tip-row" style="color:var(--gray-dark);font-size:0.85rem;"><span>Recurring</span><strong>${formatCurrency(recurring)}/${cycleLabel}</strong></div>
-    <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1rem;">
-      <button type="button" class="btn btn-ghost" id="saveDraftBtn">Save Draft</button>
-      <button type="button" class="btn btn-primary" id="sendBtn">Send to Customer &rarr;</button>
+    <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1rem;" id="sendActions">
+      <!-- buttons rendered by updateSendButtons() -->
     </div>
     <style>
       .tip-row { display:flex; justify-content:space-between; padding:0.3rem 0; font-size:0.9rem; }
     </style>
   `;
 
-  panel.querySelector('#saveDraftBtn').addEventListener('click', () => saveQuote(false));
-  panel.querySelector('#sendBtn').addEventListener('click', () => saveQuote(true));
+  updateSendButtons();
 }
 
-async function saveQuote(send) {
+function updateSendButtons() {
+  const actions = document.getElementById('sendActions');
+  if (!actions) return;
+
+  const st = formState.status || 'draft';
+  const isDraft = st === 'draft';
+  const isSent = st === 'sent';
+  const isTerminal = ['accepted', 'provisioned', 'declined', 'expired'].includes(st);
+  const dirty = !!formState.dirty;
+  const revision = Number(formState.revision) || 0;
+
+  // Determine primary action
+  let primary;
+  if (isDraft) {
+    primary = { label: 'Send to Customer →', disabled: false, action: 'send' };
+  } else if (isSent && !dirty) {
+    primary = { label: revision > 0 ? `Sent (revision ${revision})` : 'Sent', disabled: true, action: null };
+  } else if (isSent && dirty) {
+    primary = { label: `Send Revised Quote (#${revision + 1}) →`, disabled: false, action: 'revise' };
+  } else if (isTerminal && !dirty) {
+    const labelMap = { accepted: 'Accepted', provisioned: 'Provisioned', declined: 'Declined', expired: 'Expired' };
+    primary = { label: labelMap[st] || st, disabled: true, action: null };
+  } else if (isTerminal && dirty) {
+    // Allow revising declined/expired quotes — forbid revising accepted/provisioned
+    if (st === 'declined' || st === 'expired') {
+      primary = { label: `Send Revised Quote (#${revision + 1}) →`, disabled: false, action: 'revise' };
+    } else {
+      primary = { label: st === 'accepted' ? 'Accepted (locked)' : 'Provisioned (locked)', disabled: true, action: null };
+    }
+  } else {
+    primary = { label: 'Send to Customer →', disabled: false, action: 'send' };
+  }
+
+  const canEditDraft = isDraft || dirty; // can save changes to draft if this is draft OR edits pending
+
+  actions.innerHTML = `
+    <button type="button" class="btn btn-ghost" id="saveDraftBtn" ${canEditDraft ? '' : 'disabled'}>Save Draft</button>
+    <button type="button" class="btn btn-primary" id="sendBtn" ${primary.disabled ? 'disabled' : ''} ${primary.disabled ? 'style="opacity:0.55;cursor:not-allowed;"' : ''}>${primary.label}</button>
+  `;
+
+  const saveBtn = actions.querySelector('#saveDraftBtn');
+  if (saveBtn && !saveBtn.disabled) saveBtn.addEventListener('click', () => saveQuote(false));
+  const sendBtn = actions.querySelector('#sendBtn');
+  if (sendBtn && !sendBtn.disabled) {
+    sendBtn.addEventListener('click', () => saveQuote(true, primary.action === 'revise'));
+  }
+}
+
+// Mark form as dirty on any user input inside the builder root.
+// Called once after the first paint.
+function wireDirtyTracker() {
+  const root = document.getElementById('view-quotes');
+  if (!root || root._dirtyTracked) return;
+  root._dirtyTracked = true;
+  const handler = () => {
+    if (!formState.dirty) {
+      formState.dirty = true;
+      updateSendButtons();
+    }
+  };
+  root.addEventListener('input', handler, true);
+  root.addEventListener('change', handler, true);
+}
+
+async function saveQuote(send, isRevision = false) {
   const btn = document.getElementById(send ? 'sendBtn' : 'saveDraftBtn');
   btn.disabled = true;
-  btn.textContent = send ? 'Sending...' : 'Saving...';
+  btn.textContent = send ? (isRevision ? 'Sending revision…' : 'Sending…') : 'Saving…';
 
   try {
     // Ensure contact exists or create one
@@ -537,6 +603,16 @@ async function saveQuote(send) {
       notes: formState.notes,
     };
 
+    // If sending a revision, bump the revision number that gets persisted.
+    if (send && isRevision) {
+      payload.revision = (Number(formState.revision) || 0) + 1;
+    } else if (send) {
+      // First send — normalize to revision 1 so future edits know they're a v2
+      payload.revision = Math.max(1, Number(formState.revision) || 1);
+    } else {
+      payload.revision = Number(formState.revision) || 0;
+    }
+
     if (formState.id) {
       await updateDraft(formState.id, payload);
     } else {
@@ -547,15 +623,24 @@ async function saveQuote(send) {
     if (send) {
       const { url } = await sendQuote(formState.id);
       try { await navigator.clipboard.writeText(url); } catch {}
-      showToast('Quote sent — URL copied to clipboard', 'success');
-      import('./quotes.js').then(m => m.render());
+      const msg = isRevision
+        ? `Revised quote (revision ${payload.revision}) sent — URL copied`
+        : 'Quote sent — URL copied to clipboard';
+      showToast(msg, 'success');
+      // Reflect the new state in-place so the button greys out right away
+      formState.revision = payload.revision;
+      formState.status = 'sent';
+      formState.dirty = false;
+      updateSendButtons();
     } else {
       showToast('Draft saved', 'success');
+      formState.revision = payload.revision;
+      formState.dirty = false;
+      updateSendButtons();
     }
   } catch (err) {
     console.error(err);
     showToast(err.message || 'Save failed', 'error');
-    btn.disabled = false;
-    btn.textContent = send ? 'Send to Customer \u2192' : 'Save Draft';
+    updateSendButtons();
   }
 }
