@@ -103,6 +103,13 @@ onAuthStateChanged(auth, async (user) => {
     // Messages badge (portal-side)
     startPortalMessagesBadge(getTenant().id);
 
+    // Recurring billing sweep — generates invoices that came due while the
+    // operator wasn't watching. Runs once per session; idempotent.
+    try {
+      const { runRecurringSweep } = await import('./services/recurring-billing.js');
+      runRecurringSweep(getTenant().id).catch(err => console.warn('Recurring sweep failed:', err));
+    } catch (err) { console.warn('Could not start recurring sweep:', err); }
+
     // Subscribe to tenant doc so status changes mid-session take effect
     // immediately (e.g., admin suspends while the customer is logged in).
     subscribeToTenantStatus(async (newStatus) => {

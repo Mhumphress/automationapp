@@ -225,6 +225,31 @@ function renderDetail(state) {
   state.container.appendChild(box);
 
   box.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditModal(state, rec));
+
+  // Config may declare extra sections to render below the standard fields.
+  // Each section is { title, render(record, env, { reload }) => HTMLElement | Promise<HTMLElement> }.
+  const extensions = Array.isArray(state.config.detailSections) ? state.config.detailSections : [];
+  if (extensions.length) {
+    const reload = () => render(state);
+    extensions.forEach(async (section) => {
+      try {
+        const wrap = document.createElement('div');
+        wrap.className = 'record-detail-section';
+        wrap.innerHTML = section.title ? `<h3 class="section-title" style="margin-top:1.25rem;">${escapeHtml(section.title)}</h3>` : '';
+        state.container.appendChild(wrap);
+        const content = await section.render(rec, state.env, { reload });
+        if (content instanceof HTMLElement) wrap.appendChild(content);
+        else if (typeof content === 'string') {
+          const div = document.createElement('div');
+          div.innerHTML = content;
+          wrap.appendChild(div);
+        }
+      } catch (err) {
+        console.warn('detailSection render failed:', err);
+      }
+    });
+  }
+
   box.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
     if (!confirm('Delete this record? This cannot be undone.')) return;
     try {

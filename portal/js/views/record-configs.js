@@ -3,6 +3,9 @@
 //  records module. Each config maps to a single tenant subcollection.
 // ─────────────────────────────────────────────────────────────────
 
+import { renderLeaseBillingSection } from './lease-billing-section.js';
+import { makeQuickInvoiceSection } from './quick-invoice-section.js';
+
 // ── Salon ─────────────────────────────────────────────────
 
 export const appointmentsConfig = {
@@ -28,6 +31,23 @@ export const appointmentsConfig = {
     { key: 'price', label: 'Price', type: 'money' },
     { key: 'status', label: 'Status', type: 'select', options: ['scheduled', 'confirmed', 'completed', 'cancelled', 'no_show'], default: 'scheduled' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+  detailSections: [
+    { title: 'Billing', render: makeQuickInvoiceSection({
+      parentType: 'appointment',
+      chargeType: 'service',
+      buildLineItems: (rec) => {
+        if (rec.price && rec.price > 0) {
+          return [{
+            description: rec.service || rec.title || 'Service',
+            quantity: 1,
+            rate: rec.price,
+            amount: rec.price,
+          }];
+        }
+        return [];
+      },
+    }) },
   ],
 };
 
@@ -115,6 +135,40 @@ export const jobsConfig = {
     { key: 'status', label: 'Status', type: 'select', options: ['new', 'scheduled', 'in_progress', 'completed', 'cancelled', 'on_hold'], default: 'new' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
   ],
+  detailSections: [
+    { title: 'Billing', render: makeQuickInvoiceSection({
+      parentType: 'job',
+      chargeType: 'service',
+      buildLineItems: (rec) => {
+        const lines = [];
+        if (rec.laborHours && rec.laborHours > 0) {
+          lines.push({
+            description: rec.description ? `Labor: ${rec.description}` : 'Labor',
+            quantity: rec.laborHours,
+            rate: 0,
+            amount: 0,
+          });
+        }
+        if (rec.materialsCost && rec.materialsCost > 0) {
+          lines.push({
+            description: 'Materials',
+            quantity: 1,
+            rate: rec.materialsCost,
+            amount: rec.materialsCost,
+          });
+        }
+        if (rec.totalPrice && rec.totalPrice > 0 && lines.length === 0) {
+          lines.push({
+            description: rec.name || 'Job',
+            quantity: 1,
+            rate: rec.totalPrice,
+            amount: rec.totalPrice,
+          });
+        }
+        return lines;
+      },
+    }) },
+  ],
 };
 
 export const dispatchingConfig = {
@@ -172,10 +226,30 @@ export const workOrdersConfig = {
     { key: 'orderNumber', label: 'WO #', type: 'text', required: true, primary: true },
     { key: 'product', label: 'Product', type: 'text', required: true },
     { key: 'quantity', label: 'Quantity', type: 'number' },
+    { key: 'customerName', label: 'Customer', type: 'text' },
+    { key: 'customerEmail', label: 'Customer Email', type: 'email' },
+    { key: 'unitPrice', label: 'Unit Price', type: 'money' },
     { key: 'assignedTo', label: 'Assigned To', type: 'text' },
     { key: 'dueDate', label: 'Due', type: 'date' },
     { key: 'status', label: 'Status', type: 'select', options: ['queued', 'in_progress', 'qa', 'completed', 'on_hold', 'cancelled'], default: 'queued' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+  detailSections: [
+    { title: 'Billing', render: makeQuickInvoiceSection({
+      parentType: 'work_order',
+      chargeType: 'service',
+      buildLineItems: (rec) => {
+        if (rec.unitPrice && rec.quantity) {
+          return [{
+            description: `${rec.product || 'Work order'} — ${rec.orderNumber || ''}`.trim(),
+            quantity: Number(rec.quantity) || 1,
+            rate: Number(rec.unitPrice) || 0,
+            amount: (Number(rec.quantity) || 1) * (Number(rec.unitPrice) || 0),
+          }];
+        }
+        return [];
+      },
+    }) },
   ],
 };
 
@@ -207,6 +281,7 @@ export const projectsConfig = {
   fields: [
     { key: 'name', label: 'Project Name', type: 'text', required: true, primary: true },
     { key: 'clientName', label: 'Client', type: 'text' },
+    { key: 'clientEmail', label: 'Client Email', type: 'email' },
     { key: 'projectManager', label: 'Project Manager', type: 'text' },
     { key: 'description', label: 'Description', type: 'textarea' },
     { key: 'startDate', label: 'Start', type: 'date' },
@@ -214,6 +289,19 @@ export const projectsConfig = {
     { key: 'budget', label: 'Budget', type: 'money' },
     { key: 'status', label: 'Status', type: 'select', options: ['planning', 'active', 'on_hold', 'completed', 'cancelled'], default: 'planning' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+  detailSections: [
+    { title: 'Billing', render: makeQuickInvoiceSection({
+      parentType: 'project',
+      chargeType: 'retainer',
+      customerFields: { name: 'clientName', email: 'clientEmail' },
+      buildLineItems: (rec) => rec.budget ? [{
+        description: rec.name || 'Project retainer',
+        quantity: 1,
+        rate: rec.budget,
+        amount: rec.budget,
+      }] : [],
+    }) },
   ],
 };
 
@@ -292,6 +380,9 @@ export const leasesConfig = {
     { key: 'status', label: 'Status', type: 'select', options: ['active', 'pending', 'expired', 'terminated'], default: 'pending' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
   ],
+  detailSections: [
+    { title: 'Billing', render: renderLeaseBillingSection },
+  ],
 };
 
 export const maintenanceConfig = {
@@ -310,6 +401,9 @@ export const maintenanceConfig = {
     { key: 'issue', label: 'Issue', type: 'text', required: true, primary: true },
     { key: 'property', label: 'Property', type: 'text' },
     { key: 'unit', label: 'Unit', type: 'text' },
+    { key: 'tenantName', label: 'Bill To (Tenant)', type: 'text' },
+    { key: 'tenantEmail', label: 'Tenant Email', type: 'email' },
+    { key: 'billable', label: 'Billable?', type: 'select', options: ['yes', 'no'], default: 'no' },
     { key: 'priority', label: 'Priority', type: 'select', options: ['low', 'medium', 'high', 'emergency'], default: 'medium' },
     { key: 'assignedTo', label: 'Assigned To', type: 'text' },
     { key: 'scheduledAt', label: 'Scheduled', type: 'datetime' },
@@ -317,6 +411,24 @@ export const maintenanceConfig = {
     { key: 'cost', label: 'Cost', type: 'money' },
     { key: 'status', label: 'Status', type: 'select', options: ['open', 'scheduled', 'in_progress', 'completed', 'cancelled'], default: 'open' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+  detailSections: [
+    { title: 'Billing', render: makeQuickInvoiceSection({
+      parentType: 'maintenance',
+      chargeType: 'maintenance',
+      customerFields: { name: 'tenantName', email: 'tenantEmail' },
+      buildLineItems: (rec) => {
+        if (rec.cost && rec.cost > 0) {
+          return [{
+            description: rec.issue ? `Maintenance: ${rec.issue}` : 'Maintenance charge',
+            quantity: 1,
+            rate: rec.cost,
+            amount: rec.cost,
+          }];
+        }
+        return [];
+      },
+    }) },
   ],
 };
 
