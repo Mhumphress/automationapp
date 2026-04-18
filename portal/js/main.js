@@ -654,6 +654,9 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
         <div style="margin-top:0.3rem;color:var(--gray-dark);font-size:0.78rem;">If the code is 'permission-denied', Firestore rules may not be published yet.</div>
       </div>` : '';
 
+    // Banner always visible. When balance > 0, primary "Pay Balance" button.
+    // When balance = 0, a secondary "Make a Payment" option so the user can
+    // still prepay or test the payment flow.
     const bannerHTML = totalBalance > 0
       ? `
         <div class="billing-banner">
@@ -661,7 +664,7 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
             <div class="billing-banner-label">Balance due</div>
             <div class="billing-banner-amount">${formatCurrency(totalBalance)}</div>
           </div>
-          <button class="btn btn-primary btn-lg" id="payBalanceBtn">Pay Balance</button>
+          <button class="btn btn-primary btn-lg" id="payBalanceBtn">Pay Bill</button>
         </div>`
       : `
         <div class="billing-banner billing-banner-clear">
@@ -669,6 +672,7 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
             <div class="billing-banner-label">All caught up</div>
             <div class="billing-banner-amount" style="color:var(--success,#059669);">${formatCurrency(0)}</div>
           </div>
+          <button class="btn btn-ghost btn-lg" id="payBalanceBtn" style="border:1px solid var(--off-white);">Make a Payment</button>
         </div>`;
 
     let html = errorBanner + bannerHTML;

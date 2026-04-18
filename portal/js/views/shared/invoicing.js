@@ -2,6 +2,7 @@ import { addDocument, updateDocument, deleteDocument, queryDocuments } from '../
 import { canWrite, gateWrite, getTenantId } from '../../tenant-context.js';
 import { db } from '../../config.js';
 import { collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { openRecordPayment } from './record-payment-modal.js';
 
 let invoices = [];
 let currentPage = 'list';
@@ -181,34 +182,89 @@ function renderList() {
       ? '<div class="empty-state"><div class="empty-title">No invoices yet</div><p class="empty-description">Create your first invoice to start billing clients.</p></div>'
       : '<div class="empty-state"><p class="empty-description">No invoices match your filters.</p></div>';
   } else {
-    const total = filtered.reduce((s, i) => s + (Number(i.total) || 0), 0);
+    // Outstanding balance banner — click "Record Payment" to allocate across any open invoices.
+    const outstandingTotal = filtered
+      .filter(i => ['sent', 'overdue', 'partial', 'draft', 'issued'].includes(i.status))
+      .reduce((s, i) => s + balanceOf(i), 0);
+
     const summary = document.createElement('div');
-    summary.style.cssText = 'font-size:0.85rem;color:var(--gray);margin-bottom:0.5rem;';
-    summary.innerHTML = `<strong>${filtered.length}</strong> invoice${filtered.length === 1 ? '' : 's'} · <strong>${formatCurrency(total)}</strong> total`;
+    summary.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:0.85rem 1rem;background:var(--off-white,#F1F5F9);border-radius:10px;margin-bottom:0.75rem;flex-wrap:wrap;';
+    summary.innerHTML = `
+      <div>
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--gray-dark);">Outstanding</div>
+        <div style="font-size:1.3rem;font-weight:600;font-variant-numeric:tabular-nums;">${formatCurrency(outstandingTotal)}</div>
+        <div style="font-size:0.78rem;color:var(--gray);">${filtered.length} invoice${filtered.length === 1 ? '' : 's'} total</div>
+      </div>
+      ${outstandingTotal > 0 && canWrite() ? `<button class="btn btn-primary" id="recordPaymentAnyBtn">Record Payment</button>` : ''}
+    `;
     wrapper.appendChild(summary);
+
+    const recordAnyBtn = summary.querySelector('#recordPaymentAnyBtn');
+    if (recordAnyBtn) {
+      recordAnyBtn.addEventListener('click', async () => {
+        const open = filtered.filter(i => ['sent', 'overdue', 'partial', 'draft', 'issued'].includes(i.status));
+        const result = await openRecordPayment({ invoices: open });
+        if (result?.recorded) render();
+      });
+    }
 
     const table = document.createElement('table');
     table.className = 'data-table';
-    table.innerHTML = '<thead><tr><th>Invoice #</th><th>Client</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Invoice #</th><th>Client</th><th>Amount</th><th>Balance</th><th>Status</th><th>Date</th><th></th></tr></thead>';
     const tbody = document.createElement('tbody');
 
     filtered.forEach(inv => {
-      const statusClass = inv.status === 'paid' ? 'badge-success' : inv.status === 'sent' ? 'badge-info' : inv.status === 'overdue' ? 'badge-danger' : 'badge-default';
+      const statusClass = inv.status === 'paid' ? 'badge-success'
+                       : inv.status === 'partial' ? 'badge-info'
+                       : inv.status === 'sent' ? 'badge-info'
+                       : inv.status === 'overdue' ? 'badge-danger'
+                       : 'badge-default';
+      const bal = balanceOf(inv);
+      const canRecord = canWrite() && bal > 0 && inv.status !== 'paid' && inv.type !== 'refund';
       const tr = document.createElement('tr');
       tr.className = 'clickable';
       tr.innerHTML = `
         <td style="font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
         <td>${escapeHtml(inv.clientName || '-')}</td>
         <td>${formatCurrency(inv.total || 0)}</td>
+        <td>${bal > 0 ? formatCurrency(bal) : '<span style="color:var(--gray);">—</span>'}</td>
         <td><span class="badge ${statusClass}">${escapeHtml(inv.status || 'draft')}</span></td>
         <td>${formatDate(inv.issueDate || inv.createdAt)}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          ${canRecord ? `<button class="btn btn-ghost btn-sm" data-record-invoice="${escapeHtml(inv.id)}">Record Payment</button>` : ''}
+        </td>
       `;
-      tr.addEventListener('click', () => showDetail(inv));
+      // Don't navigate if clicking the action button
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('[data-record-invoice]')) return;
+        showDetail(inv);
+      });
       tbody.appendChild(tr);
     });
 
     table.appendChild(tbody);
     wrapper.appendChild(table);
+
+    wrapper.querySelectorAll('[data-record-invoice]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const inv = filtered.find(x => x.id === btn.dataset.recordInvoice);
+        if (!inv) return;
+        const result = await openRecordPayment({
+          invoices: [inv],
+          presetInvoiceId: inv.id,
+          singleInvoiceMode: true,
+          title: `Record Payment — ${inv.invoiceNumber || 'Invoice'}`,
+        });
+        if (result?.recorded) render();
+      });
+    });
+  }
+
+  function balanceOf(i) {
+    const total = Math.abs(Number(i.total || i.amount || 0));
+    const paid = Number(i.paidAmount || 0);
+    return Math.max(0, total - paid);
   }
 
   container.appendChild(wrapper);
