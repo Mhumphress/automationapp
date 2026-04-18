@@ -754,14 +754,7 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
           <tbody>`;
       invoices.forEach(inv => {
         const s = inv.status || 'draft';
-        const label = s === 'sent' ? 'due' : s === 'partial' ? 'partially paid' : s;
-        const statusClass =
-          s === 'paid'     ? 'badge-success' :
-          s === 'partial'  ? 'badge-info' :
-          s === 'overdue'  ? 'badge-danger' :
-          s === 'sent' || s === 'issued' ? 'badge-info' :
-          s === 'refunded' ? 'badge-warning' :
-          'badge-default';
+        const dueInfo = dueStatusInfo(inv);  // {label, cls, detail}
         const amount = inv.total != null ? inv.total : inv.amount;
         const balance = balanceOfInvoice(inv);
         const pending = pendingIntentsByInvoice[inv.id]?.length > 0;
@@ -772,8 +765,9 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
             <td>${formatCurrency(amount)}</td>
             <td>${balance > 0 ? formatCurrency(balance) : '<span style="color:var(--gray);">—</span>'}</td>
             <td>
-              <span class="badge ${statusClass}">${escapeHtml(label)}</span>
-              ${pending ? '<span class="badge badge-warning" style="margin-left:0.3rem;">pending</span>' : ''}
+              <span class="badge ${dueInfo.cls}" style="font-weight:600;letter-spacing:0.02em;">${escapeHtml(dueInfo.label)}</span>
+              ${dueInfo.detail ? `<div style="font-size:0.72rem;color:var(--gray-dark);margin-top:0.15rem;">${escapeHtml(dueInfo.detail)}</div>` : ''}
+              ${pending ? '<div style="margin-top:0.2rem;"><span class="badge badge-warning">pending payment</span></div>' : ''}
             </td>
             <td>${formatDate(inv.issuedDate || inv.issueDate)}</td>
             <td>${formatDate(inv.dueDate)}</td>
@@ -859,6 +853,59 @@ function balanceOfInvoice(inv) {
   const total = Math.abs(Number(inv.total || inv.amount || 0));
   const paid = Number(inv.paidAmount || 0);
   return Math.max(0, total - paid);
+}
+
+/**
+ * Produces a human-readable status for an invoice row.
+ * - PAID (green) for fully paid
+ * - PARTIAL (blue) for partial
+ * - OVERDUE by Nd (red) for anything past its dueDate and unpaid
+ * - DUE <date> (blue) for sent/issued with dueDate
+ * - DUE (blue) for sent/issued without a due date
+ * - DRAFT / REFUNDED / etc. (gray) for everything else
+ */
+function dueStatusInfo(inv) {
+  const s = inv.status || 'draft';
+  if (s === 'paid') return { label: 'PAID', cls: 'badge-success', detail: '' };
+  if (s === 'partial') return { label: 'PARTIAL', cls: 'badge-info', detail: 'Partially paid — balance remains' };
+  if (s === 'refunded') return { label: 'REFUNDED', cls: 'badge-warning', detail: '' };
+  if (s === 'void' || s === 'cancelled') return { label: s.toUpperCase(), cls: 'badge-default', detail: '' };
+
+  // For sent / overdue / issued / draft: compute due-date info.
+  const dueMs = dateMs(inv.dueDate);
+  const now = Date.now();
+
+  if (s === 'overdue' || (dueMs && dueMs < now && (s === 'sent' || s === 'issued'))) {
+    const daysOver = dueMs ? Math.floor((now - dueMs) / 86400000) : null;
+    return {
+      label: 'OVERDUE',
+      cls: 'badge-danger',
+      detail: daysOver != null ? (daysOver === 0 ? 'Due today' : `${daysOver}d past due`) : '',
+    };
+  }
+
+  if (s === 'sent' || s === 'issued') {
+    if (dueMs) {
+      const d = new Date(dueMs);
+      const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return {
+        label: `DUE ${formatted}`,
+        cls: 'badge-info',
+        detail: daysUntilLabel(dueMs, now),
+      };
+    }
+    return { label: 'DUE', cls: 'badge-info', detail: '' };
+  }
+
+  return { label: s.toUpperCase(), cls: 'badge-default', detail: '' };
+}
+
+function daysUntilLabel(dueMs, now) {
+  const days = Math.round((dueMs - now) / 86400000);
+  if (days === 0) return 'Due today';
+  if (days === 1) return 'Due tomorrow';
+  if (days > 0 && days < 14) return `Due in ${days} days`;
+  return '';
 }
 
 function dateMs(ts) {

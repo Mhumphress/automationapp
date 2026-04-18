@@ -1,5 +1,5 @@
 import { queryDocuments, addDocument, updateDocument, deleteDocument, queryDocumentsWhere } from '../services/firestore.js';
-import { updateInvoiceWithSync, deleteInvoiceWithSync } from '../services/invoice-sync.js';
+import { updateInvoiceWithSync, deleteInvoiceWithSync, createInvoiceWithTenantMirror } from '../services/invoice-sync.js';
 import { addActivity, logFieldEdit, getActivity } from '../services/activity.js';
 import { createModal } from '../components/modal.js';
 import { makeEditable } from '../components/inline-edit.js';
@@ -537,7 +537,9 @@ function openCreateModal() {
     };
 
     try {
-      await addDocument('invoices', data);
+      // Write to root /invoices AND mirror to tenant subcollection (if the
+      // contact has a linked tenant) so the portal's Billing page sees it.
+      const result = await createInvoiceWithTenantMirror(data);
 
       // Cross-reference activity on the contact
       if (data.clientId) {
@@ -549,7 +551,11 @@ function openCreateModal() {
         } catch (err) { console.error('Cross-ref contact activity failed:', err); }
       }
 
-      showToast('Invoice created', 'success');
+      if (result.tenantInvoiceId) {
+        showToast(`Invoice created and synced to ${result.tenantName || 'tenant portal'}`, 'success');
+      } else {
+        showToast('Invoice created — customer has no portal account so it won\'t appear in a portal Billing tab.', 'info');
+      }
       modal.close();
       await loadData();
       renderListView();
