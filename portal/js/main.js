@@ -404,21 +404,25 @@ function addNavItem(nav, view, label, iconPath) {
 function getVerticalModuleNav(verticalId) {
   const modules = {
     repair: [
+      { feature: 'tickets', view: 'workshop', label: 'Workshop Dashboard', icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
       { feature: 'tickets', view: 'tickets', label: 'Repair Tickets', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="9" y1="15" x2="15" y2="15"/>' },
       { feature: 'inventory', view: 'inventory', label: 'Parts Inventory', icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
       { feature: 'checkin', view: 'checkin', label: 'Check-in/out', icon: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
     ],
     trades: [
+      { feature: 'jobs', view: 'dispatch', label: 'Dispatch Board', icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
       { feature: 'jobs', view: 'jobs', label: 'Jobs', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' },
-      { feature: 'dispatching', view: 'dispatching', label: 'Dispatching', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+      { feature: 'dispatching', view: 'dispatching', label: 'Scheduling', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
       { feature: 'quoting', view: 'quoting', label: 'Quoting', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="9" y1="13" x2="15" y2="13"/>' },
     ],
     manufacturing: [
-      { feature: 'bom', view: 'bom', label: 'BOM', icon: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>' },
+      { feature: 'work_orders', view: 'production', label: 'Production', icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
       { feature: 'work_orders', view: 'work-orders', label: 'Work Orders', icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>' },
+      { feature: 'bom', view: 'bom', label: 'BOM', icon: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>' },
       { feature: 'inventory', view: 'inventory', label: 'Inventory', icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
     ],
     services: [
+      { feature: 'projects', view: 'project-pulse', label: 'Project Pulse', icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
       { feature: 'projects', view: 'projects', label: 'Projects', icon: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>' },
       { feature: 'time_tracking', view: 'time-tracking', label: 'Time Tracking', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
       { feature: 'proposals', view: 'proposals', label: 'Proposals', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="9" y1="13" x2="15" y2="13"/>' },
@@ -431,9 +435,11 @@ function getVerticalModuleNav(verticalId) {
       { feature: 'maintenance', view: 'maintenance', label: 'Maintenance', icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
     ],
     salon: [
+      { feature: 'appointments', view: 'salon-today', label: 'Today', icon: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
       { feature: 'appointments', view: 'appointments', label: 'Appointments', icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
       { feature: 'service_menu', view: 'service-menu', label: 'Services', icon: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>' },
       { feature: 'staff_calendar', view: 'staff-calendar', label: 'Staff Calendar', icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>' },
+      { feature: 'loyalty', view: 'memberships', label: 'Memberships', icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
       { feature: 'loyalty', view: 'loyalty', label: 'Client Loyalty', icon: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>' },
     ],
   };
@@ -519,7 +525,7 @@ async function registerAllViews() {
     destroy: messagesMod.destroy
   });
 
-  // Property vertical — Rent Roll (needs its own container + custom view)
+  // Property vertical — Rent Roll
   if (!document.getElementById('view-rent-roll')) {
     const div = document.createElement('div');
     div.id = 'view-rent-roll';
@@ -532,6 +538,35 @@ async function registerAllViews() {
     render() { document.getElementById('headerTitle').textContent = 'Rent Roll'; rentRollMod.render(); },
     destroy: rentRollMod.destroy,
   });
+
+  // Vertical-specific dashboards — registered unconditionally; nav items
+  // are feature-gated so they only appear for matching verticals.
+  const verticalDashboards = [
+    { view: 'workshop',       title: 'Workshop',        path: './views/repair/workshop-dashboard.js' },
+    { view: 'salon-today',    title: 'Today at the Shop', path: './views/salon/today-dashboard.js' },
+    { view: 'dispatch',       title: 'Dispatch Board',  path: './views/trades/dispatch-board.js' },
+    { view: 'production',     title: 'Production',      path: './views/manufacturing/production-dashboard.js' },
+    { view: 'project-pulse',  title: 'Project Pulse',   path: './views/services/project-pulse.js' },
+  ];
+  for (const d of verticalDashboards) {
+    const containerId = `view-${d.view}`;
+    if (!document.getElementById(containerId)) {
+      const div = document.createElement('div');
+      div.id = containerId;
+      div.className = 'view-container';
+      document.getElementById('appMain').appendChild(div);
+    }
+    try {
+      const mod = await import(d.path);
+      registerView(d.view, {
+        init: mod.init,
+        render() { document.getElementById('headerTitle').textContent = d.title; mod.render(); },
+        destroy: mod.destroy,
+      });
+    } catch (err) {
+      console.warn(`Failed to load vertical dashboard ${d.view}:`, err);
+    }
+  }
 
   const inventoryMod = await import('./views/repair/inventory.js');
   registerView('inventory', {

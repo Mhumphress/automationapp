@@ -489,6 +489,12 @@ service cloud.firestore {
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
+      match /memberships/{docId} {
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
+        allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
+        allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
+      }
+
       match /time_entries/{docId} {
         allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));

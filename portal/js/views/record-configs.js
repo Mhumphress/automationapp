@@ -92,6 +92,29 @@ export const staffCalendarConfig = {
   ],
 };
 
+export const membershipsConfig = {
+  collection: 'memberships',
+  title: 'Memberships',
+  singular: 'Membership',
+  listColumns: ['customerName', 'planName', 'monthlyPrice', 'startDate', 'nextRenewal', 'status'],
+  statuses: ['active', 'paused', 'cancelled', 'expired'],
+  fields: [
+    { key: 'customerName', label: 'Client', type: 'text', required: true, primary: true },
+    { key: 'customerEmail', label: 'Client Email', type: 'email' },
+    { key: 'customerPhone', label: 'Client Phone', type: 'tel' },
+    { key: 'planName', label: 'Plan', type: 'text', required: true },
+    { key: 'monthlyPrice', label: 'Monthly Price', type: 'money' },
+    { key: 'includedServices', label: 'Included services (comma-separated)', type: 'textarea' },
+    { key: 'serviceQuota', label: 'Services per month (0 = unlimited)', type: 'number' },
+    { key: 'startDate', label: 'Start Date', type: 'date', required: true },
+    { key: 'nextRenewal', label: 'Next Renewal', type: 'date' },
+    { key: 'billingDay', label: 'Billing Day (1-28)', type: 'number' },
+    { key: 'autoBill', label: 'Auto-Bill?', type: 'select', options: ['yes', 'no'], default: 'yes' },
+    { key: 'status', label: 'Status', type: 'select', options: ['active', 'paused', 'cancelled', 'expired'], default: 'active' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+};
+
 export const loyaltyConfig = {
   collection: 'loyalty',
   title: 'Loyalty',
@@ -499,6 +522,7 @@ export const VIEW_CONFIG = {
   appointments:    appointmentsConfig,
   'service-menu':  servicesMenuConfig,
   'staff-calendar': staffCalendarConfig,
+  memberships:     membershipsConfig,
   loyalty:         loyaltyConfig,
   // Trades
   jobs:            jobsConfig,
