@@ -556,17 +556,30 @@ async function renderBilling() {
   container.innerHTML = '<div class="loading">Loading billing...</div>';
 
   try {
-    const { collection: fbCollection, getDocs: fbGetDocs, query: fbQuery, orderBy: fbOrderBy } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const { collection: fbCollection, getDocs: fbGetDocs, query: fbQuery, orderBy: fbOrderBy } =
+      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const { db: fbDb } = await import('./config.js');
+    const { openPayBill } = await import('./views/shared/pay-bill.js');
 
+    // Invoices
     const invSnap = await fbGetDocs(fbQuery(
       fbCollection(fbDb, 'tenants', tenant.id, 'invoices'),
       fbOrderBy('issuedDate', 'desc')
     ));
-    const invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Load payments. Try processedAt first (legacy + current), fall back to
-    // an unordered fetch if the field isn't present on any docs.
+    // invoices_crm (rent invoices etc. — new engine generates here)
+    try {
+      const invCrmSnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'invoices_crm'));
+      const crmInvoices = invCrmSnap.docs.map(d => ({ id: d.id, _path: 'invoices_crm', ...d.data() }));
+      invoices = invoices.concat(crmInvoices).sort((a, b) => {
+        const ta = dateMs(a.issuedDate || a.issueDate || a.createdAt);
+        const tb = dateMs(b.issuedDate || b.issueDate || b.createdAt);
+        return tb - ta;
+      });
+    } catch {}
+
+    // Payments
     let payments = [];
     try {
       const paySnap = await fbGetDocs(fbQuery(
@@ -575,50 +588,117 @@ async function renderBilling() {
       ));
       payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch (err) {
-      console.warn('Payments ordered query failed, falling back:', err);
-      const paySnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'payments'));
-      payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      payments.sort((a, b) => {
-        const ta = (a.receivedAt || a.processedAt || a.recordedAt)?.toDate?.()?.getTime() || 0;
-        const tb = (b.receivedAt || b.processedAt || b.recordedAt)?.toDate?.()?.getTime() || 0;
-        return tb - ta;
-      });
+      try {
+        const paySnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'payments'));
+        payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        payments.sort((a, b) => dateMs(b.receivedAt || b.processedAt || b.recordedAt)
+                             - dateMs(a.receivedAt || a.processedAt || a.recordedAt));
+      } catch {}
     }
 
-    let html = '<div class="settings-section"><h2 class="section-title">Invoices</h2>';
+    // Payment intents (pending bill-pays from this portal's Pay Bill modal)
+    let intents = [];
+    try {
+      const iSnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'payment_intents'));
+      intents = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      intents.sort((a, b) => dateMs(b.submittedAt) - dateMs(a.submittedAt));
+    } catch {}
+
+    // Derived numbers
+    const openInvoices = invoices.filter(i => ['sent', 'overdue', 'partial', 'issued', 'draft'].includes(i.status));
+    const totalBalance = openInvoices.reduce((s, i) => s + balanceOfInvoice(i), 0);
+    const pendingIntentsByInvoice = {};
+    intents.filter(i => i.status === 'pending').forEach(i => {
+      if (i.invoiceId) (pendingIntentsByInvoice[i.invoiceId] ||= []).push(i);
+    });
+
+    // ── HTML ──
+    const bannerHTML = totalBalance > 0
+      ? `
+        <div class="billing-banner">
+          <div>
+            <div class="billing-banner-label">Balance due</div>
+            <div class="billing-banner-amount">${formatCurrency(totalBalance)}</div>
+          </div>
+          <button class="btn btn-primary btn-lg" id="payBalanceBtn">Pay Balance</button>
+        </div>`
+      : `
+        <div class="billing-banner billing-banner-clear">
+          <div>
+            <div class="billing-banner-label">All caught up</div>
+            <div class="billing-banner-amount" style="color:var(--success,#059669);">${formatCurrency(0)}</div>
+          </div>
+        </div>`;
+
+    let html = bannerHTML;
+
+    // Invoices section
+    html += '<div class="settings-section" style="margin-top:1rem;"><h2 class="section-title">Invoices</h2>';
     if (invoices.length === 0) {
       html += '<p style="color:var(--gray);font-size:0.9rem;">No invoices yet.</p>';
     } else {
-      html += '<table class="data-table"><thead><tr><th>Invoice #</th><th>Amount</th><th>Status</th><th>Issued</th><th>Due</th></tr></thead><tbody>';
+      html += `
+        <table class="data-table">
+          <thead><tr>
+            <th>Invoice #</th><th>Amount</th><th>Balance</th><th>Status</th><th>Issued</th><th>Due</th><th></th>
+          </tr></thead>
+          <tbody>`;
       invoices.forEach(inv => {
         const s = inv.status || 'draft';
-        // Tenant-facing label: "due" for sent, "partially paid" for partial
-        const label =
-          s === 'sent' ? 'due' :
-          s === 'issued' ? 'issued' :
-          s === 'partial' ? 'partially paid' :
-          s;
+        const label = s === 'sent' ? 'due' : s === 'partial' ? 'partially paid' : s;
         const statusClass =
-          s === 'paid' ? 'badge-success' :
-          s === 'partial' ? 'badge-info' :
-          s === 'overdue' ? 'badge-danger' :
-          s === 'sent' ? 'badge-info' :
+          s === 'paid'     ? 'badge-success' :
+          s === 'partial'  ? 'badge-info' :
+          s === 'overdue'  ? 'badge-danger' :
+          s === 'sent' || s === 'issued' ? 'badge-info' :
           s === 'refunded' ? 'badge-warning' :
-          s === 'void' || s === 'cancelled' ? 'badge-default' :
           'badge-default';
         const amount = inv.total != null ? inv.total : inv.amount;
-        html += `<tr>
-          <td style="font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
-          <td>${formatCurrency(amount)}</td>
-          <td><span class="badge ${statusClass}">${escapeHtml(label)}</span></td>
-          <td>${formatDate(inv.issuedDate)}</td>
-          <td>${formatDate(inv.dueDate)}</td>
-        </tr>`;
+        const balance = balanceOfInvoice(inv);
+        const pending = pendingIntentsByInvoice[inv.id]?.length > 0;
+        const canPay = balance > 0 && s !== 'paid' && !pending;
+        html += `
+          <tr>
+            <td style="font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
+            <td>${formatCurrency(amount)}</td>
+            <td>${balance > 0 ? formatCurrency(balance) : '<span style="color:var(--gray);">—</span>'}</td>
+            <td>
+              <span class="badge ${statusClass}">${escapeHtml(label)}</span>
+              ${pending ? '<span class="badge badge-warning" style="margin-left:0.3rem;">pending</span>' : ''}
+            </td>
+            <td>${formatDate(inv.issuedDate || inv.issueDate)}</td>
+            <td>${formatDate(inv.dueDate)}</td>
+            <td style="text-align:right;white-space:nowrap;">
+              ${canPay ? `<button class="btn btn-primary btn-sm" data-pay-invoice="${escapeHtml(inv.id)}">Pay Bill</button>` : ''}
+            </td>
+          </tr>`;
       });
       html += '</tbody></table>';
     }
     html += '</div>';
 
+    // Pending payment intents section
+    const pendingList = intents.filter(i => i.status === 'pending');
+    if (pendingList.length > 0) {
+      html += `<div class="settings-section" style="margin-top:1.5rem;"><h2 class="section-title">Pending payments</h2>
+        <p style="color:var(--gray-dark);font-size:0.85rem;margin-top:-0.3rem;margin-bottom:0.6rem;">
+          These have been submitted but aren't cleared yet.
+        </p>
+        <table class="data-table"><thead><tr><th>Submitted</th><th>Method</th><th>Amount</th><th>Invoice</th><th>Status</th></tr></thead><tbody>`;
+      pendingList.forEach(p => {
+        const methodLabel = describePaymentIntentMethod(p);
+        html += `<tr>
+          <td>${formatDate(p.submittedAt)}</td>
+          <td>${escapeHtml(methodLabel)}</td>
+          <td>${formatCurrency(p.amount)}</td>
+          <td style="font-family:var(--font-mono);">${escapeHtml(p.invoiceNumber || '-')}</td>
+          <td><span class="badge badge-warning">${escapeHtml(p.status)}</span></td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+    }
+
+    // Payment history (cleared payments)
     html += '<div class="settings-section" style="margin-top:1.5rem;"><h2 class="section-title">Payment History</h2>';
     if (payments.length === 0) {
       html += '<p style="color:var(--gray);font-size:0.9rem;">No payments recorded.</p>';
@@ -646,10 +726,54 @@ async function renderBilling() {
     html += '</div>';
 
     container.innerHTML = html;
+
+    // Wire Pay Balance banner
+    const payBalanceBtn = container.querySelector('#payBalanceBtn');
+    if (payBalanceBtn) {
+      payBalanceBtn.addEventListener('click', async () => {
+        const result = await openPayBill({ allInvoices: openInvoices });
+        if (result?.submitted) renderBilling();
+      });
+    }
+
+    // Wire per-row Pay Bill
+    container.querySelectorAll('[data-pay-invoice]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const inv = invoices.find(i => i.id === btn.dataset.payInvoice);
+        if (!inv) return;
+        const result = await openPayBill({ invoice: inv });
+        if (result?.submitted) renderBilling();
+      });
+    });
   } catch (err) {
     console.error('Billing load error:', err);
     container.innerHTML = '<p style="color:var(--danger);padding:1rem;">Failed to load billing data.</p>';
   }
+}
+
+function balanceOfInvoice(inv) {
+  const total = Math.abs(Number(inv.total || inv.amount || 0));
+  const paid = Number(inv.paidAmount || 0);
+  return Math.max(0, total - paid);
+}
+
+function dateMs(ts) {
+  if (!ts) return 0;
+  if (ts.toDate) return ts.toDate().getTime();
+  if (ts instanceof Date) return ts.getTime();
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function describePaymentIntentMethod(p) {
+  if (p.method === 'card') {
+    const brand = (p.cardBrand || 'card').toUpperCase();
+    return p.cardLast4 ? `${brand} ending in ${p.cardLast4}` : brand;
+  }
+  if (p.method === 'apple_pay') return 'Apple Pay';
+  if (p.method === 'google_pay') return 'Google Pay';
+  if (p.method === 'ach') return p.achAccountLast4 ? `ACH ending in ${p.achAccountLast4}` : 'ACH';
+  return p.method || '—';
 }
 
 // ── Team ──

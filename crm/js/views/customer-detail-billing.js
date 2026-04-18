@@ -9,6 +9,8 @@ import { openRecordPaymentModal } from '../components/record-payment-modal.js';
 import {
   invoiceEffectiveAmount, sumPaid, sumOpen, sumOverdue, sumRefunds, formatMoney
 } from '../services/money.js';
+import { db } from '../config.js';
+import { collection, getDocs, updateDoc, doc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let filterState = { status: 'all', from: '', to: '' };
 
@@ -98,7 +100,113 @@ export function renderBillingTab(body, state, rerender) {
     exportInvoices(state.contact, customerInvoices);
   });
 
+  // Pending payment intents — only if this customer has a linked tenant.
+  if (state.tenant) {
+    const intentsWrap = document.createElement('div');
+    intentsWrap.className = 'settings-section';
+    intentsWrap.innerHTML = '<h3 class="section-title">Pending payments from portal</h3><div class="intents-body"><div style="color:var(--gray);font-size:0.85rem;padding:0.5rem 0;">Loading…</div></div>';
+    body.insertBefore(intentsWrap, invoicesWrap);
+    renderPendingIntents(intentsWrap.querySelector('.intents-body'), state, customerInvoices, rerender);
+  }
+
   redrawTables();
+}
+
+async function renderPendingIntents(container, state, customerInvoices, rerender) {
+  let intents = [];
+  try {
+    const snap = await getDocs(collection(db, 'tenants', state.tenant.id, 'payment_intents'));
+    intents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    container.innerHTML = '<div style="color:var(--gray);font-size:0.85rem;padding:0.5rem 0;">Unable to load pending payments.</div>';
+    return;
+  }
+  const pending = intents.filter(i => i.status === 'pending');
+  if (!pending.length) {
+    container.innerHTML = '<div style="color:var(--gray);font-size:0.85rem;padding:0.5rem 0;">No pending payments from the portal.</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>Submitted</th><th>Method</th><th>Amount</th><th>Invoice</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${pending.map(p => `
+          <tr>
+            <td>${escapeHtml(formatDate(p.submittedAt))}</td>
+            <td>${escapeHtml(describeIntentMethod(p))}</td>
+            <td style="font-family:var(--font-mono);">${escapeHtml(formatMoney(p.amount))}</td>
+            <td style="font-family:var(--font-mono);">${escapeHtml(p.invoiceNumber || '-')}</td>
+            <td><span class="badge badge-warning">${escapeHtml(p.status)}</span></td>
+            <td style="text-align:right;white-space:nowrap;">
+              <button class="btn btn-primary btn-sm" data-intent-id="${escapeHtml(p.id)}" data-action="reconcile">Mark as Received</button>
+              <button class="btn btn-ghost btn-sm" data-intent-id="${escapeHtml(p.id)}" data-action="cancel" style="color:var(--danger,#dc2626);">Cancel</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  container.querySelectorAll('[data-action="reconcile"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const intent = pending.find(p => p.id === btn.dataset.intentId);
+      if (!intent) return;
+      // Open Record Payment modal pre-filled, then link the intent on success.
+      const targetInvoice = intent.invoiceId ? customerInvoices.find(i => i.id === intent.invoiceId) : null;
+      const result = await openRecordPaymentModal({
+        tenantId: state.tenant.id,
+        invoices: targetInvoice ? [targetInvoice] : customerInvoices.filter(i =>
+          ['sent', 'draft', 'overdue', 'partial', 'issued'].includes(i.status)
+        ),
+        presetInvoiceId: intent.invoiceId || null,
+        singleInvoiceMode: !!targetInvoice,
+        title: `Reconcile ${describeIntentMethod(intent)} — ${formatMoney(intent.amount)}`,
+      });
+      if (result && result.recorded) {
+        // Mark the intent succeeded so it stops showing in pending lists.
+        try {
+          await updateDoc(doc(db, 'tenants', state.tenant.id, 'payment_intents', intent.id), {
+            status: 'succeeded',
+            statusMessage: 'Reconciled manually by operator.',
+            reconciledAt: serverTimestamp(),
+          });
+        } catch (err) { console.warn('Failed to mark intent succeeded:', err); }
+        await rerenderWithFresh(state, rerender);
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-action="cancel"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Cancel this pending payment? Customer will need to submit again.')) return;
+      try {
+        await updateDoc(doc(db, 'tenants', state.tenant.id, 'payment_intents', btn.dataset.intentId), {
+          status: 'failed',
+          statusMessage: 'Cancelled by operator.',
+          reconciledAt: serverTimestamp(),
+        });
+        showToast('Cancelled', 'success');
+        rerender();
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to cancel', 'error');
+      }
+    });
+  });
+}
+
+function describeIntentMethod(p) {
+  if (p.method === 'card') {
+    const brand = (p.cardBrand || 'card').toUpperCase();
+    return p.cardLast4 ? `${brand} ····${p.cardLast4}` : brand;
+  }
+  if (p.method === 'apple_pay') return 'Apple Pay';
+  if (p.method === 'google_pay') return 'Google Pay';
+  if (p.method === 'ach') return p.achAccountLast4 ? `ACH ····${p.achAccountLast4}` : 'ACH';
+  return p.method || '—';
 }
 
 function renderInvoicesTable(container, invoices, filters) {

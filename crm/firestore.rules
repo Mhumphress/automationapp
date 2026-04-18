@@ -495,6 +495,19 @@ service cloud.firestore {
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
+      // Payment intents — written by the portal's Pay Bill flow. Represents
+      // a customer's attempt to pay an invoice; starts in 'pending' status.
+      // When Stripe is connected, status flips via webhook; operators can also
+      // manually reconcile a pending intent to a payments doc. Card/ACH
+      // details are stored as last4 + brand only — never full PANs or CVCs.
+      match /payment_intents/{intentId} {
+        allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
+        allow create: if isAdmin()
+          || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
+        // Only operators update (e.g. mark succeeded, link to a payment)
+        allow update, delete: if isAdmin();
+      }
+
       // Recurring + one-off charges (rent, insurance, memberships, retainers,
       // late fees, policy violations, etc). Sweep generates invoices_crm docs
       // from these automatically.

@@ -623,3 +623,329 @@ body.suspended-mode .app-main {
   border: 1px solid var(--off-white, #E2E8F0);
   max-width: 720px;
 }
+
+/* ═══════════════════════════════════════════════
+   Billing — Pay Bill balance banner
+   ═══════════════════════════════════════════════ */
+
+.billing-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 16px rgba(13,148,136,0.2);
+}
+
+.billing-banner-clear {
+  background: white;
+  color: var(--black, #0F172A);
+  border: 1px solid var(--off-white, #E2E8F0);
+  box-shadow: none;
+}
+
+.billing-banner-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+  margin-bottom: 0.2rem;
+}
+
+.billing-banner-amount {
+  font-size: 2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-banner .btn {
+  background: white;
+  color: #0f766e;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+.billing-banner .btn:hover {
+  background: #f8fafc;
+}
+
+/* ═══════════════════════════════════════════════
+   Pay Bill modal
+   ═══════════════════════════════════════════════ */
+
+.pay-bill-dialog {
+  max-width: 520px;
+  width: 100%;
+}
+
+.pay-amount-block {
+  text-align: center;
+  padding: 1rem 0 1.25rem;
+  border-bottom: 1px solid var(--off-white, #E2E8F0);
+  margin-bottom: 1rem;
+}
+
+.pay-amount-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-dark, #64748B);
+  margin-bottom: 0.3rem;
+}
+
+.pay-amount-input {
+  font-size: 2.25rem;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  outline: none;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  color: var(--black, #0F172A);
+  background: transparent;
+}
+.pay-amount-input:focus {
+  outline: none;
+}
+
+.pay-invoice-label {
+  font-size: 0.8rem;
+  color: var(--gray-dark, #64748B);
+  margin-top: 0.35rem;
+}
+
+.pay-method-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.pay-method-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.7rem 0.4rem;
+  background: white;
+  border: 1.5px solid var(--off-white, #E2E8F0);
+  border-radius: 10px;
+  font-size: 0.78rem;
+  color: var(--gray-dark, #64748B);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.pay-method-tab:hover {
+  border-color: var(--accent, #0d9488);
+  color: var(--accent, #0d9488);
+}
+
+.pay-method-tab.active {
+  border-color: var(--accent, #0d9488);
+  background: var(--accent-dim, rgba(13,148,136,0.08));
+  color: var(--accent, #0d9488);
+  font-weight: 500;
+}
+
+.pay-method-body {
+  margin-bottom: 0.75rem;
+}
+
+.pay-card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pay-field label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-dark, #64748B);
+  margin-bottom: 0.3rem;
+  font-weight: 500;
+}
+
+.pay-field input,
+.pay-field select {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--off-white, #E2E8F0);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.12s;
+  background: white;
+}
+
+.pay-field input:focus,
+.pay-field select:focus {
+  outline: none;
+  border-color: var(--accent, #0d9488);
+  box-shadow: 0 0 0 3px var(--accent-dim, rgba(13,148,136,0.08));
+}
+
+.pay-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.pay-card-number-wrap {
+  position: relative;
+}
+
+.pay-card-brand {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.pay-card-error {
+  color: var(--danger, #dc2626);
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+  min-height: 1em;
+}
+
+.pay-accepted-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--gray-dark, #64748B);
+  flex-wrap: wrap;
+}
+
+.pay-brand-logos {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.pay-wallet-block {
+  padding: 1rem;
+  background: var(--off-white, #F1F5F9);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.pay-wallet-block p {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--gray-dark, #64748B);
+}
+
+.pay-wallet-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  min-width: 220px;
+}
+
+.pay-wallet-btn.apple {
+  background: #000;
+  color: white;
+}
+
+.pay-wallet-btn.google {
+  background: #202124;
+  color: white;
+}
+
+.pay-wallet-note {
+  font-size: 0.72rem;
+  color: var(--gray-dark, #64748B);
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+
+.pay-security-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  background: var(--off-white, #F8FAFC);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--gray-dark, #64748B);
+  line-height: 1.45;
+}
+
+.pay-lock {
+  flex-shrink: 0;
+}
+
+.pay-flash {
+  background: rgba(220,38,38,0.1);
+  color: var(--danger, #dc2626);
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.pay-flash.visible { opacity: 1; }
+
+.pay-confirm {
+  text-align: center;
+  padding: 1.5rem 1rem;
+}
+
+.pay-confirm-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(5,150,105,0.1);
+  color: #059669;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 auto 1rem;
+}
+
+.pay-confirm-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.pay-confirm-body {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--gray-dark, #64748B);
+  margin-bottom: 1rem;
+}
+
+.pay-confirm-ref {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  background: var(--off-white, #F1F5F9);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--gray-dark, #64748B);
+  margin-bottom: 1.25rem;
+}
+.pay-confirm-ref code {
+  font-size: 0.85rem;
+  color: var(--black, #0F172A);
+}
