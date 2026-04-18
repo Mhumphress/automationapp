@@ -72,15 +72,28 @@ export async function render() {
 
   // Subscribe to threads
   destroy();
-  threadsUnsub = subscribeToThreads({}, (list) => {
-    threads = list;
-    renderThreadList();
-    // If we have a selected thread, keep its metadata fresh (for header)
-    if (selectedThreadId && !threads.find(t => t.id === selectedThreadId)) {
-      selectedThreadId = null;
-      renderConversation();
+  threadsUnsub = subscribeToThreads(
+    {},
+    (list) => {
+      threads = list;
+      renderThreadList();
+      if (selectedThreadId && !threads.find(t => t.id === selectedThreadId)) {
+        selectedThreadId = null;
+        renderConversation();
+      }
+    },
+    (err) => {
+      const wrap = document.getElementById('threadList');
+      if (wrap) {
+        wrap.innerHTML = `
+          <div style="padding:1rem;color:var(--danger,#dc2626);font-size:0.85rem;line-height:1.5;">
+            <div style="font-weight:600;margin-bottom:0.3rem;">Can't load threads</div>
+            <div style="color:var(--gray-dark,#64748B);font-size:0.78rem;">${escapeHtml(err.code || err.message || 'Unknown error')}</div>
+          </div>
+        `;
+      }
     }
-  });
+  );
 
   // Wire top bar
   const searchEl = container.querySelector('.messages-search');

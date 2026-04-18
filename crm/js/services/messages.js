@@ -19,38 +19,68 @@ import {
   serverTimestamp, runTransaction, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+function tsMs(ts) {
+  if (!ts) return 0;
+  if (ts.toDate) return ts.toDate().getTime();
+  if (ts instanceof Date) return ts.getTime();
+  return new Date(ts).getTime() || 0;
+}
+
+function sortThreadsByRecency(list) {
+  return list.sort((a, b) => tsMs(b.lastMessageAt) - tsMs(a.lastMessageAt));
+}
+
 /**
  * List threads. If tenantId omitted, returns all threads (operator view).
- * @param {object} opts
- * @param {string} [opts.tenantId]
- * @param {number} [opts.limit=200]
- * @param {boolean} [opts.archived=false]
+ *
+ * Tenant-scoped queries use where-only (no orderBy) to avoid needing a
+ * Firestore composite index (tenantId, lastMessageAt). Sorted client-side.
  */
 export async function listThreads(opts = {}) {
   const { tenantId, limit = 200, archived = false } = opts;
   try {
-    const clauses = [orderBy('lastMessageAt', 'desc'), fbLimit(limit)];
-    if (tenantId) clauses.unshift(where('tenantId', '==', tenantId));
-    const q = query(collection(db, 'message_threads'), ...clauses);
+    let q;
+    if (tenantId) {
+      q = query(collection(db, 'message_threads'), where('tenantId', '==', tenantId), fbLimit(limit));
+    } else {
+      q = query(collection(db, 'message_threads'), orderBy('lastMessageAt', 'desc'), fbLimit(limit));
+    }
     const snap = await getDocs(q);
-    return snap.docs
+    const list = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(t => !!archived === !!t.archived);
+    return tenantId ? sortThreadsByRecency(list) : list;
   } catch (err) {
-    console.warn('listThreads failed:', err);
-    return [];
+    console.error('[messages] listThreads failed:', err);
+    throw err;
   }
 }
 
-/** Subscribe to threads (real-time). Returns an unsubscribe fn. */
-export function subscribeToThreads(opts, onUpdate) {
+/**
+ * Subscribe to threads (real-time).
+ * @param {object} opts
+ * @param {string} [opts.tenantId]
+ * @param {number} [opts.limit=200]
+ * @param {Function} onUpdate  called with (threads[])
+ * @param {Function} [onError] optional error handler — called with Error
+ * @returns unsubscribe fn
+ */
+export function subscribeToThreads(opts, onUpdate, onError) {
   const { tenantId, limit = 200 } = opts || {};
-  const clauses = [orderBy('lastMessageAt', 'desc'), fbLimit(limit)];
-  if (tenantId) clauses.unshift(where('tenantId', '==', tenantId));
-  const q = query(collection(db, 'message_threads'), ...clauses);
+  let q;
+  if (tenantId) {
+    q = query(collection(db, 'message_threads'), where('tenantId', '==', tenantId), fbLimit(limit));
+  } else {
+    q = query(collection(db, 'message_threads'), orderBy('lastMessageAt', 'desc'), fbLimit(limit));
+  }
   return onSnapshot(q, (snap) => {
-    onUpdate(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  }, (err) => console.warn('subscribeToThreads error:', err));
+    let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (tenantId) list = sortThreadsByRecency(list);
+    onUpdate(list);
+  }, (err) => {
+    console.error('[messages] subscribeToThreads error:', err);
+    if (onError) try { onError(err); } catch {}
+  });
 }
 
 export async function getThread(threadId) {

@@ -51,14 +51,31 @@ export async function render() {
   `;
 
   destroy();
-  threadsUnsub = subscribeToThreads({ tenantId: tenant.id }, (list) => {
-    threads = list;
-    renderThreadList();
-    if (selectedThreadId && !threads.find(t => t.id === selectedThreadId)) {
-      selectedThreadId = null;
-      renderConversation();
+  threadsUnsub = subscribeToThreads(
+    { tenantId: tenant.id },
+    (list) => {
+      threads = list;
+      renderThreadList();
+      if (selectedThreadId && !threads.find(t => t.id === selectedThreadId)) {
+        selectedThreadId = null;
+        renderConversation();
+      }
+    },
+    (err) => {
+      const wrap = document.getElementById('threadList');
+      if (wrap) {
+        wrap.innerHTML = `
+          <div style="padding:1rem;color:var(--danger,#dc2626);font-size:0.85rem;line-height:1.5;">
+            <div style="font-weight:600;margin-bottom:0.3rem;">Can't load messages</div>
+            <div style="color:var(--gray-dark,#64748B);font-size:0.78rem;">${escapeHtml(err.code || err.message || 'Unknown error')}</div>
+            ${err.code === 'permission-denied'
+              ? '<div style="margin-top:0.4rem;">Firestore rules may not be published yet. Ask your administrator.</div>'
+              : ''}
+          </div>
+        `;
+      }
     }
-  });
+  );
 
   container.querySelector('.messages-search').addEventListener('input', (e) => {
     searchTerm = e.target.value.trim().toLowerCase();
