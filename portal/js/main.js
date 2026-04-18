@@ -754,13 +754,13 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
           <tbody>`;
       invoices.forEach(inv => {
         const s = inv.status || 'draft';
-        const dueInfo = dueStatusInfo(inv);  // {label, cls, detail}
+        const dueInfo = dueStatusInfo(inv);
         const amount = inv.total != null ? inv.total : inv.amount;
         const balance = balanceOfInvoice(inv);
         const pending = pendingIntentsByInvoice[inv.id]?.length > 0;
         const canPay = balance > 0 && s !== 'paid' && !pending;
         html += `
-          <tr>
+          <tr class="clickable" data-view-invoice="${escapeHtml(inv.id)}">
             <td style="font-weight:500;">${escapeHtml(inv.invoiceNumber || '-')}</td>
             <td>${formatCurrency(amount)}</td>
             <td>${balance > 0 ? formatCurrency(balance) : '<span style="color:var(--gray);">—</span>'}</td>
@@ -841,10 +841,22 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
 
     // Wire per-row Pay Bill
     container.querySelectorAll('[data-pay-invoice]').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();  // don't also trigger the row-click modal
         const inv = invoices.find(i => i.id === btn.dataset.payInvoice);
         if (!inv) return;
         await openPayBill({ invoice: inv });
+      });
+    });
+
+    // Wire row-click → open invoice detail modal
+    container.querySelectorAll('[data-view-invoice]').forEach(row => {
+      row.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-pay-invoice]')) return;
+        const inv = invoices.find(i => i.id === row.dataset.viewInvoice);
+        if (!inv) return;
+        const { openInvoiceModal } = await import('./views/shared/invoice-modal.js');
+        openInvoiceModal(inv);
       });
     });
 }

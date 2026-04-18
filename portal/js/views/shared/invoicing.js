@@ -3,6 +3,7 @@ import { canWrite, gateWrite, getTenantId } from '../../tenant-context.js';
 import { db } from '../../config.js';
 import { collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { openRecordPayment } from './record-payment-modal.js';
+import { printInvoiceDirect } from './invoice-modal.js';
 
 let invoices = [];
 let currentPage = 'list';
@@ -658,9 +659,17 @@ function showDetail(inv) {
       <div class="detail-name">${escapeHtml(inv.invoiceNumber)}</div>
       <div class="detail-subtitle">${escapeHtml(inv.clientName || '-')} &middot; <span class="badge ${statusClass}">${escapeHtml(inv.status || 'draft')}</span></div>
     </div>
+    <button class="btn btn-ghost btn-sm" id="invPrintBtn" type="button" style="margin-right:0.5rem;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:0.3rem;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print / PDF
+    </button>
     <div style="font-size:1.5rem;font-weight:600;font-family:var(--font-display);">${formatCurrency(inv.total || 0)}</div>
   `;
   container.appendChild(header);
+
+  header.querySelector('#invPrintBtn').addEventListener('click', () => {
+    printInvoiceDirect(inv);
+  });
 
   // Status change + lifecycle action buttons
   async function doStatusChange(newStatus, successMsg) {
