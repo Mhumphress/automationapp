@@ -7,6 +7,9 @@ import { createDropdown } from '../components/dropdown.js';
 import { showToast, escapeHtml, timeAgo, formatCurrency, formatDate } from '../ui.js';
 import { createContactFromDropdown } from '../utils/entity-create.js';
 import { canDelete } from '../services/roles.js';
+import { openRecordPaymentModal } from '../components/record-payment-modal.js';
+import { listPayments } from '../services/payments.js';
+import { invoiceEffectiveAmount, formatMoney } from '../services/money.js';
 
 let invoices = [];
 let contacts = [];
@@ -212,13 +215,18 @@ function renderTable(list) {
     { key: 'total', label: 'Amount' },
     { key: 'status', label: 'Status' },
     { key: 'issueDate', label: 'Issue Date' },
-    { key: 'dueDate', label: 'Due Date' }
+    { key: 'dueDate', label: 'Due Date' },
+    { key: '_actions', label: '' },
   ];
 
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   columns.forEach(col => {
     const th = document.createElement('th');
+    if (col.key === '_actions') {
+      headerRow.appendChild(th);
+      return;
+    }
     th.className = 'sortable' + (sortField === col.key ? ' sort-active' : '');
     th.innerHTML = `${col.label} <span class="sort-icon">${sortField === col.key ? (sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#9650;'}</span>`;
     th.addEventListener('click', () => {
@@ -273,6 +281,33 @@ function renderTable(list) {
     const dueTd = document.createElement('td');
     dueTd.textContent = formatDate(invoice.dueDate);
     tr.appendChild(dueTd);
+
+    // Actions — quick Record Payment for eligible rows
+    const actionTd = document.createElement('td');
+    actionTd.style.textAlign = 'right';
+    actionTd.style.whiteSpace = 'nowrap';
+    const canPay = invoice.tenantId && invoice.status !== 'paid' && invoice.type !== 'refund';
+    if (canPay) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.textContent = 'Record Payment';
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();  // don't trigger row navigation
+        const result = await openRecordPaymentModal({
+          tenantId: invoice.tenantId,
+          invoices: [invoice],
+          presetInvoiceId: invoice.id,
+          singleInvoiceMode: true,
+          title: `Record Payment — ${invoice.invoiceNumber || 'Invoice'}`,
+        });
+        if (result && result.recorded) {
+          await loadData();
+          renderListView();
+        }
+      });
+      actionTd.appendChild(btn);
+    }
+    tr.appendChild(actionTd);
 
     tr.addEventListener('click', () => showDetailPage(invoice));
     tbody.appendChild(tr);
@@ -544,6 +579,7 @@ async function showDetailPage(invoice) {
   // Header
   const allowDelete = await canDelete(invoice);
   const effectiveStatus = (invoice.status === 'overdue' || isOverdue(invoice)) ? 'overdue' : (invoice.status || 'draft');
+  const canRecordPayment = !!invoice.tenantId && invoice.status !== 'paid' && invoice.type !== 'refund';
   const header = document.createElement('div');
   header.className = 'detail-header';
   header.innerHTML = `
@@ -551,10 +587,30 @@ async function showDetailPage(invoice) {
       <div class="detail-name">${escapeHtml(invoice.invoiceNumber || 'Invoice')}</div>
       <div class="detail-subtitle">${escapeHtml(invoice.clientName || '')} &middot; <span class="badge-status ${effectiveStatus}">${effectiveStatus.charAt(0).toUpperCase() + effectiveStatus.slice(1)}</span></div>
     </div>
+    ${canRecordPayment ? '<button class="btn btn-primary detail-record-pay-btn">Record Payment</button>' : ''}
     <button class="btn btn-ghost detail-pdf-btn">Download PDF</button>
     ${allowDelete ? '<button class="btn btn-ghost detail-delete-btn" style="color:var(--danger);">Delete</button>' : ''}
   `;
   container.appendChild(header);
+
+  // Record Payment handler
+  const payBtn = header.querySelector('.detail-record-pay-btn');
+  if (payBtn) {
+    payBtn.addEventListener('click', async () => {
+      const result = await openRecordPaymentModal({
+        tenantId: invoice.tenantId,
+        invoices: [invoice],
+        presetInvoiceId: invoice.id,
+        singleInvoiceMode: true,
+        title: `Record Payment — ${invoice.invoiceNumber || 'Invoice'}`,
+      });
+      if (result && result.recorded) {
+        await loadData();
+        const fresh = invoices.find(i => i.id === invoice.id) || invoice;
+        showDetailPage(fresh);
+      }
+    });
+  }
 
   // PDF handler
   header.querySelector('.detail-pdf-btn').addEventListener('click', () => printInvoice(invoice));
@@ -584,7 +640,7 @@ async function showDetailPage(invoice) {
   const layout = document.createElement('div');
   layout.className = 'detail-layout';
 
-  // Left column — Invoice information + line items + totals
+  // Left column — Invoice information + line items + totals + payments
   const leftCol = document.createElement('div');
   const leftTitle = document.createElement('div');
   leftTitle.className = 'detail-section-title';
@@ -593,6 +649,7 @@ async function showDetailPage(invoice) {
   renderDetailFields(leftCol, invoice);
   renderDetailLineItems(leftCol, invoice);
   renderDetailTotals(leftCol, invoice);
+  renderDetailPayments(leftCol, invoice);
 
   // Right column — Activity
   const rightCol = document.createElement('div');
@@ -868,6 +925,81 @@ function renderDetailTotals(container, invoice) {
     </div>
   `;
   container.appendChild(totals);
+
+  // Balance + paid amount lines, below the totals block.
+  const paidAmount = Number(invoice.paidAmount) || 0;
+  if (paidAmount > 0 || invoice.status === 'paid' || invoice.status === 'partial') {
+    const balanceRow = document.createElement('div');
+    balanceRow.className = 'invoice-totals';
+    balanceRow.style.marginTop = '0.25rem';
+    const total = Math.abs(Number(invoice.total || 0));
+    const balance = Math.max(0, total - paidAmount);
+    balanceRow.innerHTML = `
+      <div class="invoice-totals-row" style="color:var(--success,#059669);">
+        <span class="invoice-totals-label">Paid</span>
+        <span class="invoice-totals-value">${formatCurrency(paidAmount)}</span>
+      </div>
+      ${balance > 0 ? `
+        <div class="invoice-totals-row" style="color:var(--danger,#dc2626);">
+          <span class="invoice-totals-label">Balance due</span>
+          <span class="invoice-totals-value">${formatCurrency(balance)}</span>
+        </div>
+      ` : ''}
+    `;
+    container.appendChild(balanceRow);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Payments on this invoice
+// ---------------------------------------------------------------------------
+
+async function renderDetailPayments(container, invoice) {
+  if (!invoice.tenantId) return;
+
+  const section = document.createElement('div');
+  section.className = 'settings-section';
+  section.style.marginTop = '1.5rem';
+  section.innerHTML = `<h3 class="section-title">Payments</h3><div class="invoice-payments-body"><div style="color:var(--gray);font-size:0.85rem;padding:0.5rem 0;">Loading…</div></div>`;
+  container.appendChild(section);
+
+  let payments = [];
+  try {
+    const all = await listPayments(invoice.tenantId);
+    // Only payments whose applications include THIS invoice
+    payments = all.filter(p => Array.isArray(p.appliedTo) && p.appliedTo.some(a => a.invoiceId === invoice.id));
+  } catch (err) {
+    console.warn('Load payments failed:', err);
+  }
+
+  const body = section.querySelector('.invoice-payments-body');
+  if (!payments.length) {
+    body.innerHTML = '<div style="color:var(--gray);font-size:0.85rem;padding:0.5rem 0;">No payments recorded against this invoice yet.</div>';
+    return;
+  }
+
+  body.innerHTML = `
+    <table class="data-table">
+      <thead>
+        <tr><th>Received</th><th>Amount</th><th>Method</th><th>Reference</th><th>Recorded by</th></tr>
+      </thead>
+      <tbody>
+        ${payments.map(p => {
+          const applied = (p.appliedTo || []).find(a => a.invoiceId === invoice.id);
+          const amt = applied ? Number(applied.amount) : Number(p.amount);
+          return `
+            <tr>
+              <td>${escapeHtml(formatDate(p.receivedAt || p.recordedAt))}</td>
+              <td style="font-family:var(--font-mono);">${escapeHtml(formatMoney(amt))}</td>
+              <td>${escapeHtml(p.method || '—')}</td>
+              <td>${escapeHtml(p.reference || '—')}</td>
+              <td>${escapeHtml(p.recordedByEmail || '—')}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 // ---------------------------------------------------------------------------

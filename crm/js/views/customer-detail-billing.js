@@ -3,10 +3,9 @@
 //  Invoices, payments ledger, record-payment modal, CSV export.
 // ─────────────────────────────────────────────────────────────────
 
-import { openStackedModal } from '../components/modal.js';
 import { showToast, escapeHtml, formatDate } from '../ui.js';
 import { downloadCSV, formatMoney as csvMoney, formatTimestamp } from '../utils/csv.js';
-import { recordPayment, PAYMENT_METHODS } from '../services/payments.js';
+import { openRecordPaymentModal } from '../components/record-payment-modal.js';
 import {
   invoiceEffectiveAmount, sumPaid, sumOpen, sumOverdue, sumRefunds, formatMoney
 } from '../services/money.js';
@@ -79,11 +78,18 @@ export function renderBillingTab(body, state, rerender) {
   });
 
   actionBar.querySelector('[data-action="record-payment"]')?.addEventListener('click', async () => {
+    if (!state.tenant) {
+      showToast('This customer has no tenant yet.', 'error');
+      return;
+    }
     const openInvoices = customerInvoices.filter(i =>
       ['sent', 'draft', 'overdue', 'partial', 'issued'].includes(i.status)
     );
-    const result = await openRecordPaymentModal({ state, openInvoices });
-    if (result) {
+    const result = await openRecordPaymentModal({
+      tenantId: state.tenant.id,
+      invoices: openInvoices,
+    });
+    if (result && result.recorded) {
       await rerenderWithFresh(state, rerender);
     }
   });
@@ -206,112 +212,15 @@ function renderPaymentsTable(container, payments, invoices) {
   `;
 }
 
-async function openRecordPaymentModal({ state, openInvoices }) {
-  return openStackedModal('Record Payment', (bodyEl, close) => {
-    const form = document.createElement('form');
-    form.className = 'modal-form';
-    form.innerHTML = `
-      <div class="modal-form-grid">
-        <div class="modal-field">
-          <label>Amount *</label>
-          <input type="number" name="amount" step="0.01" min="0.01" required>
-        </div>
-        <div class="modal-field">
-          <label>Method *</label>
-          <select name="method" required>
-            ${PAYMENT_METHODS.map(m => `<option value="${m}">${m.toUpperCase()}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div class="modal-form-grid">
-        <div class="modal-field">
-          <label>Received date</label>
-          <input type="date" name="receivedAt" value="${new Date().toISOString().slice(0,10)}">
-        </div>
-        <div class="modal-field">
-          <label>Reference (check #, last 4…)</label>
-          <input type="text" name="reference">
-        </div>
-      </div>
-      <div class="modal-field">
-        <label>Notes</label>
-        <textarea name="notes" rows="2"></textarea>
-      </div>
-      <div class="modal-field">
-        <label>Apply to invoice(s)</label>
-        <div class="payment-apply-list">
-          ${openInvoices.length === 0
-            ? '<div style="color:var(--gray);font-size:0.85rem;">No open invoices — payment will be recorded unapplied.</div>'
-            : openInvoices.map(i => {
-                const eff = invoiceEffectiveAmount(i);
-                const paid = Number(i.paidAmount) || 0;
-                const bal = Math.max(0, Math.abs(eff) - paid);
-                return `
-                  <label class="payment-apply-row">
-                    <input type="checkbox" data-invoice-id="${escapeHtml(i.id)}" data-balance="${bal}">
-                    <span style="flex:1;">${escapeHtml(i.invoiceNumber || '-')} — ${escapeHtml(formatMoney(bal))} open</span>
-                    <input type="number" step="0.01" min="0" placeholder="${bal.toFixed(2)}" class="payment-apply-amount" disabled>
-                  </label>
-                `;
-              }).join('')
-          }
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button type="submit" class="btn btn-primary btn-lg">Record Payment</button>
-        <span class="modal-cancel">Cancel</span>
-      </div>
-    `;
-
-    // Wire row toggles
-    form.querySelectorAll('.payment-apply-row input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const amt = cb.closest('.payment-apply-row').querySelector('.payment-apply-amount');
-        amt.disabled = !cb.checked;
-        if (cb.checked && !amt.value) amt.value = cb.dataset.balance;
-        if (!cb.checked) amt.value = '';
-      });
-    });
-
-    form.querySelector('.modal-cancel').addEventListener('click', () => close(null));
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fd = new FormData(form);
-      const amount = Number(fd.get('amount'));
-      const method = fd.get('method');
-      const notes = (fd.get('notes') || '').toString().trim();
-      const reference = (fd.get('reference') || '').toString().trim();
-      const receivedRaw = fd.get('receivedAt');
-      const receivedAt = receivedRaw ? new Date(receivedRaw.toString()) : new Date();
-
-      const appliedTo = [];
-      form.querySelectorAll('.payment-apply-row input[type="checkbox"]:checked').forEach(cb => {
-        const amt = Number(cb.closest('.payment-apply-row').querySelector('.payment-apply-amount').value);
-        if (amt > 0) appliedTo.push({ invoiceId: cb.dataset.invoiceId, amount: amt });
-      });
-
-      try {
-        await recordPayment(state.tenant.id, {
-          amount, method, reference, receivedAt, notes, appliedTo,
-        });
-        showToast('Payment recorded', 'success');
-        close({ ok: true });
-      } catch (err) {
-        console.error(err);
-        showToast(err.message || 'Failed to record payment', 'error');
-      }
-    });
-
-    bodyEl.appendChild(form);
-  });
-}
-
 async function rerenderWithFresh(state, rerender) {
-  // Reload payments + invoices after recording
-  const { listPayments } = await import('../services/payments.js');
+  const [{ listPayments }, { queryDocuments }] = await Promise.all([
+    import('../services/payments.js'),
+    import('../services/firestore.js'),
+  ]);
   state.payments = await listPayments(state.tenant.id);
-  // Invoices list may have status updates from applied payments — caller's job to refresh
+  try {
+    state.invoices = await queryDocuments('invoices', 'createdAt', 'desc');
+  } catch (err) { console.warn('invoice refresh failed:', err); }
   rerender();
 }
 
