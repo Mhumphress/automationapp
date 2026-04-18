@@ -69,14 +69,25 @@ export async function recordPayment(tenantId, p) {
 
     // The invoice may live at tenants/{t}/invoices/{id} (tenant billing)
     // OR at root /invoices/{id} (CRM revenue mirror). Try tenant first.
-    let invoicePath = `tenants/${tenantId}/invoices/${entry.invoiceId}`;
-    let exists = false;
-    try {
-      const s = await getDoc(doc(db, invoicePath));
-      exists = s.exists();
-    } catch { exists = false; }
-    if (!exists) {
-      invoicePath = `invoices/${entry.invoiceId}`;
+    // Resolve the invoice path. Try the three places invoices can live:
+    //   - tenants/{t}/invoices    — subscription / first-invoice (PM pays AutomationApp)
+    //   - tenants/{t}/invoices_crm — outgoing invoices (rent, fees, client work)
+    //   - invoices                 — legacy CRM root for operator-created invoices
+    const candidates = [
+      `tenants/${tenantId}/invoices/${entry.invoiceId}`,
+      `tenants/${tenantId}/invoices_crm/${entry.invoiceId}`,
+      `invoices/${entry.invoiceId}`,
+    ];
+    let invoicePath = null;
+    for (const c of candidates) {
+      try {
+        const s = await getDoc(doc(db, c));
+        if (s.exists()) { invoicePath = c; break; }
+      } catch {}
+    }
+    if (!invoicePath) {
+      console.warn(`Invoice ${entry.invoiceId} not found in any known path; skipping application.`);
+      continue;
     }
 
     try {

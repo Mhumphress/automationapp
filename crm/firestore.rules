@@ -355,7 +355,10 @@ service cloud.firestore {
 
       match /payments/{paymentId} {
         allow read: if isAdmin() || (isTenantMember(tenantId) && tenantHasAccess(tenantId));
-        allow create: if isAdmin();
+        // Tenant admins (e.g. property manager, salon owner) can record payments
+        // they've received from their own customers. Regular members can't — this
+        // is a money event so keep it admin-scoped.
+        allow create: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
         allow update: if isAdmin();
         allow delete: if isAdmin();
       }
