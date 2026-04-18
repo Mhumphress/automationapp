@@ -401,7 +401,8 @@ async function registerAllViews() {
     render() {
       document.getElementById('headerTitle').textContent = 'Billing';
       renderBilling();
-    }
+    },
+    destroy: destroyBilling,
   });
 
   registerView('team', {
@@ -548,62 +549,94 @@ function renderSubscription() {
 }
 
 // ── Billing ──
+//
+// Live-updates: subscribes to the four tenant subcollections that feed the
+// page (invoices, invoices_crm, payments, payment_intents). Any newly
+// generated invoice — whether from CRM provisioning, an add-on change,
+// or the recurring-billing sweep — flows in without a page refresh.
+
+let billingUnsubs = [];
+let billingRenderTimer = null;
+
+function destroyBilling() {
+  billingUnsubs.forEach(u => { try { u(); } catch {} });
+  billingUnsubs = [];
+  if (billingRenderTimer) { clearTimeout(billingRenderTimer); billingRenderTimer = null; }
+}
 
 async function renderBilling() {
   const container = document.getElementById('view-billing');
   const tenant = getTenant();
 
+  destroyBilling();
   container.innerHTML = '<div class="loading">Loading billing...</div>';
 
-  try {
-    const { collection: fbCollection, getDocs: fbGetDocs, query: fbQuery, orderBy: fbOrderBy } =
-      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    const { db: fbDb } = await import('./config.js');
-    const { openPayBill } = await import('./views/shared/pay-bill.js');
+  const { collection: fbCollection, onSnapshot: fbOnSnapshot } =
+    await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const { db: fbDb } = await import('./config.js');
+  const { openPayBill } = await import('./views/shared/pay-bill.js');
 
-    // Invoices
-    const invSnap = await fbGetDocs(fbQuery(
-      fbCollection(fbDb, 'tenants', tenant.id, 'invoices'),
-      fbOrderBy('issuedDate', 'desc')
-    ));
-    let invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Live buckets — four independent streams, re-render whenever any change.
+  const store = {
+    invoices: [],
+    invoicesCrm: [],
+    payments: [],
+    intents: [],
+    errors: {},
+  };
 
-    // invoices_crm (rent invoices etc. — new engine generates here)
+  // Debounce re-renders so a single multi-collection change fires once.
+  function scheduleRender() {
+    if (billingRenderTimer) return;
+    billingRenderTimer = setTimeout(() => {
+      billingRenderTimer = null;
+      try { draw(); } catch (err) { console.error('Billing draw error:', err); }
+    }, 50);
+  }
+
+  function subscribe(path, key) {
     try {
-      const invCrmSnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'invoices_crm'));
-      const crmInvoices = invCrmSnap.docs.map(d => ({ id: d.id, _path: 'invoices_crm', ...d.data() }));
-      invoices = invoices.concat(crmInvoices).sort((a, b) => {
-        const ta = dateMs(a.issuedDate || a.issueDate || a.createdAt);
-        const tb = dateMs(b.issuedDate || b.issueDate || b.createdAt);
-        return tb - ta;
-      });
-    } catch {}
-
-    // Payments
-    let payments = [];
-    try {
-      const paySnap = await fbGetDocs(fbQuery(
-        fbCollection(fbDb, 'tenants', tenant.id, 'payments'),
-        fbOrderBy('processedAt', 'desc')
-      ));
-      payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const unsub = fbOnSnapshot(
+        fbCollection(fbDb, ...path),
+        (snap) => {
+          store[key] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          delete store.errors[key];
+          scheduleRender();
+        },
+        (err) => {
+          console.error(`[billing] ${key} subscription error:`, err);
+          store.errors[key] = err.code || err.message;
+          scheduleRender();
+        }
+      );
+      billingUnsubs.push(unsub);
     } catch (err) {
-      try {
-        const paySnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'payments'));
-        payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        payments.sort((a, b) => dateMs(b.receivedAt || b.processedAt || b.recordedAt)
-                             - dateMs(a.receivedAt || a.processedAt || a.recordedAt));
-      } catch {}
+      console.error(`[billing] could not subscribe to ${key}:`, err);
+      store.errors[key] = err.message;
     }
+  }
 
-    // Payment intents (pending bill-pays from this portal's Pay Bill modal)
-    let intents = [];
-    try {
-      const iSnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'payment_intents'));
-      intents = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      intents.sort((a, b) => dateMs(b.submittedAt) - dateMs(a.submittedAt));
-    } catch {}
+  subscribe(['tenants', tenant.id, 'invoices'],       'invoices');
+  subscribe(['tenants', tenant.id, 'invoices_crm'],   'invoicesCrm');
+  subscribe(['tenants', tenant.id, 'payments'],       'payments');
+  subscribe(['tenants', tenant.id, 'payment_intents'],'intents');
 
+  function draw() {
+    const invoices = [...store.invoices, ...store.invoicesCrm].sort((a, b) => {
+      const ta = dateMs(a.issuedDate || a.issueDate || a.createdAt);
+      const tb = dateMs(b.issuedDate || b.issueDate || b.createdAt);
+      return tb - ta;
+    });
+    const payments = [...store.payments].sort((a, b) =>
+      dateMs(b.receivedAt || b.processedAt || b.recordedAt)
+    - dateMs(a.receivedAt || a.processedAt || a.recordedAt));
+    const intents = [...store.intents].sort((a, b) => dateMs(b.submittedAt) - dateMs(a.submittedAt));
+
+    drawBillingMarkup({ container, invoices, payments, intents, errors: store.errors, openPayBill });
+  }
+}
+
+function drawBillingMarkup({ container, invoices, payments, intents, errors, openPayBill }) {
     // Derived numbers
     const openInvoices = invoices.filter(i => ['sent', 'overdue', 'partial', 'issued', 'draft'].includes(i.status));
     const totalBalance = openInvoices.reduce((s, i) => s + balanceOfInvoice(i), 0);
@@ -613,6 +646,14 @@ async function renderBilling() {
     });
 
     // ── HTML ──
+    const errorKeys = Object.keys(errors || {});
+    const errorBanner = errorKeys.length > 0 ? `
+      <div style="padding:0.75rem 1rem;margin-bottom:0.75rem;background:rgba(220,38,38,0.08);color:var(--danger,#dc2626);border-radius:8px;font-size:0.85rem;">
+        <strong>Can't load some data:</strong>
+        ${errorKeys.map(k => `<div style="margin-top:0.2rem;">· ${escapeHtml(k)} — ${escapeHtml(errors[k])}</div>`).join('')}
+        <div style="margin-top:0.3rem;color:var(--gray-dark);font-size:0.78rem;">If the code is 'permission-denied', Firestore rules may not be published yet.</div>
+      </div>` : '';
+
     const bannerHTML = totalBalance > 0
       ? `
         <div class="billing-banner">
@@ -630,7 +671,7 @@ async function renderBilling() {
           </div>
         </div>`;
 
-    let html = bannerHTML;
+    let html = errorBanner + bannerHTML;
 
     // Invoices section
     html += '<div class="settings-section" style="margin-top:1rem;"><h2 class="section-title">Invoices</h2>';
@@ -727,12 +768,12 @@ async function renderBilling() {
 
     container.innerHTML = html;
 
-    // Wire Pay Balance banner
+    // Wire Pay Balance banner. onSnapshot will re-render automatically when
+    // payment_intents change, so no manual re-render is needed.
     const payBalanceBtn = container.querySelector('#payBalanceBtn');
     if (payBalanceBtn) {
       payBalanceBtn.addEventListener('click', async () => {
-        const result = await openPayBill({ allInvoices: openInvoices });
-        if (result?.submitted) renderBilling();
+        await openPayBill({ allInvoices: openInvoices });
       });
     }
 
@@ -741,14 +782,9 @@ async function renderBilling() {
       btn.addEventListener('click', async () => {
         const inv = invoices.find(i => i.id === btn.dataset.payInvoice);
         if (!inv) return;
-        const result = await openPayBill({ invoice: inv });
-        if (result?.submitted) renderBilling();
+        await openPayBill({ invoice: inv });
       });
     });
-  } catch (err) {
-    console.error('Billing load error:', err);
-    container.innerHTML = '<p style="color:var(--danger);padding:1rem;">Failed to load billing data.</p>';
-  }
 }
 
 function balanceOfInvoice(inv) {
