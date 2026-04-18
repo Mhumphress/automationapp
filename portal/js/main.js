@@ -103,6 +103,9 @@ onAuthStateChanged(auth, async (user) => {
     // Messages badge (portal-side)
     startPortalMessagesBadge(getTenant().id);
 
+    // Billing / unpaid-invoice badge (same pattern as Messages)
+    startPortalBillingBadge(getTenant().id);
+
     // Recurring billing sweep — generates invoices that came due while the
     // operator wasn't watching. Runs once per session; idempotent.
     try {
@@ -165,6 +168,63 @@ async function startPortalMessagesBadge(tenantId) {
     });
   } catch (err) {
     console.warn('Messages badge subscription failed:', err);
+  }
+}
+
+// ── Billing badge (portal) — count of unpaid invoices across both
+// tenants/{t}/invoices and tenants/{t}/invoices_crm collections. ──
+
+async function startPortalBillingBadge(tenantId) {
+  if (!tenantId) return;
+  try {
+    const { collection: fbCol, onSnapshot: fbOnSnap } =
+      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const { db: fbDb } = await import('./config.js');
+
+    const counts = { invoices: 0, invoices_crm: 0 };
+    const openStatuses = new Set(['sent', 'overdue', 'partial', 'draft', 'issued']);
+
+    function updateBadge() {
+      const total = counts.invoices + counts.invoices_crm;
+      const navItem = document.querySelector('.nav-item[data-view="billing"]');
+      if (!navItem) return;
+      let badge = navItem.querySelector('.nav-badge');
+      if (total > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'nav-badge';
+          navItem.appendChild(badge);
+        }
+        badge.textContent = total > 99 ? '99+' : String(total);
+      } else if (badge) {
+        badge.remove();
+      }
+    }
+
+    function subscribeTo(coll) {
+      fbOnSnap(
+        fbCol(fbDb, 'tenants', tenantId, coll),
+        (snap) => {
+          counts[coll] = snap.docs.filter(d => {
+            const data = d.data();
+            if (!openStatuses.has(data.status)) return false;
+            if (data.type === 'refund') return false;
+            const total = Math.abs(Number(data.total || data.amount || 0));
+            const paid = Number(data.paidAmount || 0);
+            return (total - paid) > 0.0049;
+          }).length;
+          updateBadge();
+        },
+        (err) => {
+          console.warn(`[billing badge] ${coll} subscription error:`, err);
+        }
+      );
+    }
+
+    subscribeTo('invoices');
+    subscribeTo('invoices_crm');
+  } catch (err) {
+    console.warn('Billing badge subscription failed:', err);
   }
 }
 
@@ -620,6 +680,10 @@ async function renderBilling() {
   subscribe(['tenants', tenant.id, 'invoices_crm'],   'invoicesCrm');
   subscribe(['tenants', tenant.id, 'payments'],       'payments');
   subscribe(['tenants', tenant.id, 'payment_intents'],'intents');
+
+  // Always draw immediately so the page replaces "Loading..." with the
+  // empty-state UI even before the first snapshot arrives.
+  scheduleRender();
 
   function draw() {
     const invoices = [...store.invoices, ...store.invoicesCrm].sort((a, b) => {
