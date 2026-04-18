@@ -39,6 +39,9 @@ export async function recordPayment(tenantId, p) {
   const applied = Array.isArray(p.appliedTo) ? p.appliedTo : [];
 
   // 1. Write the payment doc first.
+  const receivedAtTs = p.receivedAt
+    ? (p.receivedAt instanceof Date ? Timestamp.fromDate(p.receivedAt) : p.receivedAt)
+    : serverTimestamp();
   const paymentData = {
     tenantId,
     amount:          Number(p.amount),
@@ -48,9 +51,8 @@ export async function recordPayment(tenantId, p) {
     type:            p.type || 'payment',
     reference:       p.reference || '',
     appliedTo:       applied,
-    receivedAt:      p.receivedAt
-      ? (p.receivedAt instanceof Date ? Timestamp.fromDate(p.receivedAt) : p.receivedAt)
-      : serverTimestamp(),
+    receivedAt:      receivedAtTs,
+    processedAt:     receivedAtTs,  // legacy field — portal billing view orders by this
     recordedAt:      serverTimestamp(),
     recordedBy:      user ? user.uid : null,
     recordedByEmail: user ? user.email || '' : '',
@@ -102,23 +104,46 @@ export async function recordPayment(tenantId, p) {
         tx.update(invRef, update);
       });
 
-      // Mirror paid status to the CRM root invoice if this was a tenant invoice.
-      if (invoicePath.startsWith('tenants/')) {
-        const tSnap = await getDoc(doc(db, invoicePath));
-        if (tSnap.exists()) {
-          const crmInvoiceId = tSnap.data().crmInvoiceId;
-          if (crmInvoiceId) {
-            try {
-              await updateDoc(doc(db, 'invoices', crmInvoiceId), {
-                paidAmount: tSnap.data().paidAmount || 0,
-                status: tSnap.data().status || 'sent',
-                lastPaymentAt: serverTimestamp(),
-              });
-            } catch (err) {
-              console.warn('Mirror paid-status to CRM invoice failed:', err);
+      // Mirror the paid status to the COUNTERPART invoice. Every provisioned
+      // invoice exists in two places:
+      //   - tenants/{t}/invoices/{id}  — what the customer sees in their portal
+      //   - invoices/{id}              — the CRM's revenue tracker
+      // They're linked by crmInvoiceId (on the tenant doc) and tenantInvoiceId
+      // + tenantId (on the root doc). Regardless of which side got paid, we
+      // must mirror status + paidAmount to the other so the portal's "Due"
+      // badge flips to "Paid" immediately.
+      try {
+        const paidSnap = await getDoc(doc(db, invoicePath));
+        if (paidSnap.exists()) {
+          const paid = paidSnap.data();
+          const mirrorUpdate = {
+            paidAmount: Number(paid.paidAmount || 0),
+            status: paid.status || 'sent',
+            lastPaymentAt: serverTimestamp(),
+          };
+          if (paid.status === 'paid') mirrorUpdate.paidAt = serverTimestamp();
+
+          if (invoicePath.startsWith('tenants/')) {
+            // Tenant-side paid → mirror to root CRM invoice.
+            const crmInvoiceId = paid.crmInvoiceId;
+            if (crmInvoiceId) {
+              await updateDoc(doc(db, 'invoices', crmInvoiceId), mirrorUpdate);
+            }
+          } else {
+            // Root CRM invoice paid → mirror to the tenant invoice so the
+            // customer's portal stops showing "Due".
+            const tenantInvoiceId = paid.tenantInvoiceId;
+            const linkedTenantId = paid.tenantId;
+            if (tenantInvoiceId && linkedTenantId) {
+              await updateDoc(
+                doc(db, `tenants/${linkedTenantId}/invoices/${tenantInvoiceId}`),
+                mirrorUpdate
+              );
             }
           }
         }
+      } catch (err) {
+        console.warn('Mirror paid-status failed:', err);
       }
     } catch (err) {
       console.error(`Apply payment to ${invoicePath} failed:`, err);
@@ -126,6 +151,64 @@ export async function recordPayment(tenantId, p) {
   }
 
   return { id: paymentRef.id, ...paymentData };
+}
+
+/**
+ * Reconcile any root CRM invoice vs tenant invoice where the paid status is
+ * out-of-sync. Idempotent — safe to run on every admin load; does nothing
+ * once everything is synced. Fixes pre-existing mismatches from earlier
+ * payment flows that only updated one side.
+ */
+export async function reconcileLinkedInvoices() {
+  try {
+    // 1. Scan root /invoices for any linked to a tenant invoice.
+    const rootSnap = await getDocs(collection(db, 'invoices'));
+    let fixed = 0;
+    for (const d of rootSnap.docs) {
+      const root = d.data();
+      if (!root.tenantId || !root.tenantInvoiceId) continue;
+
+      let tSnap;
+      try {
+        tSnap = await getDoc(doc(db, `tenants/${root.tenantId}/invoices/${root.tenantInvoiceId}`));
+      } catch { continue; }
+      if (!tSnap || !tSnap.exists()) continue;
+      const tenantInv = tSnap.data();
+
+      // Figure out the "winning" state: prefer paid over partial over open.
+      const rank = s => s === 'paid' ? 3 : s === 'partial' ? 2 : 1;
+      const rootRank = rank(root.status);
+      const tenantRank = rank(tenantInv.status);
+
+      if (rootRank === tenantRank
+        && (Number(root.paidAmount || 0) === Number(tenantInv.paidAmount || 0))) {
+        continue;  // already in sync
+      }
+
+      const winning = rootRank >= tenantRank ? root : tenantInv;
+      const update = {
+        status:     winning.status || 'sent',
+        paidAmount: Number(winning.paidAmount || 0),
+      };
+      if (winning.status === 'paid') update.paidAt = winning.paidAt || serverTimestamp();
+
+      try {
+        if (rootRank > tenantRank) {
+          await updateDoc(doc(db, `tenants/${root.tenantId}/invoices/${root.tenantInvoiceId}`), update);
+        } else {
+          await updateDoc(doc(db, 'invoices', d.id), update);
+        }
+        fixed += 1;
+      } catch (err) {
+        console.warn(`Reconcile failed for invoice ${d.id}:`, err);
+      }
+    }
+    if (fixed > 0) console.log(`[payments] reconcileLinkedInvoices: fixed ${fixed} invoice(s)`);
+    return { fixed };
+  } catch (err) {
+    console.warn('reconcileLinkedInvoices failed:', err);
+    return { fixed: 0 };
+  }
 }
 
 /** List payments for a tenant, newest first. */

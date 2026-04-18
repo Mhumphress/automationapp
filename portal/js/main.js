@@ -558,11 +558,25 @@ async function renderBilling() {
     ));
     const invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const paySnap = await fbGetDocs(fbQuery(
-      fbCollection(fbDb, 'tenants', tenant.id, 'payments'),
-      fbOrderBy('processedAt', 'desc')
-    ));
-    const payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Load payments. Try processedAt first (legacy + current), fall back to
+    // an unordered fetch if the field isn't present on any docs.
+    let payments = [];
+    try {
+      const paySnap = await fbGetDocs(fbQuery(
+        fbCollection(fbDb, 'tenants', tenant.id, 'payments'),
+        fbOrderBy('processedAt', 'desc')
+      ));
+      payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (err) {
+      console.warn('Payments ordered query failed, falling back:', err);
+      const paySnap = await fbGetDocs(fbCollection(fbDb, 'tenants', tenant.id, 'payments'));
+      payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      payments.sort((a, b) => {
+        const ta = (a.receivedAt || a.processedAt || a.recordedAt)?.toDate?.()?.getTime() || 0;
+        const tb = (b.receivedAt || b.processedAt || b.recordedAt)?.toDate?.()?.getTime() || 0;
+        return tb - ta;
+      });
+    }
 
     let html = '<div class="settings-section"><h2 class="section-title">Invoices</h2>';
     if (invoices.length === 0) {
@@ -571,13 +585,15 @@ async function renderBilling() {
       html += '<table class="data-table"><thead><tr><th>Invoice #</th><th>Amount</th><th>Status</th><th>Issued</th><th>Due</th></tr></thead><tbody>';
       invoices.forEach(inv => {
         const s = inv.status || 'draft';
-        // Tenant-facing label: show "Due" for sent invoices (admin's "sent" = tenant's "due to pay")
+        // Tenant-facing label: "due" for sent, "partially paid" for partial
         const label =
           s === 'sent' ? 'due' :
           s === 'issued' ? 'issued' :
+          s === 'partial' ? 'partially paid' :
           s;
         const statusClass =
           s === 'paid' ? 'badge-success' :
+          s === 'partial' ? 'badge-info' :
           s === 'overdue' ? 'badge-danger' :
           s === 'sent' ? 'badge-info' :
           s === 'refunded' ? 'badge-warning' :
@@ -600,13 +616,22 @@ async function renderBilling() {
     if (payments.length === 0) {
       html += '<p style="color:var(--gray);font-size:0.9rem;">No payments recorded.</p>';
     } else {
-      html += '<table class="data-table"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>';
+      html += '<table class="data-table"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th></tr></thead><tbody>';
       payments.forEach(p => {
+        const when = p.receivedAt || p.processedAt || p.recordedAt;
+        const s = p.status || 'received';
+        const badgeClass =
+          (s === 'received' || s === 'completed') ? 'badge-success' :
+          s === 'refunded' ? 'badge-warning' :
+          s === 'pending' ? 'badge-info' :
+          s === 'failed' ? 'badge-danger' :
+          'badge-default';
         html += `<tr>
-          <td>${formatDate(p.processedAt)}</td>
+          <td>${formatDate(when)}</td>
           <td>${formatCurrency(p.amount)}</td>
           <td>${escapeHtml(p.method || '-')}</td>
-          <td><span class="badge ${p.status === 'completed' ? 'badge-success' : 'badge-danger'}">${escapeHtml(p.status || '-')}</span></td>
+          <td>${escapeHtml(p.reference || '-')}</td>
+          <td><span class="badge ${badgeClass}">${escapeHtml(s)}</span></td>
         </tr>`;
       });
       html += '</tbody></table>';

@@ -23,6 +23,7 @@ import { enforceCancellations } from './services/subscription.js';
 import { recordEvent as recordSubEvent, EVENT_TYPES as SUB_EVENTS, backfillSubscriptionEvents } from './services/subscription-events.js';
 import * as money from './services/money.js';
 import { subscribeToThreads, countUnread } from './services/messages.js';
+import { reconcileLinkedInvoices } from './services/payments.js';
 import { createTenant, addTenantActivity, addTenantInvoice, addTenantUser } from './services/tenants.js';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp, runTransaction, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -83,6 +84,7 @@ onAuthStateChanged(auth, (user) => {
         runCompaniesMigration().catch(err => console.error('Migration failed:', err));
         backfillSubscriptionEvents().catch(err => console.error('Events backfill failed:', err));
         enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
+        reconcileLinkedInvoices().catch(err => console.error('Invoice reconciliation failed:', err));
         mountUniversalSearch();
         startMessagesBadge();
       }
