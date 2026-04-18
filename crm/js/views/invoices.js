@@ -10,6 +10,73 @@ import { canDelete } from '../services/roles.js';
 import { openRecordPaymentModal } from '../components/record-payment-modal.js';
 import { listPayments } from '../services/payments.js';
 import { invoiceEffectiveAmount, formatMoney } from '../services/money.js';
+import { findTenantForContact } from '../services/invoice-sync.js';
+import { addDoc, updateDoc, doc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { db, auth } from '../config.js';
+
+/**
+ * Resolve a tenantId for an invoice AND ensure the tenant-side mirror
+ * exists so payments can sync both ways. If the invoice isn't already
+ * linked, this creates the tenants/{tid}/invoices/{...} mirror and
+ * cross-links both sides in one go.
+ */
+async function resolveTenantId(invoice) {
+  if (invoice.tenantId && invoice.tenantInvoiceId) return invoice.tenantId;
+  if (!invoice.clientId) return null;
+
+  let tenant = null;
+  if (invoice.tenantId) {
+    tenant = { id: invoice.tenantId };
+  } else {
+    tenant = await findTenantForContact(invoice.clientId);
+  }
+  if (!tenant) return null;
+
+  // If the tenant mirror hasn't been created yet, create it now.
+  if (!invoice.tenantInvoiceId) {
+    try {
+      const user = auth.currentUser;
+      const mirror = await addDoc(collection(db, 'tenants', tenant.id, 'invoices'), {
+        invoiceNumber: invoice.invoiceNumber,
+        clientId: invoice.clientId,
+        clientName: invoice.clientName,
+        tenantId: tenant.id,
+        crmInvoiceId: invoice.id,
+        issueDate: invoice.issueDate || '',
+        dueDate: invoice.dueDate || '',
+        lineItems: invoice.lineItems || [],
+        subtotal: invoice.subtotal || 0,
+        taxRate: invoice.taxRate || 0,
+        taxAmount: invoice.taxAmount || 0,
+        total: invoice.total || 0,
+        paidAmount: invoice.paidAmount || 0,
+        status: invoice.status || 'draft',
+        type: invoice.type || 'charge',
+        notes: invoice.notes || '',
+        createdAt: serverTimestamp(),
+        createdBy: user ? user.uid : null,
+        source: { createdVia: 'on_demand_resolve' },
+      });
+      await updateDoc(doc(db, 'invoices', invoice.id), {
+        tenantId: tenant.id,
+        tenantInvoiceId: mirror.id,
+        updatedAt: serverTimestamp(),
+      });
+      invoice.tenantId = tenant.id;
+      invoice.tenantInvoiceId = mirror.id;
+    } catch (err) {
+      console.warn('On-demand tenant mirror creation failed:', err);
+    }
+  } else if (!invoice.tenantId) {
+    // tenantInvoiceId exists but tenantId is missing — just set it.
+    try {
+      await updateDoc(doc(db, 'invoices', invoice.id), { tenantId: tenant.id });
+      invoice.tenantId = tenant.id;
+    } catch (err) { console.warn('Backfill invoice.tenantId failed:', err); }
+  }
+
+  return tenant.id;
+}
 
 let invoices = [];
 let contacts = [];
@@ -282,19 +349,26 @@ function renderTable(list) {
     dueTd.textContent = formatDate(invoice.dueDate);
     tr.appendChild(dueTd);
 
-    // Actions — quick Record Payment for eligible rows
+    // Actions — show Record Payment for any non-paid, non-refund invoice.
+    // Tenant linkage is resolved lazily (at click time) so legacy invoices
+    // without tenantId still get the button.
     const actionTd = document.createElement('td');
     actionTd.style.textAlign = 'right';
     actionTd.style.whiteSpace = 'nowrap';
-    const canPay = invoice.tenantId && invoice.status !== 'paid' && invoice.type !== 'refund';
+    const canPay = invoice.status !== 'paid' && invoice.type !== 'refund';
     if (canPay) {
       const btn = document.createElement('button');
       btn.className = 'btn btn-ghost btn-sm';
       btn.textContent = 'Record Payment';
       btn.addEventListener('click', async (e) => {
-        e.stopPropagation();  // don't trigger row navigation
+        e.stopPropagation();
+        const tid = await resolveTenantId(invoice);
+        if (!tid) {
+          showToast('This invoice\'s customer has no linked tenant. Payment can be recorded once provisioned.', 'error');
+          return;
+        }
         const result = await openRecordPaymentModal({
-          tenantId: invoice.tenantId,
+          tenantId: tid,
           invoices: [invoice],
           presetInvoiceId: invoice.id,
           singleInvoiceMode: true,
@@ -585,7 +659,7 @@ async function showDetailPage(invoice) {
   // Header
   const allowDelete = await canDelete(invoice);
   const effectiveStatus = (invoice.status === 'overdue' || isOverdue(invoice)) ? 'overdue' : (invoice.status || 'draft');
-  const canRecordPayment = !!invoice.tenantId && invoice.status !== 'paid' && invoice.type !== 'refund';
+  const canRecordPayment = invoice.status !== 'paid' && invoice.type !== 'refund';
   const header = document.createElement('div');
   header.className = 'detail-header';
   header.innerHTML = `
@@ -603,8 +677,13 @@ async function showDetailPage(invoice) {
   const payBtn = header.querySelector('.detail-record-pay-btn');
   if (payBtn) {
     payBtn.addEventListener('click', async () => {
+      const tid = await resolveTenantId(invoice);
+      if (!tid) {
+        showToast('This invoice\'s customer has no linked tenant. Payment can be recorded once provisioned.', 'error');
+        return;
+      }
       const result = await openRecordPaymentModal({
-        tenantId: invoice.tenantId,
+        tenantId: tid,
         invoices: [invoice],
         presetInvoiceId: invoice.id,
         singleInvoiceMode: true,

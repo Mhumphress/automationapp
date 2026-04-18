@@ -135,6 +135,107 @@ export async function createInvoiceWithTenantMirror(data) {
   };
 }
 
+/**
+ * Backfill tenantId + tenantInvoiceId on legacy root invoices. For each
+ * root invoice that has a clientId but no tenantId, look up the contact's
+ * tenant and (a) write the missing tenantId on the root, (b) create a
+ * tenants/{tid}/invoices/{...} mirror if none exists, (c) cross-link
+ * both sides with tenantInvoiceId / crmInvoiceId.
+ *
+ * Idempotent. Flag-gated. Runs once per CRM deployment.
+ */
+export async function backfillInvoiceTenantLinks() {
+  const flagRef = doc(db, 'settings', 'migrations');
+  const flagSnap = await getDocs(query(collection(db, 'settings'), where('__name__', '==', 'migrations')));
+  const flags = flagSnap.docs[0]?.data() || {};
+  if (flags.invoiceTenantLinksBackfilled) return { skipped: true, fixed: 0 };
+
+  const invSnap = await getDocs(collection(db, 'invoices'));
+  const user = auth.currentUser;
+  let fixed = 0;
+
+  // Cache tenant lookups per clientId — one query per contact.
+  const tenantByContact = new Map();
+
+  for (const d of invSnap.docs) {
+    const inv = { id: d.id, ...d.data() };
+    if (inv.tenantId && inv.tenantInvoiceId) continue;  // already linked
+    if (!inv.clientId) continue;
+
+    let tenant;
+    if (tenantByContact.has(inv.clientId)) {
+      tenant = tenantByContact.get(inv.clientId);
+    } else {
+      tenant = await findTenantForContact(inv.clientId);
+      tenantByContact.set(inv.clientId, tenant);
+    }
+    if (!tenant) continue;
+
+    const rootRef = doc(db, 'invoices', inv.id);
+    const updates = {};
+    if (!inv.tenantId) updates.tenantId = tenant.id;
+
+    // Write the tenant-side mirror if it's missing.
+    if (!inv.tenantInvoiceId) {
+      try {
+        const tenantMirror = await addDoc(
+          collection(db, 'tenants', tenant.id, 'invoices'),
+          {
+            invoiceNumber: inv.invoiceNumber,
+            clientId: inv.clientId,
+            clientName: inv.clientName,
+            tenantId: tenant.id,
+            crmInvoiceId: inv.id,
+            issueDate: inv.issueDate || '',
+            dueDate: inv.dueDate || '',
+            lineItems: inv.lineItems || [],
+            subtotal: inv.subtotal || 0,
+            taxRate: inv.taxRate || 0,
+            taxAmount: inv.taxAmount || 0,
+            total: inv.total || 0,
+            paidAmount: inv.paidAmount || 0,
+            status: inv.status || 'draft',
+            type: inv.type || 'charge',
+            notes: inv.notes || '',
+            createdAt: serverTimestamp(),
+            createdBy: user ? user.uid : null,
+            source: { createdVia: 'backfill' },
+          }
+        );
+        updates.tenantInvoiceId = tenantMirror.id;
+      } catch (err) {
+        console.warn(`Backfill mirror for invoice ${inv.id} failed:`, err);
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      try {
+        await updateDoc(rootRef, { ...updates, updatedAt: serverTimestamp() });
+        fixed += 1;
+      } catch (err) {
+        console.warn(`Backfill update for invoice ${inv.id} failed:`, err);
+      }
+    }
+  }
+
+  try {
+    await updateDoc(doc(db, 'settings', 'migrations'), {
+      invoiceTenantLinksBackfilled: { ranAt: serverTimestamp(), fixed },
+    });
+  } catch (err) {
+    // Doc may not exist yet — use setDoc via merge.
+    try {
+      const { setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      await setDoc(doc(db, 'settings', 'migrations'), {
+        invoiceTenantLinksBackfilled: { ranAt: serverTimestamp(), fixed },
+      }, { merge: true });
+    } catch (e) { console.warn('Could not persist migration flag:', e); }
+  }
+
+  if (fixed > 0) console.log(`[invoice-sync] Backfilled ${fixed} invoice(s) with tenant links.`);
+  return { skipped: false, fixed };
+}
+
 // Create a CRM root invoice record that mirrors a newly-created tenant
 // billing invoice (used by subscription service when adding seats, changing
 // plans, cancelling — anything that generates a tenant invoice should also
