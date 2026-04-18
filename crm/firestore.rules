@@ -72,6 +72,21 @@ service cloud.firestore {
         allow create: if isApprovedUser();
         allow update, delete: if false;
       }
+
+      // Customer-level files (metadata docs — Storage paths referenced)
+      match /files/{fileId} {
+        allow read: if isApprovedUser();
+        allow create: if isApprovedUser();
+        allow update: if isApprovedUser();
+        allow delete: if isApprovedUser();
+      }
+    }
+
+    // ── Subscription events (append-only queryable history) ──
+    match /subscription_events/{eventId} {
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser();
+      allow update, delete: if false;
     }
 
     // ── Quotes ───────────────────────────────
@@ -428,6 +443,14 @@ service cloud.firestore {
       match /proposals/{docId} {
         allow read: if isAdmin() || isTenantMember(tenantId);
         allow create, update: if isAdmin() || (isTenantMember(tenantId) && tenantIsActive(tenantId));
+        allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
+      }
+
+      // Tenant-level files — metadata for uploaded documents. Storage path
+      // referenced from inside the doc.
+      match /files/{fileId} {
+        allow read: if isAdmin() || isTenantMember(tenantId);
+        allow create, update: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
         allow delete: if isAdmin() || (isTenantAdmin(tenantId) && tenantIsActive(tenantId));
       }
 
