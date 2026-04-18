@@ -5,6 +5,8 @@
 
 import { renderLeaseBillingSection } from './lease-billing-section.js';
 import { makeQuickInvoiceSection } from './quick-invoice-section.js';
+import { renderPropertyUnitsSection } from './property-units-section.js';
+import { renderUnitDetailSection } from './unit-detail-section.js';
 
 // ── Salon ─────────────────────────────────────────────────
 
@@ -347,36 +349,68 @@ export const propertiesConfig = {
   title: 'Properties',
   singular: 'Property',
   listColumns: ['name', 'address', 'type', 'units', 'status'],
-  statuses: ['occupied', 'vacant', 'maintenance', 'off_market'],
+  statuses: ['active', 'acquiring', 'selling', 'off_market'],
   fields: [
     { key: 'name', label: 'Name', type: 'text', required: true, primary: true },
     { key: 'address', label: 'Address', type: 'text', required: true },
     { key: 'type', label: 'Type', type: 'select', options: ['residential', 'commercial', 'mixed_use'], default: 'residential' },
-    { key: 'units', label: 'Units', type: 'number' },
-    { key: 'squareFeet', label: 'Sq Ft', type: 'number' },
+    { key: 'units', label: 'Total Units', type: 'number' },
+    { key: 'squareFeet', label: 'Total Sq Ft', type: 'number' },
+    { key: 'yearBuilt', label: 'Year Built', type: 'number' },
     { key: 'purchasePrice', label: 'Purchase Price', type: 'money' },
     { key: 'currentValue', label: 'Current Value', type: 'money' },
-    { key: 'status', label: 'Status', type: 'select', options: ['occupied', 'vacant', 'maintenance', 'off_market'], default: 'vacant' },
+    { key: 'status', label: 'Status', type: 'select', options: ['active', 'acquiring', 'selling', 'off_market'], default: 'active' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+  detailSections: [
+    { title: 'Units at this property', render: renderPropertyUnitsSection },
+  ],
+};
+
+export const unitsConfig = {
+  collection: 'units',
+  title: 'Units',
+  singular: 'Unit',
+  orderField: 'label',
+  listColumns: ['label', 'propertyName', 'bedrooms', 'sqft', 'baseRent', 'status', 'currentTenantName'],
+  statuses: ['vacant', 'occupied', 'maintenance', 'off_market'],
+  fields: [
+    { key: 'label', label: 'Unit Label', type: 'text', required: true, primary: true },
+    { key: 'propertyName', label: 'Property', type: 'text' },
+    { key: 'propertyId', label: 'Property ID', type: 'text' },
+    { key: 'bedrooms', label: 'Bedrooms', type: 'number' },
+    { key: 'bathrooms', label: 'Bathrooms', type: 'number' },
+    { key: 'sqft', label: 'Square Feet', type: 'number' },
+    { key: 'baseRent', label: 'Base Rent', type: 'money' },
+    { key: 'securityDeposit', label: 'Security Deposit', type: 'money' },
+    { key: 'status', label: 'Status', type: 'select', options: ['vacant', 'occupied', 'maintenance', 'off_market'], default: 'vacant' },
+    { key: 'currentTenantName', label: 'Current Tenant', type: 'text' },
+    { key: 'currentLeaseId', label: 'Current Lease ID', type: 'text' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ],
+  detailSections: [
+    { title: 'Current lease', render: renderUnitDetailSection },
   ],
 };
 
 export const leasesConfig = {
   collection: 'leases',
-  title: 'Leases',
+  title: 'Tenants & Leases',
   singular: 'Lease',
-  listColumns: ['tenantName', 'property', 'startDate', 'endDate', 'monthlyRent', 'status'],
+  listColumns: ['tenantName', 'property', 'unit', 'startDate', 'endDate', 'monthlyRent', 'status'],
   statuses: ['active', 'pending', 'expired', 'terminated'],
   fields: [
-    { key: 'tenantName', label: 'Tenant', type: 'text', required: true, primary: true },
-    { key: 'tenantEmail', label: 'Email', type: 'email' },
-    { key: 'tenantPhone', label: 'Phone', type: 'tel' },
+    { key: 'tenantName', label: 'Tenant (Renter) Name', type: 'text', required: true, primary: true },
+    { key: 'tenantEmail', label: 'Tenant Email', type: 'email' },
+    { key: 'tenantPhone', label: 'Tenant Phone', type: 'tel' },
     { key: 'property', label: 'Property', type: 'text' },
-    { key: 'unit', label: 'Unit', type: 'text' },
-    { key: 'startDate', label: 'Start', type: 'date', required: true },
-    { key: 'endDate', label: 'End', type: 'date', required: true },
+    { key: 'unit', label: 'Unit Label', type: 'text' },
+    { key: 'propertyId', label: 'Property ID (for auto-link)', type: 'text' },
+    { key: 'unitId', label: 'Unit ID (for auto-link)', type: 'text' },
+    { key: 'startDate', label: 'Lease Start', type: 'date', required: true },
+    { key: 'endDate', label: 'Lease End', type: 'date', required: true },
     { key: 'monthlyRent', label: 'Monthly Rent', type: 'money' },
-    { key: 'deposit', label: 'Deposit', type: 'money' },
+    { key: 'deposit', label: 'Security Deposit', type: 'money' },
     { key: 'status', label: 'Status', type: 'select', options: ['active', 'pending', 'expired', 'terminated'], default: 'pending' },
     { key: 'notes', label: 'Notes', type: 'textarea' },
   ],
@@ -479,6 +513,7 @@ export const VIEW_CONFIG = {
   proposals:       proposalsConfig,
   // Property
   properties:      propertiesConfig,
+  units:           unitsConfig,
   leases:          leasesConfig,
   maintenance:     maintenanceConfig,
   // Shared

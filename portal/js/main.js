@@ -425,7 +425,9 @@ function getVerticalModuleNav(verticalId) {
     ],
     property: [
       { feature: 'properties', view: 'properties', label: 'Properties', icon: '<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>' },
-      { feature: 'leases', view: 'leases', label: 'Leases', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' },
+      { feature: 'properties', view: 'units', label: 'Units', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>' },
+      { feature: 'leases', view: 'leases', label: 'Tenants & Leases', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' },
+      { feature: 'rent_collection', view: 'rent-roll', label: 'Rent Roll', icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       { feature: 'maintenance', view: 'maintenance', label: 'Maintenance', icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
     ],
     salon: [
@@ -515,6 +517,20 @@ async function registerAllViews() {
     init: messagesMod.init,
     render() { document.getElementById('headerTitle').textContent = 'Messages'; messagesMod.render(); },
     destroy: messagesMod.destroy
+  });
+
+  // Property vertical — Rent Roll (needs its own container + custom view)
+  if (!document.getElementById('view-rent-roll')) {
+    const div = document.createElement('div');
+    div.id = 'view-rent-roll';
+    div.className = 'view-container';
+    document.getElementById('appMain').appendChild(div);
+  }
+  const rentRollMod = await import('./views/property/rent-roll.js');
+  registerView('rent-roll', {
+    init: rentRollMod.init,
+    render() { document.getElementById('headerTitle').textContent = 'Rent Roll'; rentRollMod.render(); },
+    destroy: rentRollMod.destroy,
   });
 
   const inventoryMod = await import('./views/repair/inventory.js');
