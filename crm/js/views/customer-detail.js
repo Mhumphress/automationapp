@@ -154,8 +154,9 @@ function renderHeader() {
 
   // Wire quick actions
   header.querySelector('[data-qa="new-quote"]')?.addEventListener('click', async () => {
-    const m = await import('./quote-builder.js');
-    m.openBuilder(null, { contactId: c.id });
+    const m = await import('./quotes.js');
+    m.requestNewQuoteFor(c);
+    window.location.hash = 'quotes';
   });
   header.querySelector('[data-qa="log-activity"]')?.addEventListener('click', () => {
     state.activeTab = 'activity';
@@ -164,14 +165,17 @@ function renderHeader() {
   header.querySelector('[data-qa="record-payment"]')?.addEventListener('click', () => {
     state.activeTab = 'billing';
     render();
-    // Scroll record-payment area into view on next tick
+    // Click the in-tab Record Payment button on the next tick once the DOM settles.
     setTimeout(() => {
       const btn = document.querySelector('[data-action="record-payment"]');
       btn?.click();
     }, 50);
   });
-  header.querySelector('[data-qa="open-tenant"]')?.addEventListener('click', () => {
-    window.location.hash = `tenants`;
+  header.querySelector('[data-qa="open-tenant"]')?.addEventListener('click', async () => {
+    if (!state.tenant) return;
+    const m = await import('./tenants.js');
+    m.requestTenant(state.tenant.id);
+    window.location.hash = 'tenants';
   });
 
   return header;

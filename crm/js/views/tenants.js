@@ -21,8 +21,17 @@ export function init() {
   modal = createModal();
 }
 
+let pendingTenantId = null;
+export function requestTenant(id) { pendingTenantId = id; }
+
 export async function render() {
   await loadData();
+  if (pendingTenantId) {
+    const id = pendingTenantId;
+    pendingTenantId = null;
+    const t = tenants.find(x => x.id === id);
+    if (t) return showDetailPage(t);
+  }
   if (currentPage === 'list') renderListView();
 }
 

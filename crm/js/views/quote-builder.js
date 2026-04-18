@@ -9,7 +9,12 @@ const ADDON_PRICE_MONTHLY = 'priceMonthly';
 // State for the form
 let formState = null;
 
-export async function openBuilder(existingQuoteId) {
+export async function openBuilder(existingQuoteId, opts = {}) {
+  // Make sure the quotes view is visible — the builder renders into #view-quotes.
+  // Calling from any other screen would render into a hidden container otherwise.
+  if (window.location.hash !== '#quotes') {
+    window.location.hash = 'quotes';
+  }
   const container = document.getElementById('view-quotes');
   container.innerHTML = '<div class="loading">Loading builder...</div>';
 
@@ -23,10 +28,20 @@ export async function openBuilder(existingQuoteId) {
   let existing = null;
   if (existingQuoteId) existing = await getQuote(existingQuoteId);
 
+  // Pre-fill from opts.contact when starting a new quote from the customer page.
+  const prefillContact = !existing && opts.contact ? opts.contact : null;
+  const prefillSnapshot = prefillContact ? {
+    firstName: prefillContact.firstName || '',
+    lastName:  prefillContact.lastName  || '',
+    email:     prefillContact.email     || '',
+    phone:     prefillContact.phone     || '',
+    company:   prefillContact.company   || prefillContact.companyName || '',
+  } : null;
+
   formState = {
     id: existing?.id || null,
-    contactId: existing?.contactId || '',
-    customerSnapshot: existing?.customerSnapshot || { firstName: '', lastName: '', email: '', phone: '', company: '' },
+    contactId: existing?.contactId || (prefillContact ? prefillContact.id : ''),
+    customerSnapshot: existing?.customerSnapshot || prefillSnapshot || { firstName: '', lastName: '', email: '', phone: '', company: '' },
     vertical: existing?.vertical || (verticals[0]?.id || ''),
     packageId: existing?.packageId || '',
     tier: existing?.tier || '',

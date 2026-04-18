@@ -6,11 +6,27 @@ let quotes = [];
 let currentPage = 'list';
 let searchTerm = '';
 
+// Pending builder-open request from another view. When set, the next render()
+// opens the builder for the given contact instead of the quotes list.
+let pendingBuilderContact = null;
+let pendingBuilderQuoteId = null;
+export function requestNewQuoteFor(contact) { pendingBuilderContact = contact; pendingBuilderQuoteId = null; }
+export function requestOpenQuote(quoteId) { pendingBuilderQuoteId = quoteId; pendingBuilderContact = null; }
+
 export async function init() {}
 export function destroy() { currentPage = 'list'; }
 
 export async function render() {
   const container = document.getElementById('view-quotes');
+  if (pendingBuilderContact || pendingBuilderQuoteId) {
+    const contact = pendingBuilderContact;
+    const quoteId = pendingBuilderQuoteId;
+    pendingBuilderContact = null;
+    pendingBuilderQuoteId = null;
+    currentPage = 'builder';
+    const m = await import('./quote-builder.js');
+    return m.openBuilder(quoteId, contact ? { contact } : {});
+  }
   container.innerHTML = '<div class="loading">Loading quotes...</div>';
   try { quotes = await listQuotes(); }
   catch (err) { console.error(err); quotes = []; }

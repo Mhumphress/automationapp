@@ -43,9 +43,14 @@ export function renderSubscriptionTab(body, state, rerender) {
   `;
   body.appendChild(actions);
 
-  actions.querySelector('[data-action="change-plan"]').addEventListener('click', () => notImplementedYet('Change Plan — use the Tenants page for now'));
-  actions.querySelector('[data-action="add-addon"]').addEventListener('click', () => notImplementedYet('Add-on — use the Tenants page for now'));
-  actions.querySelector('[data-action="cancel"]').addEventListener('click', () => notImplementedYet('Cancel — use the Tenants page for now'));
+  const openTenantDetail = async () => {
+    const m = await import('./tenants.js');
+    m.requestTenant(state.tenant.id);
+    window.location.hash = 'tenants';
+  };
+  actions.querySelector('[data-action="change-plan"]').addEventListener('click', openTenantDetail);
+  actions.querySelector('[data-action="add-addon"]').addEventListener('click', openTenantDetail);
+  actions.querySelector('[data-action="cancel"]').addEventListener('click', openTenantDetail);
   actions.querySelector('[data-action="export-events"]').addEventListener('click', () => exportEvents(state));
 
   // Timeline
@@ -173,10 +178,6 @@ function renderEventDiff(e) {
     parts.push(`status: ${e.fromState?.status || '—'} → ${e.toState?.status || '—'}`);
   }
   return parts.join(' · ');
-}
-
-function notImplementedYet(msg) {
-  import('../ui.js').then(m => m.showToast(msg, 'info'));
 }
 
 function exportEvents(state) {
