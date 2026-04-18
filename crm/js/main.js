@@ -87,6 +87,7 @@ onAuthStateChanged(auth, (user) => {
         enforceCancellations().catch(err => console.error('Cancellation sweep failed:', err));
         reconcileLinkedInvoices().catch(err => console.error('Invoice reconciliation failed:', err));
         runRecurringSweepForAllTenants().catch(err => console.error('Recurring billing sweep failed:', err));
+        retirePropertyBasic().catch(err => console.error('property_basic cleanup failed:', err));
         mountUniversalSearch();
         startMessagesBadge();
       }
@@ -1363,6 +1364,56 @@ async function handleQuoteAccepted(responseId, responseData) {
     });
     showToast('Provisioning failed — see Quotes list', 'error');
   }
+}
+
+/**
+ * One-time retirement of the property_basic package. Runs on admin load,
+ * flag-gated so it only executes once per Firestore. Deletes the package
+ * doc so it stops appearing in the Quote Builder / Packages view, then
+ * logs any tenants still on it so they can be migrated manually.
+ */
+async function retirePropertyBasic() {
+  const flagRef = doc(db, 'settings', 'migrations');
+  const flagSnap = await getDoc(flagRef);
+  const flags = flagSnap.exists() ? flagSnap.data() : {};
+  if (flags.propertyBasicRetired) return;
+
+  const pkgRef = doc(db, 'packages', 'property_basic');
+  const pkgSnap = await getDoc(pkgRef);
+  let deleted = false;
+  if (pkgSnap.exists()) {
+    try {
+      await deleteDoc(pkgRef);
+      deleted = true;
+    } catch (err) {
+      console.warn('[retire property_basic] delete failed:', err);
+    }
+  }
+
+  // Check for tenants still on this package; we don't auto-migrate — just log.
+  let affected = [];
+  try {
+    const { collection: col, query: q, where: w, getDocs: gd } =
+      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const snap = await gd(q(col(db, 'tenants'), w('packageId', '==', 'property_basic')));
+    affected = snap.docs.map(d => ({ id: d.id, companyName: d.data().companyName || d.id }));
+  } catch (err) {
+    console.warn('[retire property_basic] tenant scan failed:', err);
+  }
+
+  if (affected.length > 0) {
+    console.warn(
+      `[retire property_basic] ${affected.length} tenant(s) still on property_basic — migrate via Change Plan:`,
+      affected
+    );
+    showToast(
+      `${affected.length} tenant(s) still on PropertyApp Basic — open Tenants to migrate them.`,
+      'info'
+    );
+  }
+
+  await setDoc(flagRef, { propertyBasicRetired: { ranAt: serverTimestamp(), packageDeleted: deleted, affected: affected.length } }, { merge: true });
+  console.log(`[retire property_basic] Done. Deleted package: ${deleted}. Affected tenants: ${affected.length}.`);
 }
 
 async function runCompaniesMigration() {
