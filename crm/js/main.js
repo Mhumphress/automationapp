@@ -1090,11 +1090,11 @@ async function checkTaskNotifications() {
 
 async function startPendingPaymentsBadge() {
   try {
-    const { collectionGroup, query, where, onSnapshot } =
+    const { collectionGroup, onSnapshot } =
       await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    const q = query(collectionGroup(db, 'payment_intents'), where('status', '==', 'pending'));
-    onSnapshot(q, (snap) => {
-      const count = snap.size;
+    // Unfiltered CG read, filter client-side (avoids needing a composite index)
+    onSnapshot(collectionGroup(db, 'payment_intents'), (snap) => {
+      const count = snap.docs.filter(d => d.data().status === 'pending').length;
       const navItem = document.querySelector('.nav-item[data-view="pending-payments"]');
       if (!navItem) return;
       let badge = navItem.querySelector('.nav-badge');

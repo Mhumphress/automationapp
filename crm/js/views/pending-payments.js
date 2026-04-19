@@ -10,7 +10,7 @@
 
 import { db } from '../config.js';
 import {
-  collectionGroup, query, where, onSnapshot, doc, updateDoc, serverTimestamp,
+  collectionGroup, onSnapshot, doc, updateDoc, serverTimestamp,
   collection, getDocs
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { openRecordPaymentModal } from '../components/record-payment-modal.js';
@@ -42,18 +42,19 @@ export async function render() {
     console.warn('Tenants load for pending-payments failed:', err);
   }
 
+  // No where-filter on the collection-group query — a filtered CG query would
+  // need an explicit index. Pull everything, filter client-side. Low volume
+  // (only admin-visible submissions), cheap.
   try {
-    const q = query(
-      collectionGroup(db, 'payment_intents'),
-      where('status', '==', 'pending')
-    );
-    unsub = onSnapshot(q, (snap) => {
-      intents = snap.docs.map(d => ({
-        id: d.id,
-        _path: d.ref.path,
-        _tenantId: extractTenantId(d.ref.path),
-        ...d.data(),
-      }));
+    unsub = onSnapshot(collectionGroup(db, 'payment_intents'), (snap) => {
+      intents = snap.docs
+        .map(d => ({
+          id: d.id,
+          _path: d.ref.path,
+          _tenantId: extractTenantId(d.ref.path),
+          ...d.data(),
+        }))
+        .filter(i => i.status === 'pending');
       draw(container);
     }, (err) => {
       console.error('pending_payments subscription error:', err);
