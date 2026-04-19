@@ -119,14 +119,45 @@ export function openRecordPayment(opts) {
       </div>
     `;
 
+    const topAmountInput = form.querySelector('input[name="amount"]');
+
+    function syncRowAmountsFromTop() {
+      const checkedRows = [...form.querySelectorAll('.payment-apply-row input[type="checkbox"]:checked')];
+      if (checkedRows.length !== 1) return;  // ambiguous allocation when multiple checked
+      const cb = checkedRows[0];
+      const amtInput = cb.closest('.payment-apply-row').querySelector('.payment-apply-amount');
+      if (!amtInput.disabled) {
+        amtInput.value = topAmountInput.value;
+      }
+    }
+
+    function syncTopFromRowAmounts() {
+      const checked = [...form.querySelectorAll('.payment-apply-row input[type="checkbox"]:checked')];
+      const total = checked.reduce((s, cb) => {
+        const amt = Number(cb.closest('.payment-apply-row').querySelector('.payment-apply-amount').value) || 0;
+        return s + amt;
+      }, 0);
+      if (total > 0) topAmountInput.value = total.toFixed(2);
+    }
+
     form.querySelectorAll('.payment-apply-row input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', () => {
         const amt = cb.closest('.payment-apply-row').querySelector('.payment-apply-amount');
         amt.disabled = !cb.checked;
         if (cb.checked && !amt.value) amt.value = cb.dataset.balance;
         if (!cb.checked) amt.value = '';
+        syncTopFromRowAmounts();
       });
     });
+
+    // Per-row amount edits → update top total
+    form.querySelectorAll('.payment-apply-row .payment-apply-amount').forEach(amtInput => {
+      amtInput.addEventListener('input', syncTopFromRowAmounts);
+    });
+
+    // Top amount edit → push to single checked row (so partial payments work
+    // without the user having to edit both fields).
+    topAmountInput?.addEventListener('input', syncRowAmountsFromTop);
 
     form.querySelector('.modal-cancel').addEventListener('click', () => close());
 

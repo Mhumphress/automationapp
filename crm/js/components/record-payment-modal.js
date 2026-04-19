@@ -109,6 +109,23 @@ export function openRecordPaymentModal(opts) {
       </div>
     `;
 
+    const topAmountInput = form.querySelector('input[name="amount"]');
+
+    function syncRowAmountsFromTop() {
+      const checked = [...form.querySelectorAll('.payment-apply-row input[type="checkbox"]:checked')];
+      if (checked.length !== 1) return;
+      const amtInput = checked[0].closest('.payment-apply-row').querySelector('.payment-apply-amount');
+      if (!amtInput.disabled) amtInput.value = topAmountInput.value;
+    }
+    function syncTopFromRowAmounts() {
+      const checked = [...form.querySelectorAll('.payment-apply-row input[type="checkbox"]:checked')];
+      const total = checked.reduce((s, cb) => {
+        const amt = Number(cb.closest('.payment-apply-row').querySelector('.payment-apply-amount').value) || 0;
+        return s + amt;
+      }, 0);
+      if (total > 0) topAmountInput.value = total.toFixed(2);
+    }
+
     // Wire allocation checkboxes
     form.querySelectorAll('.payment-apply-row input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -116,8 +133,13 @@ export function openRecordPaymentModal(opts) {
         amt.disabled = !cb.checked;
         if (cb.checked && !amt.value) amt.value = cb.dataset.balance;
         if (!cb.checked) amt.value = '';
+        syncTopFromRowAmounts();
       });
     });
+    form.querySelectorAll('.payment-apply-row .payment-apply-amount').forEach(amt => {
+      amt.addEventListener('input', syncTopFromRowAmounts);
+    });
+    topAmountInput?.addEventListener('input', syncRowAmountsFromTop);
 
     form.querySelector('.modal-cancel').addEventListener('click', () => close({ recorded: false }));
 
