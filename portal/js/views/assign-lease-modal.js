@@ -10,7 +10,7 @@ import { db, auth } from '../config.js';
 import {
   doc, addDoc, updateDoc, collection, serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { createCharge } from '../services/recurring-billing.js';
+import { createCharge, generateOneTimeInvoice } from '../services/recurring-billing.js';
 
 /**
  * Open the Assign Tenant modal for a unit.
@@ -88,6 +88,22 @@ export function openAssignLease(unit, env, onDone) {
           </select>
         </div>
       </div>
+      <div class="modal-form-grid">
+        <div class="modal-field">
+          <label>Invoice deposit at signing?</label>
+          <select name="invoiceDeposit">
+            <option value="yes" selected>Yes — invoice due within 3 days</option>
+            <option value="no">No — already collected</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>Invoice first month's rent?</label>
+          <select name="invoiceFirstMonth">
+            <option value="yes" selected>Yes — invoice due within 5 days</option>
+            <option value="no">No — already collected or prorated manually</option>
+          </select>
+        </div>
+      </div>
       <div class="modal-field">
         <label>Notes</label>
         <textarea name="notes" rows="2" placeholder="Move-in details, special terms, etc."></textarea>
@@ -111,6 +127,8 @@ export function openAssignLease(unit, env, onDone) {
       const endDate = fd.get('endDate') ? new Date(fd.get('endDate').toString()) : null;
       const deposit = Number(fd.get('deposit')) || 0;
       const autoBill = fd.get('autoBill') === 'yes';
+      const invoiceDeposit = fd.get('invoiceDeposit') === 'yes';
+      const invoiceFirstMonth = fd.get('invoiceFirstMonth') === 'yes';
       const notes = (fd.get('notes') || '').toString().trim();
 
       if (!tenantName || !(monthlyRent > 0)) {
@@ -150,8 +168,60 @@ export function openAssignLease(unit, env, onDone) {
           updatedAt: serverTimestamp(),
         });
 
+        // Signing-day invoices: deposit + first month's rent.
+        const generatedInvoices = [];
+        if (invoiceDeposit && deposit > 0) {
+          try {
+            const inv = await generateOneTimeInvoice(env.tenantId, {
+              customerName: tenantName,
+              customerEmail: tenantEmail,
+              parentType: 'lease',
+              parentId: leaseRef.id,
+              chargeType: 'rent',
+              dueInDays: 3,
+              notes: `Security deposit for ${unit.propertyName || ''} ${unit.label} — lease start ${startDate.toLocaleDateString()}`.trim(),
+              lineItems: [{
+                description: 'Security Deposit',
+                quantity: 1,
+                rate: deposit,
+                amount: deposit,
+              }],
+            });
+            generatedInvoices.push('deposit');
+          } catch (err) {
+            console.warn('Deposit invoice failed:', err);
+          }
+        }
+
+        if (invoiceFirstMonth) {
+          try {
+            const monthLabel = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            const inv = await generateOneTimeInvoice(env.tenantId, {
+              customerName: tenantName,
+              customerEmail: tenantEmail,
+              parentType: 'lease',
+              parentId: leaseRef.id,
+              chargeType: 'rent',
+              dueInDays: 5,
+              notes: `First month's rent — ${monthLabel} · ${unit.propertyName || ''} ${unit.label}`.trim(),
+              lineItems: [{
+                description: `Rent — ${monthLabel}`,
+                quantity: 1,
+                rate: monthlyRent,
+                amount: monthlyRent,
+              }],
+            });
+            generatedInvoices.push('first-month rent');
+          } catch (err) {
+            console.warn('First-month rent invoice failed:', err);
+          }
+        }
+
+        // Recurring monthly rent — start next month so we don't double-bill
+        // the current month (which we just invoiced above).
         if (autoBill) {
           try {
+            const firstRecurring = firstOfNextMonth(startDate);
             await createCharge(env.tenantId, {
               name: `Rent — ${unit.propertyName || ''} ${unit.label}`.trim(),
               description: `Monthly rent for ${unit.propertyName || ''} ${unit.label}`.trim(),
@@ -164,7 +234,10 @@ export function openAssignLease(unit, env, onDone) {
               frequency: 'monthly',
               dayOfMonth: 1,
               dueInDays: 5,
-              startDate, endDate,
+              // Skip the current month — it's covered by the first-month
+              // invoice above. Recurring picks up from the next 1st of month.
+              startDate: invoiceFirstMonth ? firstRecurring : startDate,
+              endDate,
               autoGenerate: true,
             });
           } catch (err) {
@@ -172,7 +245,10 @@ export function openAssignLease(unit, env, onDone) {
           }
         }
 
-        toast(autoBill ? 'Tenant assigned — monthly rent billing scheduled' : 'Tenant assigned', 'success');
+        const msg = generatedInvoices.length > 0
+          ? `Tenant assigned · Invoiced: ${generatedInvoices.join(' + ')}${autoBill ? ' · Recurring rent on the 1st' : ''}`
+          : (autoBill ? 'Tenant assigned — monthly rent billing scheduled' : 'Tenant assigned');
+        toast(msg, 'success');
         if (onDone) try { onDone(); } catch {}
         close({ created: true, leaseId: leaseRef.id });
       } catch (err) {
@@ -183,6 +259,13 @@ export function openAssignLease(unit, env, onDone) {
       }
     });
   });
+}
+
+function firstOfNextMonth(fromDate) {
+  const d = new Date(fromDate);
+  d.setMonth(d.getMonth() + 1, 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function escapeHtml(s) {
