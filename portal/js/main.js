@@ -171,8 +171,14 @@ async function startPortalMessagesBadge(tenantId) {
   }
 }
 
-// ── Billing badge (portal) — count of unpaid invoices across both
-// tenants/{t}/invoices and tenants/{t}/invoices_crm collections. ──
+// ── Nav badges — separate counts for Billing (incoming / subscription bills)
+// and Invoicing (outgoing / what your customers owe you).
+//
+// Billing   = tenants/{t}/invoices        — bills YOU owe AutomationApp
+// Invoicing = tenants/{t}/invoices_crm    — invoices YOUR customers owe YOU
+//
+// Different financial direction entirely, so they get their own badges and
+// live in separate nav items. ──
 
 async function startPortalBillingBadge(tenantId) {
   if (!tenantId) return;
@@ -180,51 +186,50 @@ async function startPortalBillingBadge(tenantId) {
     const { collection: fbCol, onSnapshot: fbOnSnap } =
       await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const { db: fbDb } = await import('./config.js');
-
-    const counts = { invoices: 0, invoices_crm: 0 };
     const openStatuses = new Set(['sent', 'overdue', 'partial', 'draft', 'issued']);
 
-    function updateBadge() {
-      const total = counts.invoices + counts.invoices_crm;
-      const navItem = document.querySelector('.nav-item[data-view="billing"]');
+    function countOpen(snap) {
+      return snap.docs.filter(d => {
+        const data = d.data();
+        if (!openStatuses.has(data.status)) return false;
+        if (data.type === 'refund') return false;
+        const total = Math.abs(Number(data.total || data.amount || 0));
+        const paid = Number(data.paidAmount || 0);
+        return (total - paid) > 0.0049;
+      }).length;
+    }
+
+    function setBadge(viewName, count) {
+      const navItem = document.querySelector(`.nav-item[data-view="${viewName}"]`);
       if (!navItem) return;
       let badge = navItem.querySelector('.nav-badge');
-      if (total > 0) {
+      if (count > 0) {
         if (!badge) {
           badge = document.createElement('span');
           badge.className = 'nav-badge';
           navItem.appendChild(badge);
         }
-        badge.textContent = total > 99 ? '99+' : String(total);
+        badge.textContent = count > 99 ? '99+' : String(count);
       } else if (badge) {
         badge.remove();
       }
     }
 
-    function subscribeTo(coll) {
-      fbOnSnap(
-        fbCol(fbDb, 'tenants', tenantId, coll),
-        (snap) => {
-          counts[coll] = snap.docs.filter(d => {
-            const data = d.data();
-            if (!openStatuses.has(data.status)) return false;
-            if (data.type === 'refund') return false;
-            const total = Math.abs(Number(data.total || data.amount || 0));
-            const paid = Number(data.paidAmount || 0);
-            return (total - paid) > 0.0049;
-          }).length;
-          updateBadge();
-        },
-        (err) => {
-          console.warn(`[billing badge] ${coll} subscription error:`, err);
-        }
-      );
-    }
+    // Billing badge — only subscription bills (tenants/{t}/invoices)
+    fbOnSnap(
+      fbCol(fbDb, 'tenants', tenantId, 'invoices'),
+      (snap) => setBadge('billing', countOpen(snap)),
+      (err) => console.warn('[billing badge] error:', err)
+    );
 
-    subscribeTo('invoices');
-    subscribeTo('invoices_crm');
+    // Invoicing badge — outgoing invoices (tenants/{t}/invoices_crm)
+    fbOnSnap(
+      fbCol(fbDb, 'tenants', tenantId, 'invoices_crm'),
+      (snap) => setBadge('invoicing', countOpen(snap)),
+      (err) => console.warn('[invoicing badge] error:', err)
+    );
   } catch (err) {
-    console.warn('Billing badge subscription failed:', err);
+    console.warn('Billing/Invoicing badge subscription failed:', err);
   }
 }
 
@@ -664,10 +669,13 @@ function renderSubscription() {
 
 // ── Billing ──
 //
-// Live-updates: subscribes to the four tenant subcollections that feed the
-// page (invoices, invoices_crm, payments, payment_intents). Any newly
-// generated invoice — whether from CRM provisioning, an add-on change,
-// or the recurring-billing sweep — flows in without a page refresh.
+// "Billing" = money YOUR business owes AutomationApp (subscription, add-ons,
+// seat charges). Tenant-outgoing invoices — rent, fees, client invoices —
+// live on the **Invoicing** page instead. Keep the two flows separate.
+//
+// Live-updates: subscribes to three collections — invoices (your subscription
+// bills), payments (money you've paid), and payment_intents (pay-bill
+// submissions still processing).
 
 let billingUnsubs = [];
 let billingRenderTimer = null;
@@ -690,10 +698,9 @@ async function renderBilling() {
   const { db: fbDb } = await import('./config.js');
   const { openPayBill } = await import('./views/shared/pay-bill.js');
 
-  // Live buckets — four independent streams, re-render whenever any change.
+  // Live buckets — three streams (subscription bills only; no invoices_crm).
   const store = {
     invoices: [],
-    invoicesCrm: [],
     payments: [],
     intents: [],
     errors: {},
@@ -731,7 +738,6 @@ async function renderBilling() {
   }
 
   subscribe(['tenants', tenant.id, 'invoices'],       'invoices');
-  subscribe(['tenants', tenant.id, 'invoices_crm'],   'invoicesCrm');
   subscribe(['tenants', tenant.id, 'payments'],       'payments');
   subscribe(['tenants', tenant.id, 'payment_intents'],'intents');
 
@@ -740,7 +746,7 @@ async function renderBilling() {
   scheduleRender();
 
   function draw() {
-    const invoices = [...store.invoices, ...store.invoicesCrm].sort((a, b) => {
+    const invoices = [...store.invoices].sort((a, b) => {
       const ta = dateMs(a.issuedDate || a.issueDate || a.createdAt);
       const tb = dateMs(b.issuedDate || b.issueDate || b.createdAt);
       return tb - ta;
@@ -793,10 +799,16 @@ function drawBillingMarkup({ container, invoices, payments, intents, errors, ope
           <button class="btn btn-ghost btn-lg" id="payBalanceBtn" style="border:1px solid var(--off-white);">Make a Payment</button>
         </div>`;
 
-    let html = errorBanner + bannerHTML;
+    const helperNote = `
+      <div style="padding:0.5rem 0.75rem;margin:0.5rem 0 1rem;background:var(--off-white,#F1F5F9);border-radius:6px;font-size:0.78rem;color:var(--gray-dark,#64748B);">
+        <strong>Billing</strong> shows bills from Automation App for your subscription and add-ons.
+        Invoices you've sent to your own customers (rent, fees, services) are on the <strong>Invoicing</strong> tab.
+      </div>`;
 
-    // Invoices section
-    html += '<div class="settings-section" style="margin-top:1rem;"><h2 class="section-title">Invoices</h2>';
+    let html = errorBanner + bannerHTML + helperNote;
+
+    // Invoices section — subscription bills only.
+    html += '<div class="settings-section" style="margin-top:1rem;"><h2 class="section-title">Subscription Invoices</h2>';
     if (invoices.length === 0) {
       html += '<p style="color:var(--gray);font-size:0.9rem;">No invoices yet.</p>';
     } else {
