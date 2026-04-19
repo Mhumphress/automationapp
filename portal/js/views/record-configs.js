@@ -421,8 +421,8 @@ export const unitsConfig = {
 
 export const leasesConfig = {
   collection: 'leases',
-  title: 'Tenants & Leases',
-  singular: 'Lease',
+  title: 'Tenants',
+  singular: 'Tenant',
   listColumns: ['tenantName', 'property', 'unit', 'startDate', 'endDate', 'monthlyRent', 'status'],
   statuses: ['active', 'pending', 'expired', 'terminated'],
   fields: [
