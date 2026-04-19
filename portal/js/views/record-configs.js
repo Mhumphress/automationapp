@@ -10,6 +10,7 @@ import { renderUnitDetailSection } from './unit-detail-section.js';
 import { openAssignTenantPicker } from './assign-tenant-picker.js';
 import { renderTenantProfileHeader } from './tenant-profile-header.js';
 import { renderTenantMaintenanceSection } from './tenant-maintenance-section.js';
+import { openMaintenanceCreate } from './property/maintenance-create.js';
 
 // ── Salon ─────────────────────────────────────────────────
 
@@ -493,6 +494,7 @@ export const maintenanceConfig = {
       },
     }) },
   ],
+  createOverride: openMaintenanceCreate,
 };
 
 // ── Shared (any vertical) ─────────────────────────────────
