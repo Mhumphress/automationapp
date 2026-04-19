@@ -6,6 +6,25 @@ import { getTenant, getPackage, getVertical, getTenantId, hasFeature } from '../
 import { requestTicketFilter } from '../repair/tickets.js';
 import { requestInvoice, requestInvoiceFilter } from './invoicing.js';
 
+// Vertical routing — each vertical gets its own Dashboard builder. If
+// no specific module is registered, fall through to the default
+// repair-flavored dashboard below. Add entries here as new verticals
+// get their own custom dashboards.
+let activeVerticalDelegate = null;
+async function routeByVertical() {
+  const v = getVertical();
+  const id = v?.id;
+  try {
+    if (id === 'property') {
+      const mod = await import('../property/dashboard.js');
+      return mod;
+    }
+  } catch (err) {
+    console.warn(`Vertical dashboard for ${id} failed to load, falling back:`, err);
+  }
+  return null;
+}
+
 // ── State ─────────────────────────────────
 let chartModule = null;
 let activeCharts = [];
@@ -35,7 +54,15 @@ function destroyCharts() {
 }
 
 export function init() {}
-export function destroy() { cleanup(); ready = { tickets: false, invoices: false, contacts: false }; }
+export function destroy() {
+  if (activeVerticalDelegate?.destroy) {
+    try { activeVerticalDelegate.destroy(); } catch {}
+    activeVerticalDelegate = null;
+    return;
+  }
+  cleanup();
+  ready = { tickets: false, invoices: false, contacts: false };
+}
 
 // ── Date helpers ──────────────────────────
 const DAY = 86400000;
@@ -60,6 +87,15 @@ export async function render() {
   container.innerHTML = '<div class="loading">Loading dashboard...</div>';
 
   cleanup();
+  if (activeVerticalDelegate?.destroy) { try { activeVerticalDelegate.destroy(); } catch {} activeVerticalDelegate = null; }
+
+  // If this vertical has a dedicated dashboard module, hand off to it.
+  const delegate = await routeByVertical();
+  if (delegate) {
+    activeVerticalDelegate = delegate;
+    try { if (delegate.init) delegate.init(); } catch {}
+    return delegate.render();
+  }
 
   const tid = getTenantId();
   if (!tid) { container.innerHTML = '<p style="color:var(--danger);padding:1rem;">No tenant context.</p>'; return; }
