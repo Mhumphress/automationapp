@@ -4,6 +4,7 @@ import { registerView, navigate, initRouter } from './router.js';
 import { showToast, escapeHtml, formatDate, timeAgo, formatCurrency as fmtCurrency } from './ui.js';
 import * as contactsView from './views/contacts.js';
 import * as messagesView from './views/messages.js';
+import * as pendingPaymentsView from './views/pending-payments.js';
 import * as companiesView from './views/companies.js';
 import * as quotesView from './views/quotes.js';
 import { mountUniversalSearch } from './components/universal-search.js';
@@ -92,6 +93,7 @@ onAuthStateChanged(auth, (user) => {
         retirePropertyBasic().catch(err => console.error('property_basic cleanup failed:', err));
         mountUniversalSearch();
         startMessagesBadge();
+        startPendingPaymentsBadge();
       }
     })
     .catch(err => console.error('Role setup error:', err));
@@ -148,7 +150,8 @@ const viewTitles = {
   settings:      'Settings',
   tenants:       'Tenants',
   packages:      'Packages',
-  renewals:      'Renewals'
+  renewals:      'Renewals',
+  'pending-payments': 'Pending Payments'
 };
 
 // ── Register views ──────────────────────
@@ -275,6 +278,15 @@ registerView('messages', {
     messagesView.render();
   },
   destroy: messagesView.destroy
+});
+
+registerView('pending-payments', {
+  init: pendingPaymentsView.init,
+  render() {
+    document.getElementById('headerTitle').textContent = 'Pending Payments';
+    pendingPaymentsView.render();
+  },
+  destroy: pendingPaymentsView.destroy,
 });
 
 // ── Dashboard ───────────────────────────
@@ -1067,6 +1079,38 @@ async function checkTaskNotifications() {
     });
   } catch (err) {
     console.error('Notification check error:', err);
+  }
+}
+
+// ── Pending Payments badge in sidebar ────────────────
+//
+// Live count of payment_intents across ALL tenants where status==='pending'.
+// Admins get a visible cue in the sidebar so submitted payments don't sit
+// unreconciled for days buried inside individual customer profiles.
+
+async function startPendingPaymentsBadge() {
+  try {
+    const { collectionGroup, query, where, onSnapshot } =
+      await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const q = query(collectionGroup(db, 'payment_intents'), where('status', '==', 'pending'));
+    onSnapshot(q, (snap) => {
+      const count = snap.size;
+      const navItem = document.querySelector('.nav-item[data-view="pending-payments"]');
+      if (!navItem) return;
+      let badge = navItem.querySelector('.nav-badge');
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'nav-badge';
+          navItem.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? '99+' : String(count);
+      } else if (badge) {
+        badge.remove();
+      }
+    }, (err) => console.warn('[pending-payments badge] error:', err));
+  } catch (err) {
+    console.warn('Pending Payments badge subscription failed:', err);
   }
 }
 

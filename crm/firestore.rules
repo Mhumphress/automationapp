@@ -261,6 +261,13 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // ── Payment intents (collection group for the Pending Payments inbox —
+    //    admin-only cross-tenant view of everyone's submitted-but-not-yet-
+    //    reconciled payments). ──
+    match /{path=**}/payment_intents/{intentId} {
+      allow read: if isAdmin();
+    }
+
     // ── Root-level counters (admin-only) ─────
     match /counters/{counterId} {
       allow read, write: if isAdmin();
